@@ -29,12 +29,18 @@ use orb_info::{
 };
 use prelude::future::Callback;
 use speare::mini;
-use std::{env, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    env,
+    os::unix::fs::FileTypeExt,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
 use test_utils::docker::{self, Container};
 use tokio::{fs, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
-use zenorb::Zenorb;
+use zenorb::{zenoh, Zenorb};
 
 #[allow(dead_code)]
 pub struct Fixture {
@@ -49,7 +55,7 @@ pub struct Fixture {
     pub secure_storage_cancel_token: CancellationToken,
     pub platform: OrbOsPlatform,
     zsession: Zenorb,
-    router_port: u16,
+    router_socket: PathBuf,
     pub orb_id: String,
     pub connd_path: PathBuf,
 }
@@ -89,7 +95,7 @@ impl Fixture {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
-        let (container, router_port) =
+        let (container, router_socket) =
             setup_container(TempDir::new().await.unwrap()).await;
 
         let sysfs = container.tempdir.dir_path().join("sysfs");
@@ -195,7 +201,7 @@ impl Fixture {
             arrange_cb.call(ctx).await;
         }
         let orb_id = OrbId::from_str("ea2ea744").unwrap();
-        let zsession = Zenorb::from_cfg(zenorb::client_cfg(router_port))
+        let zsession = Zenorb::from_cfg(zenoh_socket_cfg(&router_socket))
             .orb_id(orb_id.clone())
             .with_name("connd")
             .await
@@ -244,7 +250,7 @@ impl Fixture {
             usr_persistent,
             secure_storage,
             secure_storage_cancel_token: cancel_token,
-            router_port,
+            router_socket,
             zsession,
             orb_id: orb_id.to_string(),
             platform,
@@ -266,12 +272,12 @@ impl Fixture {
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let (container, zenohport) =
+        let (container, router_socket) =
             setup_container(self.container.tempdir.try_clone().await.unwrap()).await;
 
         time::sleep(Duration::from_secs(1)).await;
 
-        self.router_port = zenohport;
+        self.router_socket = router_socket;
         self.container = container;
 
         let dbus_socket = self.container.tempdir.dir_path().join("socket");
@@ -302,6 +308,13 @@ impl Fixture {
             }
         };
 
+        let orb_id = OrbId::from_str(&self.orb_id).unwrap();
+        let zsession = Zenorb::from_cfg(zenoh_socket_cfg(&self.router_socket))
+            .orb_id(orb_id)
+            .with_name("connd")
+            .await
+            .unwrap();
+
         let speare = program()
             .os_release(OrbOsRelease {
                 release_type: OrbRelease::Dev,
@@ -321,12 +334,13 @@ impl Fixture {
             .session_bus(self.conn.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
-            .zenoh(&self.zsession)
+            .zenoh(&zsession)
             .mcu_util(default_mock_mcu_util_cli())
             .run()
             .await
             .unwrap();
 
+        self.zsession = zsession;
         self.nm = nm;
         self.speare = speare;
         self.secure_storage_cancel_token = cancel_token;
@@ -341,7 +355,7 @@ impl Fixture {
     }
 }
 
-async fn setup_container(tempdir: TempDir) -> (Container, u16) {
+async fn setup_container(tempdir: TempDir) -> (Container, PathBuf) {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -351,17 +365,18 @@ async fn setup_container(tempdir: TempDir) -> (Container, u16) {
     let uid = unsafe { libc::geteuid() };
     let gid = unsafe { libc::getegid() };
 
-    let zenohport = portpicker::pick_unused_port().expect("No ports free");
     let nm_profiles_dir = tempdir.dir_path().join("system-connections");
+    let zenoh_dir = tempdir.dir_path().join("zenohd");
     fs::create_dir_all(&nm_profiles_dir).await.unwrap();
+    fs::create_dir_all(&zenoh_dir).await.unwrap();
 
     let target_uid = format!("TARGET_UID={uid}");
     let target_gid = format!("TARGET_GID={gid}");
-    let zenoh_mapping = format!("-p={zenohport}:7447");
     let nm_profiles_volume = format!(
         "{}:/etc/NetworkManager/system-connections",
         nm_profiles_dir.display()
     );
+    let zenoh_volume = format!("{}:/run/zenohd", zenoh_dir.display());
 
     let container = docker::run_with(
         tag,
@@ -374,13 +389,46 @@ async fn setup_container(tempdir: TempDir) -> (Container, u16) {
             &target_gid,
             "-v",
             &nm_profiles_volume,
-            &zenoh_mapping,
+            "-v",
+            &zenoh_volume,
         ],
         tempdir,
     )
     .await;
 
-    (container, zenohport)
+    let router_socket = zenoh_dir.join("zenohd.sock");
+    wait_for_zenoh_socket(&router_socket).await;
+
+    (container, router_socket)
+}
+
+fn zenoh_socket_cfg(socket: &Path) -> zenoh::Config {
+    let mut cfg = zenoh::Config::default();
+    let endpoint = format!("unixsock-stream/{}", socket.display());
+    let endpoints = serde_json::to_string(&[endpoint]).unwrap();
+
+    cfg.insert_json5("mode", r#""client""#).unwrap();
+    cfg.insert_json5("connect/endpoints", &endpoints).unwrap();
+    cfg.insert_json5("scouting/multicast/enabled", "false")
+        .unwrap();
+
+    cfg
+}
+
+async fn wait_for_zenoh_socket(socket: &Path) {
+    for _ in 0..50 {
+        if fs::metadata(socket)
+            .await
+            .map(|metadata| metadata.file_type().is_socket())
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        time::sleep(Duration::from_millis(100)).await;
+    }
+
+    panic!("zenoh socket was not created at {}", socket.display());
 }
 
 fn default_mockmmcli() -> MockMMCli {

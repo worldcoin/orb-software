@@ -326,7 +326,7 @@ dependencies = [
  "cacache",
  "clap",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "futures",
  "indicatif",
  "octocrab",
@@ -429,9 +429,9 @@ dependencies = [
 
 [[package]]
 name = "astral-tokio-tar"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ce73b17c62717c4b6a9af10b43e87c578b0cac27e00666d48304d3b7d2c0693"
+checksum = "cb50a7aae84a03bf55b067832bc376f4961b790c97e64d3eacee97d389b90277"
 dependencies = [
  "filetime",
  "futures-core",
@@ -3090,11 +3090,11 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b768e943bed7bf2cab53df09f4bc34bfd217cdb57d971e769874c9a6710618"
+checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
 dependencies = [
- "derive_more-impl 2.1.0",
+ "derive_more-impl 2.1.1",
 ]
 
 [[package]]
@@ -3111,9 +3111,9 @@ dependencies = [
 
 [[package]]
 name = "derive_more-impl"
-version = "2.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d286bfdaf75e988b4a78e013ecd79c581e06399ab53fbacd2d916c2f904f30b"
+checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
 dependencies = [
  "convert_case 0.10.0",
  "proc-macro2",
@@ -3181,7 +3181,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3676,7 +3676,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4380,7 +4380,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps 7.0.7",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4845,6 +4845,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
+name = "hex-literal"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
+
+[[package]]
 name = "hickory-proto"
 version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5218,7 +5224,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -5673,7 +5679,7 @@ dependencies = [
  "crypto_box",
  "data-encoding",
  "der 0.7.10",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "ed25519-dalek",
  "futures-buffered",
  "futures-util",
@@ -5746,7 +5752,7 @@ checksum = "42393ff3628e5c765acdceb7da693d5f7869ec4c92599a83fa62368b15b0034e"
 dependencies = [
  "curve25519-dalek",
  "data-encoding",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "ed25519-dalek",
  "n0-snafu",
  "nested_enum_utils",
@@ -5769,7 +5775,7 @@ dependencies = [
  "bytes",
  "chrono",
  "data-encoding",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "futures-lite",
  "genawaiter",
  "hex 0.4.3",
@@ -6014,7 +6020,7 @@ dependencies = [
  "bytes",
  "cfg_aliases 0.2.1",
  "data-encoding",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "getrandom 0.3.4",
  "hickory-resolver",
  "http 1.3.1",
@@ -6096,7 +6102,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi 0.5.2",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7310,7 +7316,7 @@ dependencies = [
  "atomic-waker",
  "bytes",
  "cfg_aliases 0.2.1",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "iroh-quinn-udp",
  "js-sys",
  "libc",
@@ -7489,7 +7495,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7986,7 +7992,7 @@ dependencies = [
  "anyhow",
  "bon",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "flume",
  "futures",
@@ -8042,7 +8048,7 @@ dependencies = [
 name = "orb-attest-dbus"
 version = "0.2.9"
 dependencies = [
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "zbus",
 ]
 
@@ -8055,7 +8061,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dbus-launch",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "flume",
  "futures-util",
@@ -8094,7 +8100,7 @@ dependencies = [
 name = "orb-backend-status-dbus"
 version = "0.0.0"
 dependencies = [
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "orb-telemetry",
  "orb-update-agent-dbus",
  "serde",
@@ -8113,7 +8119,7 @@ dependencies = [
  "clap",
  "clap-stdin",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "futures",
  "hex 0.4.3",
  "indicatif",
@@ -8224,7 +8230,7 @@ version = "0.0.0"
 dependencies = [
  "bon",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "flume",
  "futures",
@@ -8296,7 +8302,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dashmap",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "dogstatsd",
  "escargot",
  "flume",
@@ -8349,7 +8355,7 @@ name = "orb-connd-dbus"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "serde",
  "zbus",
 ]
@@ -8433,7 +8439,7 @@ name = "orb-info"
 version = "0.0.0"
 dependencies = [
  "dbus-launch",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "hex 0.4.3",
  "orb-attest-dbus",
@@ -8465,6 +8471,7 @@ dependencies = [
  "const_format",
  "dashmap",
  "dbus-launch",
+ "dogstatsd",
  "figment",
  "flume",
  "futures",
@@ -8515,7 +8522,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "ed25519-dalek",
- "hex-literal",
+ "hex-literal 0.4.1",
  "jose-jwk",
  "orb-build-info",
  "pkcs8 0.10.2",
@@ -8614,7 +8621,7 @@ source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17f
 dependencies = [
  "bon",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "flume",
  "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f)",
  "orb-relay-test-utils",
@@ -8705,9 +8712,9 @@ dependencies = [
  "clap",
  "color-eyre",
  "der 0.8.0",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "hex 0.4.3",
- "hex-literal",
+ "hex-literal 0.4.1",
  "orb-telemetry",
  "owo-colors 3.5.0",
  "p256 0.13.2",
@@ -8728,7 +8735,7 @@ dependencies = [
  "bytes",
  "clap",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "escargot",
  "flume",
  "futures",
@@ -8737,6 +8744,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-se050",
+ "orb-se050-reprovision-validate",
  "orb-security-utils",
  "orb-telemetry",
  "rand 0.8.5",
@@ -8748,6 +8756,23 @@ dependencies = [
  "tokio-util",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "orb-se050-reprovision-validate"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "bon",
+ "derive_more 2.1.1",
+ "eyre",
+ "hex-literal 1.1.0",
+ "orb-info",
+ "orb-se050",
+ "rand 0.10.1",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -8786,7 +8811,7 @@ name = "orb-security-utils"
 version = "0.0.0"
 dependencies = [
  "eyre",
- "hex-literal",
+ "hex-literal 0.4.1",
  "reqwest 0.12.24",
  "ring",
 ]
@@ -8798,7 +8823,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "efivar",
  "libc",
  "orb-build-info",
@@ -8856,14 +8881,20 @@ dependencies = [
  "listenfd",
  "once_cell",
  "orb-build-info",
+ "orb-info",
  "orb-telemetry",
+ "portpicker",
+ "serde",
+ "serde_json",
  "tap",
+ "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tracing",
  "zbus",
  "zbus_systemd",
+ "zenorb",
 ]
 
 [[package]]
@@ -8936,7 +8967,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dashmap",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "futures",
  "hound",
@@ -9017,7 +9048,7 @@ dependencies = [
  "dogstatsd",
  "ed25519-dalek",
  "gpt",
- "hex-literal",
+ "hex-literal 0.4.1",
  "jose-jwk",
  "once_cell",
  "orb-slot-ctrl",
@@ -9117,7 +9148,7 @@ dependencies = [
  "bon",
  "clap",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "futures",
  "keycode",
  "orb-telemetry",
@@ -9143,7 +9174,7 @@ dependencies = [
  "clap",
  "cmd_lib",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "object 0.38.1",
  "serde",
  "serde_json",
@@ -9179,7 +9210,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dashmap",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "eyre",
  "futures",
  "orb-build-info",
@@ -9224,7 +9255,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -9866,7 +9897,7 @@ checksum = "62f1975debe62a70557e42b9ff9466e4890cf9d3d156d296408a711f1c5f642b"
 dependencies = [
  "base64 0.22.1",
  "bytes",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "futures-lite",
  "futures-util",
  "hyper-util",
@@ -10455,7 +10486,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.35",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -10494,9 +10525,9 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
  "once_cell",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11220,7 +11251,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11341,7 +11372,7 @@ dependencies = [
  "security-framework 3.5.1",
  "security-framework-sys",
  "webpki-root-certs 1.0.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -12932,7 +12963,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -14499,7 +14530,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -15320,7 +15351,7 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "color-eyre",
- "derive_more 2.1.0",
+ "derive_more 2.1.1",
  "orb-x-optee",
  "serde",
  "serde_json",

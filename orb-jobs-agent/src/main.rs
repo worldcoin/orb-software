@@ -4,6 +4,7 @@ use orb_jobs_agent::args::Args;
 use orb_jobs_agent::program::{self, Deps};
 use orb_jobs_agent::settings::Settings;
 use orb_jobs_agent::shell::Host;
+use orb_jobs_agent::statsd::dd::DogstatsdClient;
 use tracing::info;
 use zenorb::Zenorb;
 
@@ -29,12 +30,13 @@ async fn run(args: &Args) -> Result<()> {
     let connection = zbus::Connection::session().await?;
 
     info!("conecting to zenoh");
-    let zenorb = Zenorb::from_cfg(zenorb::client_cfg(settings.zenoh_port))
+    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(settings.orb_id.clone())
         .with_name("jobs-agent")
         .await?;
 
-    let deps = Deps::new(Host, connection, zenorb, settings);
+    let statsd = DogstatsdClient::new();
+    let deps = Deps::new(Host, connection, zenorb, settings, statsd);
 
     program::run(deps).await?;
 

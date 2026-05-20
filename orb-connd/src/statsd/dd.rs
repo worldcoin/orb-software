@@ -2,11 +2,13 @@ use async_trait::async_trait;
 use color_eyre::Result;
 use dogstatsd::DogstatsdResult;
 use flume::Sender;
-use std::{thread, time::Duration};
+use std::{fs, path::Path, thread, time::Duration};
 use tokio::sync::oneshot;
-use tracing::error;
+use tracing::{error, info, warn};
 
 use super::StatsdClient;
+
+const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
 
 pub struct DogstatsdClient {
     tx: Sender<Msg>,
@@ -20,7 +22,22 @@ impl DogstatsdClient {
 
         thread::spawn(move || {
             let client = loop {
-                match dogstatsd::Client::new(dogstatsd::Options::default()) {
+                let opts =
+                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
+                        info!("datadog-agent socket found, using it for IPC");
+
+                        dogstatsd::OptionsBuilder::new()
+                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
+                            .build()
+                    } else {
+                        warn!(
+                        "datadog-agent socket not found, falling back to UDP for IPC"
+                    );
+
+                        dogstatsd::Options::default()
+                    };
+
+                match dogstatsd::Client::new(opts) {
                     Ok(client) => break client,
                     Err(e) => {
                         error!(

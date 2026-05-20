@@ -1,5 +1,6 @@
 use crate::{
     network_manager::NetworkManager, resolved::Resolved, statsd::StatsdClient,
+    systemd::Systemd,
 };
 use color_eyre::Result;
 use speare::{mini::OnErr, Backoff, Limit};
@@ -9,6 +10,7 @@ use tracing::info;
 pub mod active_connections;
 pub mod cellular_status;
 pub mod connd_report;
+pub mod data_usage;
 pub mod datadog;
 pub mod net_stats;
 
@@ -19,6 +21,7 @@ pub async fn spawn(
     resolved: Resolved,
     session_bus: zbus::Connection,
     statsd: Arc<dyn StatsdClient>,
+    systemd: Systemd,
     zsender: zenorb::Sender,
     sysfs: PathBuf,
     procfs: PathBuf,
@@ -46,7 +49,9 @@ pub async fn spawn(
 
     speare
         .task_with()
-        .args(datadog::Args { statsd })
+        .args(datadog::Args {
+            statsd: statsd.clone(),
+        })
         .on_err(static_backoff(15))
         .spawn(datadog::report)?;
 
@@ -71,6 +76,12 @@ pub async fn spawn(
         })
         .on_err(static_backoff(15))
         .spawn(active_connections::report)?;
+
+    speare
+        .task_with()
+        .args(data_usage::Args { statsd, systemd })
+        .on_err(static_backoff(15))
+        .spawn(data_usage::report)?;
 
     Ok(())
 }

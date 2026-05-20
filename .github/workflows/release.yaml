@@ -21,6 +21,7 @@ on:
           - orb-ui
           - orb-update-agent
           - orb-update-verifier
+          - zorb
       channel:
         description: |
           Which release channel?

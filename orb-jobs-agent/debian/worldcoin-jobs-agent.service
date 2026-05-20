@@ -6,6 +6,7 @@ After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 After=zenohd.service
 Requires=zenohd.service
+StartLimitIntervalSec=0
 
 [Service]
 Environment="HOME=/home/worldcoin"
@@ -16,7 +17,10 @@ Environment=RUST_BACKTRACE=1
 ExecStart=/usr/local/bin/orb-jobs-agent
 SyslogIdentifier=worldcoin-jobs-agent
 Restart=always
+RestartSec=3
 SupplementaryGroups=systemd-journal
+IPAccounting=yes
+SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target

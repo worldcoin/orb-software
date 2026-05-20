@@ -14,12 +14,31 @@ let
       user = "worldcoin";
     };
   };
+  mkHilOrchestratorCmd =
+    { name, source }:
+    pkgs.writeShellScriptBin name ''
+      export HIL_ORCHESTRATOR_URL='${osConfig.worldcoin.hilOrchestratorUrl}'
+      export HIL_ORB_ID='${osConfig.worldcoin.orbId}'
+      exec ${pkgs.python3.withPackages (ps: [ ps.requests ])}/bin/python3 ${source} "$@"
+    '';
+  hilOrchestratorCmds =
+    lib.optionals (osConfig.worldcoin.orbId != null && osConfig.worldcoin.hilOrchestratorUrl != null)
+      [
+        (mkHilOrchestratorCmd {
+          name = "try_lock";
+          source = ../scripts/hil_try_lock.py;
+        })
+        (mkHilOrchestratorCmd {
+          name = "unlock";
+          source = ../scripts/hil_unlock.py;
+        })
+      ];
 in
 {
   home = {
     username = "worldcoin";
     homeDirectory = "/home/worldcoin";
-    packages = import "${packages}/hil.nix" { inherit pkgs; };
+    packages = (import "${packages}/hil.nix" { inherit pkgs; }) ++ hilOrchestratorCmds;
     sessionVariables = {
       EDITOR = "nvim";
       VISUAL = "nvim";

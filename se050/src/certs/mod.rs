@@ -1,6 +1,8 @@
 mod null_params_alg;
 
-use std::{str::Utf8Error, sync::OnceLock};
+pub use rustls_pki_types::UnixTime;
+
+use std::{hash::Hash, str::Utf8Error, sync::OnceLock};
 
 use p256::{
     ecdsa::VerifyingKey as P256VerifyingKey,
@@ -8,7 +10,7 @@ use p256::{
 };
 use rustls_pki_types::{
     pem::{Error as PemError, PemObject as _},
-    CertificateDer, TrustAnchor, UnixTime,
+    CertificateDer, TrustAnchor,
 };
 use webpki::{EndEntityCert, KeyUsage};
 
@@ -22,6 +24,12 @@ pub struct ChipUniquePubkey(pub P256VerifyingKey);
 impl PartialEq<P256VerifyingKey> for ChipUniquePubkey {
     fn eq(&self, other: &P256VerifyingKey) -> bool {
         self.0 == *other
+    }
+}
+
+impl Hash for ChipUniquePubkey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_encoded_point(true).hash(state);
     }
 }
 
