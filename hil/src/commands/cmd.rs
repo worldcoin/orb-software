@@ -134,13 +134,13 @@ async fn run_inner(
         // Type newline to force a prompt (helps make sure we are in the state we
         // think we are in)
         type_str(&mut serial_writer, "\n").await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id", timeout)
+        wait_for_str(&mut serial_stream, "worldcoin@", timeout)
             .await
             .wrap_err("failed while listening for prompt after newline")?;
 
         // Run cmd
         type_str(&mut serial_writer, &format!("stty -echo; {}\n\n", cmd)).await?;
-        wait_for_str(&mut serial_stream, "worldcoin@id", timeout)
+        wait_for_str(&mut serial_stream, "worldcoin@", timeout)
             .await
             .wrap_err("failed while listening for prompt after command")?;
 
