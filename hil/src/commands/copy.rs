@@ -5,7 +5,10 @@ use color_eyre::{eyre::Context as _, Result};
 use humantime::parse_duration;
 use tracing::info;
 
-use crate::{remote_cmd::CopyDirection, OrbConfig, RemoteArgs, RemoteTransport};
+use crate::{
+    remote_cmd::{CopyDirection, CopyEntity},
+    OrbConfig, RemoteArgs, RemoteTransport,
+};
 
 /// Copy a local file to the Orb.
 #[derive(Debug, Parser)]
@@ -17,6 +20,10 @@ pub struct CopyTo {
     /// Destination path on the Orb.
     #[arg(long)]
     orb: PathBuf,
+
+    /// Recursively copy a directory.
+    #[arg(short, long)]
+    recursive: bool,
 
     /// Transport to use for the copy
     #[arg(long, value_enum, default_value_t = RemoteTransport::Ssh)]
@@ -40,6 +47,10 @@ pub struct CopyFrom {
     /// Destination path on the local machine.
     #[arg(long)]
     local: PathBuf,
+
+    /// Recursively copy a directory.
+    #[arg(short, long)]
+    recursive: bool,
 
     /// Transport to use for the copy
     #[arg(long, value_enum, default_value_t = RemoteTransport::Ssh)]
@@ -66,7 +77,16 @@ impl CopyTo {
         );
         tokio::time::timeout(
             self.timeout,
-            session.copy_file(&self.local, &self.orb, CopyDirection::Upload),
+            session.copy_file(
+                &self.local,
+                &self.orb,
+                CopyDirection::Upload,
+                if self.recursive {
+                    CopyEntity::Directory
+                } else {
+                    CopyEntity::File
+                },
+            ),
         )
         .await
         .wrap_err("copy timed out")?
@@ -87,7 +107,16 @@ impl CopyFrom {
         );
         tokio::time::timeout(
             self.timeout,
-            session.copy_file(&self.local, &self.orb, CopyDirection::Download),
+            session.copy_file(
+                &self.local,
+                &self.orb,
+                CopyDirection::Download,
+                if self.recursive {
+                    CopyEntity::Directory
+                } else {
+                    CopyEntity::File
+                },
+            ),
         )
         .await
         .wrap_err("copy timed out")?
