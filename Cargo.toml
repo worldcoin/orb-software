@@ -37,6 +37,7 @@ members = [
 	"orb-connd",
 	"orb-connd/dbus",
 	"orb-core/agent-iroh",
+	"orb-dogd",
 	"orb-info",
 	"orb-jobs-agent",
 	"ota-backend",
