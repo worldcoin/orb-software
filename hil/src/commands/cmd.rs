@@ -89,7 +89,14 @@ impl Cmd {
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
-        run_inner(serial_reader, serial_writer, self.cmd, self.timeout, &self.username).await
+        run_inner(
+            serial_reader,
+            serial_writer,
+            self.cmd,
+            self.timeout,
+            &self.username,
+        )
+        .await
     }
 
     async fn run_remote(
