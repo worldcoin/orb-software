@@ -55,6 +55,10 @@ pub struct Cmd {
     #[arg(long, default_value = "10s", value_parser = parse_duration)]
     timeout: Duration,
 
+    /// Username whose shell prompt to expect (serial transport only)
+    #[arg(long, default_value = "worldcoin")]
+    username: String,
+
     #[command(flatten)]
     remote: RemoteArgs,
 }
@@ -85,7 +89,14 @@ impl Cmd {
         })?;
         let (serial_reader, serial_writer) = tokio::io::split(serial);
 
-        run_inner(serial_reader, serial_writer, self.cmd, self.timeout).await
+        run_inner(
+            serial_reader,
+            serial_writer,
+            self.cmd,
+            self.timeout,
+            &self.username,
+        )
+        .await
     }
 
     async fn run_remote(
@@ -124,7 +135,9 @@ async fn run_inner(
     serial_writer: impl AsyncWrite,
     cmd: String,
     timeout: Duration,
+    username: &str,
 ) -> Result<()> {
+    let shell_prompt = format!("{username}@");
     let mut serial_writer = pin!(serial_writer);
     let (serial_tx, serial_rx) = broadcast::channel(64);
     let (reader_task, _kill_tx) = spawn_serial_reader_task(serial_reader, serial_tx);
@@ -134,13 +147,13 @@ async fn run_inner(
         // Type newline to force a prompt (helps make sure we are in the state we
         // think we are in)
         type_str(&mut serial_writer, "\n").await?;
-        wait_for_str(&mut serial_stream, "worldcoin@", timeout)
+        wait_for_str(&mut serial_stream, &shell_prompt, timeout)
             .await
             .wrap_err("failed while listening for prompt after newline")?;
 
         // Run cmd
         type_str(&mut serial_writer, &format!("stty -echo; {}\n\n", cmd)).await?;
-        wait_for_str(&mut serial_stream, "worldcoin@", timeout)
+        wait_for_str(&mut serial_stream, &shell_prompt, timeout)
             .await
             .wrap_err("failed while listening for prompt after command")?;
 
@@ -244,6 +257,7 @@ mod test {
             cmd: "pwd".to_owned(),
             transport: CommandTransport::Ssh,
             timeout: Duration::from_secs(5),
+            username: "worldcoin".to_owned(),
             remote: RemoteArgs {
                 hostname: None,
                 username: None,
