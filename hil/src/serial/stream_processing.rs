@@ -38,11 +38,11 @@ impl SerialProcessor {
             make_streamed_buf_comparison(self.custom_pattern);
         let mut kernel_panic_detector =
             make_streamed_buf_comparison(self.kernel_panic_pattern);
-
         byte_stream
             .map_ok(move |bytes| {
-                let num_custom = custom_pattern_detector(bytes.as_ref());
-                let num_kernel_panics = kernel_panic_detector(bytes.as_ref());
+                let stripped = strip_ansi_codes(bytes.as_ref());
+                let num_custom = custom_pattern_detector(&stripped);
+                let num_kernel_panics = kernel_panic_detector(&stripped);
                 let custom_iter =
                     (0..num_custom).map(|_| Ok(SerialLogEvent::PatternFound));
                 let panic_iter =
@@ -51,6 +51,24 @@ impl SerialProcessor {
             })
             .try_flatten()
     }
+}
+
+fn strip_ansi_codes(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'[') {
+            i += 2;
+            while i < bytes.len() && !(0x40..=0x7e).contains(&bytes[i]) {
+                i += 1;
+            }
+            i += 1;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
 }
 
 /// Creates a closure used to match a stream of bytes against `pattern`.
