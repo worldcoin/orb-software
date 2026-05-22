@@ -16,7 +16,7 @@
     ../hil-common.nix
   ];
 
-  worldcoin.orbId = "cf2dbea5";
+  worldcoin.orbId = "a5af7640";
   worldcoin.orbPlatform = "pearl";
 
   environment.etc."worldcoin/orb.yaml" = {
