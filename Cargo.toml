@@ -22,7 +22,6 @@ members = [
 	"experiments/zenoh",
 	"gst-jpeg",
 	"header-parsing",
-	"hil",
 	"io-utils",
 	"jwk-util",
 	"license-stubs/glib",
