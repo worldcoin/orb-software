@@ -30,6 +30,7 @@ use clap::Parser as _;
 use efivar::EfiVarDb;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
+use orb_dogd::DogstatsdClient;
 use orb_info::orb_os_release::OrbOsRelease;
 use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_agent::{
@@ -145,6 +146,9 @@ fn setup_dbus() -> (
 }
 
 fn run(args: &Args) -> eyre::Result<()> {
+    let metrics =
+        DogstatsdClient::new().wrap_err("failed to construct DogstatsdClient")?;
+
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let os_release =
         OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
@@ -371,7 +375,7 @@ fn run(args: &Args) -> eyre::Result<()> {
         }
 
         component
-            .run_update(target_slot, &claim, settings.recovery)
+            .run_update(target_slot, &claim, settings.recovery, &metrics)
             .inspect(|_| {
                 if let Some(iface) = &update_iface
                     && let Err(e) = interfaces::update_dbus_progress(
@@ -427,6 +431,7 @@ fn run(args: &Args) -> eyre::Result<()> {
             settings.active_slot,
             &mut version_map,
             &version_map_dst,
+            &metrics,
         )
         .wrap_err("failed to copy redundant GPT partitions not listed in manifest")?;
     }

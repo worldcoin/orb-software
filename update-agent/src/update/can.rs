@@ -13,12 +13,9 @@ use can_rs::{
     CAN_DATA_LEN,
 };
 use eyre::{bail, ensure, eyre, WrapErr as _};
+use orb_dogd::MetricEmitter;
 use orb_messages::{self as protobuf, prost::Message as _};
-use orb_update_agent_core::{
-    components,
-    telemetry::{LogOnError, MetricEmitter, DATADOG},
-    Slot,
-};
+use orb_update_agent_core::{components, Slot};
 use polling::{Event, Poller};
 use tracing::{debug, info, warn};
 
@@ -118,13 +115,14 @@ enum McuUpdateError {
 }
 
 impl Update for components::Can {
-    fn update<R>(&self, _slot: Slot, mut src: R) -> eyre::Result<()>
+    fn update<R, M>(&self, _slot: Slot, mut src: R, metrics: &M) -> eyre::Result<()>
     where
         R: io::Read + io::Seek,
+        M: MetricEmitter,
     {
-        DATADOG
+        let _ = metrics
             .incr("orb.update.count.component.can", ["status:started"])
-            .or_log();
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         src.seek(io::SeekFrom::Start(0))
             .wrap_err("failed to seek to start of CAN update source")?;
         let src_len = src
@@ -174,11 +172,12 @@ impl Update for components::Can {
                 .wrap_err_with(|| {
                     eyre!("unable to send dfu block {}/{}", blocks_num, block_len)
                 })
-                .map_err({
-                    DATADOG
+                .inspect_err(|_| {
+                    let _ = metrics
                         .incr("orb.update.count.component.can", ["status:write_error"])
-                        .or_log();
-                    |e| e
+                        .inspect_err(|me| {
+                            tracing::error!("metric emit failed: {me:#?}")
+                        });
                 })?;
             std::thread::sleep(Duration::from_millis(MCU_BLOCK_SEND_THROTTLE_DELAY_MS));
         }
@@ -198,14 +197,13 @@ impl Update for components::Can {
             }
             _ => bail!("Unknown node"),
         };
-        update_stream.send_payload(payload).map_err({
-            DATADOG
+        update_stream.send_payload(payload).inspect_err(|_| {
+            let _ = metrics
                 .incr(
                     "orb.update.count.component.can",
                     ["status:post_check_error"],
                 )
-                .or_log();
-            |e| e
+                .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
         })?;
 
         // activate image in MCU secondary slot so that the image is used
@@ -229,14 +227,13 @@ impl Update for components::Can {
             ),
             _ => bail!("Unknown node"),
         };
-        update_stream.send_payload(payload).map_err({
-            DATADOG
+        update_stream.send_payload(payload).inspect_err(|_| {
+            let _ = metrics
                 .incr(
                     "orb.update.count.component.can",
                     ["status:activation_error"],
                 )
-                .or_log();
-            |e| e
+                .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
         })?;
 
         // Security MCU won't reboot to install the new update
@@ -253,9 +250,9 @@ impl Update for components::Can {
             _ => bail!("Unknown node"),
         };
 
-        DATADOG
+        let _ = metrics
             .incr("orb.update.count.component.can", ["status:write_complete"])
-            .or_log();
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         Ok(())
     }
 }

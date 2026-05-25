@@ -35,6 +35,7 @@ libc.workspace = true
 nix = { workspace = true, default-features = false, features = ["fs"] }
 once_cell = "1.17.0"
 orb-build-info.workspace = true
+orb-dogd.workspace = true
 orb-io-utils.workspace = true
 orb-telemetry.workspace = true
 orb-update-agent-core.workspace = true

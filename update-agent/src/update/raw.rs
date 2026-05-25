@@ -1,22 +1,20 @@
 use eyre::{ensure, WrapErr as _};
-use orb_update_agent_core::{
-    components,
-    telemetry::{LogOnError, MetricEmitter, DATADOG},
-    Slot,
-};
+use orb_dogd::MetricEmitter;
+use orb_update_agent_core::{components, Slot};
 use std::io::{self, Seek as _, Write};
 use tracing::debug;
 
 use super::Update;
 
 impl Update for components::Raw {
-    fn update<R>(&self, slot: Slot, mut src: R) -> eyre::Result<()>
+    fn update<R, M>(&self, slot: Slot, mut src: R, metrics: &M) -> eyre::Result<()>
     where
         R: io::Read + io::Seek,
+        M: MetricEmitter,
     {
-        DATADOG
+        let _ = metrics
             .incr("orb.update.count.component.raw", ["status:started"])
-            .or_log();
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         let mut block_dev =
             self.get_file().wrap_err("failed to open target raw file")?;
 
@@ -73,11 +71,10 @@ impl Update for components::Raw {
                     self.device
                 )
             })
-            .map_err({
-                DATADOG
+            .inspect_err(|_| {
+                let _ = metrics
                     .incr("orb.update.count.component.raw", ["status:write_error"])
-                    .or_log();
-                |e| e
+                    .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
 
@@ -86,9 +83,9 @@ impl Update for components::Raw {
             .wrap_err_with(|| format!("block device `{}` flush failed", self.device))?;
         debug!("-- flushed!");
 
-        DATADOG
+        let _ = metrics
             .incr("orb.update.count.component.raw", ["status:write_complete"])
-            .or_log();
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         Ok(())
     }
