@@ -15,6 +15,7 @@ testing = []
 
 [dependencies]
 dogstatsd.workspace = true
+eyre.workspace = true
 flume.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

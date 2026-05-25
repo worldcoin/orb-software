@@ -1,8 +1,8 @@
-//! sync, drop-on-overflow statsd client.
+//! Standardized statsd client interface.
 //!
-//! [`MetricEmitter::emit`] queues a metric onto a bounded channel and returns
-//! immediately. A background worker (see [`DogstatsdClient`]) drains the
-//! channel and performs the UDP send to the metric collector.
+//! [`MetricEmitter`] is an abstraction trait bounding the API;
+//! [`DogstatsdClient`] is used for the default  implementation.
+//! Test implementations are gated behind the `testing` feature.
 #![forbid(unsafe_code)]
 
 mod dd;
@@ -12,98 +12,43 @@ pub use dogstatsd::DogstatsdError;
 #[cfg(any(test, feature = "testing"))]
 pub mod test;
 
-/// Failure of [`MetricEmitter::emit`].
-///
-/// Wraps the underlying channel's send error so the choice of channel
-/// implementation stays an internal detail of this crate.
+/// Empty tag set.
+pub const NO_TAGS: [&str; 0] = [];
+
+/// Failure from a [`MetricEmitter`] method.
 #[derive(thiserror::Error, Debug)]
-pub enum MetricError {
-    /// Channel at capacity. The rejected [`Metric`] is returned so
-    /// callers may retry or drop.
-    #[error("channel is at capacity")]
-    ChannelFull(Metric),
-    /// Consumer is closed. Every subsequent `emit` will also
-    /// fail with this variant.
-    #[error("channel is closed")]
-    ChannelClosed(Metric),
-}
+#[error(transparent)]
+pub struct MetricError(#[from] pub eyre::Report);
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Metric {
-    /// Counter delta; Used by:
-    /// [`MetricEmitter::count`] and [`MetricEmitter::incr`]
-    Count {
-        stat: String,
-        val: i64,
-        tags: Vec<String>,
-    },
-    /// Last point-in-time value;
-    /// Used by: [`MetricEmitter::gauge`]
-    Gauge {
-        stat: String,
-        val: f64,
-        tags: Vec<String>,
-    },
-    /// Metric aggregated by the **local Datadog agent**.
-    /// Percentiles are per-host only;
-    /// Used by [`MetricEmitter::hist`].
-    Histogram {
-        stat: String,
-        val: f64,
-        tags: Vec<String>,
-    },
-    /// Raw metrics are aggregated by the **Datadog's backend**.
-    /// Supports global percentiles and post-hoc tag splits.
-    /// Used by [`MetricEmitter::dist`].
-    Distribution {
-        stat: String,
-        val: f64,
-        tags: Vec<String>,
-    },
-}
-
-/// Sink for [`Metric`]s.
+/// Statsd-style metric sink.
 pub trait MetricEmitter: Send + Sync + 'static {
-    /// Queue `metric` for publishing
-    fn emit(&self, metric: Metric) -> Result<(), MetricError>;
+    /// Counter delta
+    fn count<S, I>(&self, stat: S, val: i64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 
-    fn count(&self, stat: &str, val: i64, tags: &[&str]) -> Result<(), MetricError> {
-        self.emit(Metric::Count {
-            stat: stat.to_owned(),
-            val,
-            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
-        })
-    }
+    /// Single increment of a counter
+    fn incr<S, I>(&self, stat: S, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 
-    fn gauge(&self, stat: &str, val: f64, tags: &[&str]) -> Result<(), MetricError> {
-        self.emit(Metric::Gauge {
-            stat: stat.to_owned(),
-            val,
-            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
-        })
-    }
+    /// Last point-in-time value;
+    fn gauge<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 
-    fn incr(&self, stat: &str, tags: &[&str]) -> Result<(), MetricError> {
-        self.emit(Metric::Count {
-            stat: stat.to_owned(),
-            val: 1,
-            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
-        })
-    }
+    /// Metric aggregated by the **local Datadog agent**.
+    fn hist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 
-    fn hist(&self, stat: &str, val: f64, tags: &[&str]) -> Result<(), MetricError> {
-        self.emit(Metric::Histogram {
-            stat: stat.to_owned(),
-            val,
-            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
-        })
-    }
-
-    fn dist(&self, stat: &str, val: f64, tags: &[&str]) -> Result<(), MetricError> {
-        self.emit(Metric::Distribution {
-            stat: stat.to_owned(),
-            val,
-            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
-        })
-    }
+    /// Metrics are aggregated by the **Datadog's backend**.
+    fn dist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 }

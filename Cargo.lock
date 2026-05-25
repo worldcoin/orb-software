@@ -8369,6 +8369,7 @@ name = "orb-dogd"
 version = "0.1.0"
 dependencies = [
  "dogstatsd",
+ "eyre",
  "flume",
  "thiserror 2.0.17",
  "tracing",
