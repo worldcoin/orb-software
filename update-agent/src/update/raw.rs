@@ -1,7 +1,7 @@
 use eyre::{ensure, WrapErr as _};
 use orb_update_agent_core::{
     components,
-    telemetry::{LogOnError, DATADOG},
+    telemetry::{LogOnError, MetricEmitter, DATADOG},
     Slot,
 };
 use std::io::{self, Seek as _, Write};

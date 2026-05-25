@@ -1,16 +1,11 @@
-use dogstatsd::{Client, DogstatsdResult, Options};
 use once_cell::sync::Lazy;
+use orb_dogd::{DogstatsdClient, MetricError};
 
-/// Orb identification code.
-pub static DATADOG: Lazy<Client> = Lazy::new(init_datadog_client);
+pub use orb_dogd::MetricEmitter;
 
-/// Removes the need to put` &[] as &[&str]` everywhere.
-pub const NO_TAGS: &[&str] = &[];
-
-fn init_datadog_client() -> Client {
-    let datadog_options = Options::default();
-    Client::new(datadog_options).unwrap()
-}
+pub static DATADOG: Lazy<DogstatsdClient> = Lazy::new(|| {
+    DogstatsdClient::new().expect("failed to construct DogstatsdClient")
+});
 
 /// A trait for logging errors instead of propagating the error with `?`.
 pub trait LogOnError {
@@ -18,10 +13,10 @@ pub trait LogOnError {
     fn or_log(&self);
 }
 
-impl LogOnError for DogstatsdResult {
+impl<T> LogOnError for Result<T, MetricError> {
     fn or_log(&self) {
         if let Err(e) = self {
-            tracing::error!("Datadog reporting failed with error: {e:#?}");
+            tracing::error!("metric emit failed: {e:#?}");
         }
     }
 }

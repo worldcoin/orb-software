@@ -9057,12 +9057,13 @@ name = "orb-update-agent-core"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
- "dogstatsd",
  "ed25519-dalek",
+ "eyre",
  "gpt",
  "hex-literal 0.4.1",
  "jose-jwk",
  "once_cell",
+ "orb-dogd",
  "orb-slot-ctrl",
  "rustix 0.38.44",
  "serde",

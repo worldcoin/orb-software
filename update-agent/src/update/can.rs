@@ -16,7 +16,7 @@ use eyre::{bail, ensure, eyre, WrapErr as _};
 use orb_messages::{self as protobuf, prost::Message as _};
 use orb_update_agent_core::{
     components,
-    telemetry::{LogOnError, DATADOG},
+    telemetry::{LogOnError, MetricEmitter, DATADOG},
     Slot,
 };
 use polling::{Event, Poller};

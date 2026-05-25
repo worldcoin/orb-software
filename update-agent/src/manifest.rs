@@ -6,7 +6,7 @@ use std::{
 
 use eyre::WrapErr;
 use tap::TapFallible as _;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 extern crate hex;
 

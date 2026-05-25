@@ -8,7 +8,7 @@ use eyre::{ensure, WrapErr as _};
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
     components::{self, Gpt},
-    telemetry::{LogOnError, DATADOG},
+    telemetry::{LogOnError, MetricEmitter, DATADOG},
     Claim, Component, Components, Slot, VersionMap,
 };
 use tracing::{debug, warn};
