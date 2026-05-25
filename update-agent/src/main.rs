@@ -30,7 +30,7 @@ use clap::Parser as _;
 use efivar::EfiVarDb;
 use eyre::{bail, ensure, WrapErr};
 use nix::sys::statvfs;
-use orb_dogd::DogstatsdClient;
+use orb_dogd::{DogstatsdClient, MetricEmitter};
 use orb_info::orb_os_release::OrbOsRelease;
 use orb_slot_ctrl::OrbSlotCtrl;
 use orb_update_agent::{
@@ -333,6 +333,25 @@ fn run(args: &Args) -> eyre::Result<()> {
         )?;
     } else {
         bail!("no connection to dbus supervisor, bailing");
+    }
+
+    // check the status of the target slot to detect prior update attempts:
+    // - `UpdateInProcess` -> consumption was interrupted (shutdown, crash,
+    //   or boot failed before L4TLauncher cleared the state).
+    // - `Unbootable` -> the bootloader exhausted retries on the target slot
+    //   and fell back to the currently active slot.
+    match slot_ctrl.get_rootfs_status(target_slot.into()) {
+        Ok(orb_slot_ctrl::RootFsStatus::UpdateInProcess) => {
+            let _ = metrics
+                .incr("orb.platform.update.failed", orb_dogd::NO_TAGS)
+                .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
+        }
+        Ok(orb_slot_ctrl::RootFsStatus::Unbootable) => {
+            let _ = metrics
+                .incr("orb.platform.update.fallback", orb_dogd::NO_TAGS)
+                .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
+        }
+        _ => {}
     }
 
     // before starting to update components, set the rootfs status for the target slot

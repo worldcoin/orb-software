@@ -101,7 +101,7 @@ impl Update for components::Gpt {
         }
 
         let _ = metrics
-            .incr("orb.update.count.component.gpt", ["status:started"])
+            .incr("orb.platform.update.component.gpt", ["status:started"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         let disk = self
@@ -167,7 +167,7 @@ impl Update for components::Gpt {
             })
             .inspect_err(|_| {
                 let _ = metrics
-                    .incr("orb.update.count.component.gpt", ["status:write_error"])
+                    .incr("orb.platform.update.component.gpt", ["status:write_error"])
                     .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
@@ -179,7 +179,10 @@ impl Update for components::Gpt {
         debug!("-- flushed!");
 
         let _ = metrics
-            .incr("orb.update.count.component.gpt", ["status:write_complete"])
+            .incr(
+                "orb.platform.update.component.gpt",
+                ["status:write_complete"],
+            )
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         Ok(())
     }

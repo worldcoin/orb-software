@@ -121,7 +121,7 @@ impl Update for components::Can {
         M: MetricEmitter,
     {
         let _ = metrics
-            .incr("orb.update.count.component.can", ["status:started"])
+            .incr("orb.platform.update.component.can", ["status:started"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         src.seek(io::SeekFrom::Start(0))
             .wrap_err("failed to seek to start of CAN update source")?;
@@ -174,7 +174,10 @@ impl Update for components::Can {
                 })
                 .inspect_err(|_| {
                     let _ = metrics
-                        .incr("orb.update.count.component.can", ["status:write_error"])
+                        .incr(
+                            "orb.platform.update.component.can",
+                            ["status:write_error"],
+                        )
                         .inspect_err(|me| {
                             tracing::error!("metric emit failed: {me:#?}")
                         });
@@ -200,7 +203,7 @@ impl Update for components::Can {
         update_stream.send_payload(payload).inspect_err(|_| {
             let _ = metrics
                 .incr(
-                    "orb.update.count.component.can",
+                    "orb.platform.update.component.can",
                     ["status:post_check_error"],
                 )
                 .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
@@ -230,7 +233,7 @@ impl Update for components::Can {
         update_stream.send_payload(payload).inspect_err(|_| {
             let _ = metrics
                 .incr(
-                    "orb.update.count.component.can",
+                    "orb.platform.update.component.can",
                     ["status:activation_error"],
                 )
                 .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
@@ -251,7 +254,10 @@ impl Update for components::Can {
         };
 
         let _ = metrics
-            .incr("orb.update.count.component.can", ["status:write_complete"])
+            .incr(
+                "orb.platform.update.component.can",
+                ["status:write_complete"],
+            )
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         Ok(())
     }
