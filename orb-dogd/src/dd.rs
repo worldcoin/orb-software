@@ -1,13 +1,16 @@
-use dogstatsd::{Client, DogstatsdError, Options};
-use flume::Sender;
-use std::thread;
-use tracing::warn;
+use dogstatsd::Client;
+use flume::{Sender, TrySendError};
+use std::{fs, path::Path, thread, time::Duration};
+use tracing::{error, info, warn};
 
 use super::{MetricEmitter, MetricError};
 
 pub struct DogstatsdClient {
     tx: Sender<Metric>,
 }
+
+const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Metric {
@@ -43,17 +46,45 @@ pub(crate) enum Metric {
     },
 }
 
+impl Default for DogstatsdClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DogstatsdClient {
     /// Connect to the local statsd collector.
     ///
     /// Fails if the underlying socket cannot be bound.
-    pub fn new() -> Result<Self, DogstatsdError> {
-        let (tx, rx) = flume::unbounded();
-
-        let datadog_options = Options::default();
-        let client = Client::new(datadog_options)?;
+    pub fn new() -> Self {
+        let (tx, rx) = flume::bounded(512);
 
         thread::spawn(move || {
+            let client = loop {
+                let err_msg =
+                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
+                        info!("datadog-agent socket found, using it for IPC");
+
+                        let opts = dogstatsd::OptionsBuilder::new()
+                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
+                            .build();
+
+                        match Client::new(opts) {
+                            Ok(client) => break client,
+                            Err(e) => format!("failed to create DD client {e}"),
+                        }
+                    } else {
+                        format!("{DOGSTATSD_SOCKET_PATH} not found")
+                    };
+
+                error!(
+                    "{err_msg}. waiting {}s and trying again",
+                    DOGSTATSD_BACKOFF.as_secs()
+                );
+
+                thread::sleep(DOGSTATSD_BACKOFF);
+            };
+
             while let Ok(metric) = rx.recv() {
                 match metric {
                     Metric::Count { stat, val, tags } => {
@@ -81,7 +112,15 @@ impl DogstatsdClient {
             }
         });
 
-        Ok(Self { tx })
+        Self { tx }
+    }
+
+    fn emit(&self, metric: Metric) -> Result<(), MetricError> {
+        self.tx.try_send(metric).map_err(|e| match e {
+            TrySendError::Full(_) => eyre::eyre!("transport channel is full: {e:#?}"),
+            TrySendError::Disconnected(_) => eyre::eyre!("worker has died: {e:#?}"),
+        })?;
+        Ok(())
     }
 }
 
@@ -96,11 +135,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn incr<S, I>(&self, stat: S, tags: I) -> Result<(), MetricError>
@@ -113,11 +148,7 @@ impl MetricEmitter for DogstatsdClient {
             val: 1,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn gauge<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -130,11 +161,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn hist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -147,11 +174,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn dist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -164,10 +187,6 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 }
