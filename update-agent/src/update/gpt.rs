@@ -19,6 +19,8 @@ use crate::{
     mount::unmount_partition_by_label, write_json_and_sync,
 };
 
+const METRIC_NAME: &str = "orb.platform.update.component.gpt";
+
 // Find all redundant GPT components that are listed in `system_components` buit
 // which were not updated as part of the base update
 // specified in the update manifest
@@ -101,7 +103,7 @@ impl Update for components::Gpt {
         }
 
         let _ = metrics
-            .incr("orb.platform.update.component.gpt", ["status:started"])
+            .incr(METRIC_NAME, ["status:started"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         let disk = self
@@ -167,7 +169,7 @@ impl Update for components::Gpt {
             })
             .inspect_err(|_| {
                 let _ = metrics
-                    .incr("orb.platform.update.component.gpt", ["status:write_error"])
+                    .incr(METRIC_NAME, ["status:write_error"])
                     .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
@@ -179,10 +181,7 @@ impl Update for components::Gpt {
         debug!("-- flushed!");
 
         let _ = metrics
-            .incr(
-                "orb.platform.update.component.gpt",
-                ["status:write_complete"],
-            )
+            .incr(METRIC_NAME, ["status:write_complete"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         Ok(())
     }

@@ -6,6 +6,8 @@ use tracing::debug;
 
 use super::Update;
 
+const METRIC_NAME: &str = "orb.platform.update.component.raw";
+
 impl Update for components::Raw {
     fn update<R, M>(&self, slot: Slot, mut src: R, metrics: &M) -> eyre::Result<()>
     where
@@ -13,7 +15,7 @@ impl Update for components::Raw {
         M: MetricEmitter,
     {
         let _ = metrics
-            .incr("orb.platform.update.component.raw", ["status:started"])
+            .incr(METRIC_NAME, ["status:started"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         let mut block_dev =
             self.get_file().wrap_err("failed to open target raw file")?;
@@ -73,7 +75,7 @@ impl Update for components::Raw {
             })
             .inspect_err(|_| {
                 let _ = metrics
-                    .incr("orb.platform.update.component.raw", ["status:write_error"])
+                    .incr(METRIC_NAME, ["status:write_error"])
                     .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
@@ -84,10 +86,7 @@ impl Update for components::Raw {
         debug!("-- flushed!");
 
         let _ = metrics
-            .incr(
-                "orb.platform.update.component.raw",
-                ["status:write_complete"],
-            )
+            .incr(METRIC_NAME, ["status:write_complete"])
             .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         Ok(())
