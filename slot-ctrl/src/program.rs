@@ -2,7 +2,6 @@ use crate::{BootChainFwStatus, Error, OrbSlotCtrl, RootFsStatus, Slot};
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::bail, Result};
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_info::orb_os_release::OrbOsPlatform;
 use std::{env, str::FromStr};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -186,16 +185,12 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                 StatusCommands::ListStatusVariants => {
                     let mut output = String::new();
                     output.push_str(
-                        "Available Rootfs status variants with their aliases):\n",
+                        "Available Rootfs status variants (with their aliases):\n",
                     );
-                    output.push_str("  Normal (normal, 0)\n");
-                    if OrbOsPlatform::Pearl == slot_ctrl.orb_type {
-                        output.push_str(
-                            "  UpdateInProcess (updateinprocess, updinprocess, 1)\n",
-                        );
-                        output.push_str("  UpdateDone (updatedone, upddone, 2)\n");
-                    }
-                    output.push_str("  Unbootable (unbootable, 3)\n");
+                    output.push_str("\tNormal (normal, 0)\n");
+                    output.push_str("\tUpdateInProcess (updateinprocess, 1)\n");
+                    output.push_str("\tUpdateDone (updatedone, 2)\n");
+                    output.push_str("\tUnbootable (unbootable, 3)\n");
 
                     output
                 }
