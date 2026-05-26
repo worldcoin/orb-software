@@ -146,9 +146,6 @@ fn setup_dbus() -> (
 }
 
 fn run(args: &Args) -> eyre::Result<()> {
-    let metrics =
-        DogstatsdClient::new().wrap_err("failed to construct DogstatsdClient")?;
-
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let os_release =
         OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
@@ -174,6 +171,9 @@ fn run(args: &Args) -> eyre::Result<()> {
         }
     };
     debug!("running with the following settings: {settings_ser}");
+
+    //  metrics propagation to DD
+    let metrics = DogstatsdClient::new();
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
