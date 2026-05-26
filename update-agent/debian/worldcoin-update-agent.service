@@ -23,6 +23,7 @@ ExecStart=/bin/bash -c '/usr/local/bin/orb-update-agent \
                     ${ORB_UPDATE_AGENT_EXTRA_ARGS}'
 RestartForceExitStatus=150
 RestartSec=10s
+IPAccounting=yes
 
 [Install]
 WantedBy=multi-user.target

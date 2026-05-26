@@ -20,6 +20,7 @@ SyslogIdentifier=worldcoin-attest
 Restart=on-failure
 # TODO: use the orb-info crate
 ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
+IPAccounting=yes
 
 NoNewPrivileges=yes
 ProtectHome=yes

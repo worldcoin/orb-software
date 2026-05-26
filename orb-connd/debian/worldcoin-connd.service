@@ -23,6 +23,8 @@ SyslogIdentifier=worldcoin-connd
 ExecStart=/usr/local/bin/orb-connd
 Restart=always
 RestartSec=3
+IPAccounting=yes
+SupplementaryGroups=zenohd
 
 # Diamond only: spawns itself (via std::env::current_exe()) as the `orb-ss-connd-nmprofiles`
 # user/group for OP-TEE secure storage. tokio Command::uid()/gid() calls setresuid()/

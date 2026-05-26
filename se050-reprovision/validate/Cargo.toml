@@ -1,0 +1,32 @@
+[package]
+name = "orb-se050-reprovision-validate"
+version = "0.0.0"
+description = "Validation logic shared between orb and backend"
+authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+base64.workspace = true
+bon.workspace = true
+derive_more = { version = "2.1.1", features = ["as_ref", "deref"] }
+eyre.workspace = true
+orb-info = { workspace = true, default-features = false, features = [
+	"serde",
+	"orb-id",
+] }
+orb-se050.workspace = true
+rand = "0.10.1"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+hex-literal = "1.1.0"
+
+[features]
+orb = [] # enables orb-specific apis. DO NOT USE THIS FROM THE BACKEND.

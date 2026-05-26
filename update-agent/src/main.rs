@@ -331,6 +331,16 @@ fn run(args: &Args) -> eyre::Result<()> {
         bail!("no connection to dbus supervisor, bailing");
     }
 
+    // before starting to update components, set the rootfs status for the target slot
+    slot_ctrl
+        .set_rootfs_status(
+            orb_slot_ctrl::RootFsStatus::UpdateInProcess,
+            target_slot.into(),
+        )
+        .wrap_err_with(|| {
+            format!("failed to set the rootfs status for the target slot {target_slot}")
+        })?;
+
     // Set overall status to Installing before starting component installations
     if let Some(iface) = &update_iface
         && let Err(e) = interfaces::update_dbus_progress(
@@ -811,8 +821,10 @@ fn finalize_normal_update(
         if data.value() == &EFI_OS_REQUEST_CAPSULE_UPDATE[4..] {
             debug!("Capsule update detected");
             slot_ctrl
-                .mark_slot_ok(target_slot.into())
-                .unwrap_or_else(|e| warn!("{e:#}"));
+                .reset_retry_counts_to_max(target_slot.into())
+                .wrap_err_with(|| {
+                    format!("failed to reset retry counter for the target slot {target_slot}")
+                })?;
             return Ok(());
         }
     } else {

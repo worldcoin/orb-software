@@ -7,6 +7,7 @@ use bon::{bon, builder};
 use dbus_launch::BusType;
 use orb_connd_dbus::Connd;
 use orb_info::OrbId;
+use orb_jobs_agent::statsd::dd::DogstatsdClient;
 use orb_jobs_agent::{
     program::{self, Deps},
     settings::Settings,
@@ -248,6 +249,7 @@ impl JobAgentFixture {
             self.dbus_conn.clone(),
             self.zenorb.clone(),
             self.settings.clone(),
+            DogstatsdClient::new(),
         )
     }
 

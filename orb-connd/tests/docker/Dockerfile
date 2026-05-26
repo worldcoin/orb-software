@@ -27,7 +27,7 @@ RUN ZENOH_VERSION="1.7.2" && \
     rm -rf /var/lib/apt/lists/* /tmp/zenoh.zip /tmp/zenoh && \
     zenohd --version
 
-RUN mkdir -p /run/integration-tests
+RUN mkdir -p /run/integration-tests /run/zenohd
 
 COPY zenohd.json5 /etc/zenohd.json5
 

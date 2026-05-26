@@ -3,6 +3,8 @@
 pub mod cli;
 pub mod remote_api;
 
+pub use orb_se050_reprovision_validate as validate;
+
 use color_eyre::{eyre::WrapErr as _, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use rand::{rngs::StdRng, Rng as _};
@@ -30,33 +32,8 @@ pub async fn run(mut cfg: Config) -> Result<()> {
     cfg.rng.fill(&mut nonce);
     let output = crate::cli::call(cfg.cli_strat, nonce)
         .await
-        .wrap_err("failed to call cli");
-    let output = output?;
+        .wrap_err("failed to call cli")?;
     info!("cli output: {output:?}");
 
     Ok(())
-}
-
-mod base64_serde {
-    use base64::engine::general_purpose::STANDARD;
-    use base64::Engine as _;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let encoded = STANDARD.encode(value);
-        serializer.serialize_str(&encoded)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let encoded = String::deserialize(deserializer)?;
-        STANDARD
-            .decode(encoded.as_bytes())
-            .map_err(serde::de::Error::custom)
-    }
 }

@@ -8,8 +8,9 @@ use orb_info::OrbId;
 use tracing::warn;
 
 use self::client_builder::{IsUnset, SetBaseUrl, SetClient, State};
-use crate::cli::KeyInfo;
 use crate::BUILD_INFO;
+
+use crate::validate::KeyInfo;
 
 const USER_AGENT: &str = const_concat!(
     "orb-se050-reprovision/",
@@ -81,7 +82,6 @@ pub struct PubkeyPem(String);
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Proof {
-    #[serde(skip)]
     orb_id: OrbId,
     server_nonce: u128,
     /// Combined with server_nonce for freshness

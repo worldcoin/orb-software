@@ -1,14 +1,44 @@
 # home-manager configuration for all HILs.
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  ...
+}:
 let
   xdg = ../xdg;
   packages = ../packages;
+  mkOrbSshMatchBlock = id: {
+    "orb" = {
+      hostname = "orb-${id}.local";
+      user = "worldcoin";
+    };
+  };
+  mkHilOrchestratorCmd =
+    { name, source }:
+    pkgs.writeShellScriptBin name ''
+      export HIL_ORCHESTRATOR_URL='${osConfig.worldcoin.hilOrchestratorUrl}'
+      export HIL_ORB_ID='${osConfig.worldcoin.orbId}'
+      exec ${pkgs.python3.withPackages (ps: [ ps.requests ])}/bin/python3 ${source} "$@"
+    '';
+  hilOrchestratorCmds =
+    lib.optionals (osConfig.worldcoin.orbId != null && osConfig.worldcoin.hilOrchestratorUrl != null)
+      [
+        (mkHilOrchestratorCmd {
+          name = "try_lock";
+          source = ../scripts/hil_try_lock.py;
+        })
+        (mkHilOrchestratorCmd {
+          name = "unlock";
+          source = ../scripts/hil_unlock.py;
+        })
+      ];
 in
 {
   home = {
     username = "worldcoin";
     homeDirectory = "/home/worldcoin";
-    packages = import "${packages}/hil.nix" { inherit pkgs; };
+    packages = (import "${packages}/hil.nix" { inherit pkgs; }) ++ hilOrchestratorCmds;
     sessionVariables = {
       EDITOR = "nvim";
       VISUAL = "nvim";
@@ -105,6 +135,10 @@ in
   };
 
   fonts.fontconfig.enable = true;
+
+  programs.ssh.matchBlocks = lib.optionalAttrs (osConfig.worldcoin.orbId != null) (
+    mkOrbSshMatchBlock osConfig.worldcoin.orbId
+  );
 
   # Nicely reload system units when changing configs
   systemd.user.startServices = "sd-switch";

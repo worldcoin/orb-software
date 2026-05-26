@@ -168,10 +168,7 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                 }
 
                 StatusCommands::ResetRetryCounters => {
-                    if let Err(e) = slot_ctrl
-                        .reset_efi_retry_count_to_max(slot)
-                        .and_then(|_| slot_ctrl.reset_srrf_retry_count_to_max(slot))
-                    {
+                    if let Err(e) = slot_ctrl.reset_retry_counts_to_max(slot) {
                         check_running_as_root(e)?;
                     }
 

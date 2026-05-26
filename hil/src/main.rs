@@ -50,7 +50,7 @@ fn make_clap_v3_styles() -> clap::builder::Styles {
 async fn main() -> Result<()> {
     color_eyre::install()?;
     tracing_subscriber::registry()
-        .with(fmt::layer())
+        .with(fmt::layer().with_writer(std::io::stderr))
         .with(
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())

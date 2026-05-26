@@ -1,8 +1,11 @@
-use crate::network_manager::{NetworkManager, WifiProfile, WifiSec};
+use crate::network_manager::{
+    AccessPoint, ActiveConnState, NetworkManager, WifiProfile, WifiSec,
+};
 use crate::secure_storage::SecureStorage;
 use crate::utils::{IntoZResult, State};
 use crate::OrbCapabilities;
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::ContextCompat;
 use color_eyre::{
     eyre::{bail, eyre, Context},
     Result,
@@ -13,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashSet;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::fs::{self, File};
 use tokio::io::{self};
+use tokio::time;
 use tracing::{error, info, warn};
 use wifi::Auth;
 use wpa_conf::LegacyWpaConfig;
@@ -25,7 +29,9 @@ mod mecard;
 mod netconfig;
 mod wifi;
 mod wpa_conf;
+pub mod zoci;
 
+#[derive(Clone)]
 pub struct ConndService {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
@@ -36,7 +42,7 @@ pub struct ConndService {
     profile_storage: ProfileStorage,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ProfileStorage {
     SecureStorage(SecureStorage),
     NetworkManager,
@@ -450,6 +456,165 @@ impl ConndService {
                 "directory too big even after wiping files. size: {dir_size}kB"
             ))
         }
+    }
+
+    async fn connect_to_wifi(&self, ssid: &str) -> Result<AccessPoint> {
+        info!("connecting to wifi with ssid {ssid}");
+        let profiles = self.nm.list_wifi_profiles().await?;
+        let max_prio = profiles
+            .iter()
+            .map(|p| p.priority)
+            .max()
+            .unwrap_or_default();
+
+        let profile = profiles
+            .into_iter()
+            .find(|p| p.ssid == ssid)
+            .wrap_err_with(|| format!("ssid {ssid} is not a saved profile"))?;
+
+        let aps = self.nm.wifi_scan().await.inspect_err(|e| {
+            error!("failed to scan for wifi networks due to err {e}")
+        })?;
+
+        let get_activated_or_activating_conn = async || {
+            self.nm
+                .active_connections()
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .find(|conn| {
+                    conn.id == profile.id
+                        && (conn.state == ActiveConnState::Activated
+                            || conn.state == ActiveConnState::Activating)
+                })
+        };
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(10);
+        let backoff = Duration::from_secs(2);
+        while let Some(conn) = get_activated_or_activating_conn().await {
+            if ActiveConnState::Activated == conn.state {
+                info!("{:?}, no need to attempt connetion: {conn:?}", conn.state);
+
+                return aps.into_iter().
+                    find(|ap| ap.ssid == profile.ssid).with_context(|| format!("already connected, but could not find an ap for the connection with ssid {}. should be unreachable state.", profile.ssid));
+            }
+
+            // only possible state left is ActiveConnState::Activating
+            if start.elapsed() > timeout {
+                warn!("{:?}, connection spent too long activating, will re-add it {conn:?}", conn.state);
+                break;
+            }
+
+            info!(
+                "{:?} connection still activating, waiting {}s and trying again",
+                conn.state,
+                backoff.as_secs()
+            );
+
+            time::sleep(backoff).await;
+        }
+
+        info!(
+            "no active or activating conn, configuring new conn to profile {}",
+            profile.id
+        );
+
+        // We re-add the profile as that will overwrite the old one
+        // and is easier than re-using shitty NM d-bus api.
+        // We do this to elevate the profile's priority and make sure
+        // latest connected profile is always the highest priority one.
+        let next_priority = if profile.priority != max_prio {
+            self.get_next_priority().await.into_z()?
+        } else {
+            profile.priority
+        };
+
+        let profile = self
+            .nm
+            .wifi_profile(&profile.id)
+            .ssid(&profile.ssid)
+            .sec(profile.sec)
+            .psk(&profile.psk)
+            .priority(next_priority)
+            .hidden(profile.hidden)
+            .persist(self.profile_storage.should_persist())
+            .add()
+            .await?;
+
+        let path = profile.path.clone();
+
+        if let Err(e) = self.commit_profiles_to_storage().await {
+            error!(
+                "failed to commit profile store when removing wifi profile. err: {e}"
+            );
+        }
+
+        for ap in aps {
+            if ap.ssid == ssid {
+                info!("connecting to ap {ap:?}");
+
+                self.nm
+                    .connect_to_wifi(
+                        &path,
+                        Self::DEFAULT_WIFI_IFACE,
+                        self.connect_timeout,
+                    )
+                    .await
+                    .map_err(|e| {
+                        eyre!("failed to connect to wifi ssid {ssid} due to err {e}")
+                    })?;
+
+                info!("successfully connected to ap {ap:?}");
+
+                return Ok(ap);
+            }
+        }
+
+        Err(eyre!("could not find ssid {ssid}"))
+    }
+
+    async fn remove_wifi_profile(&self, ssid: &str) -> Result<()> {
+        info!("removing wifi profile with ssid {ssid}");
+        if ssid == Self::DEFAULT_CELLULAR_PROFILE || ssid == Self::DEFAULT_WIFI_SSID {
+            return Err(eyre!("{ssid} is not an allowed SSID name"));
+        }
+
+        self.nm.remove_profile(ssid).await?;
+
+        if let Err(e) = self.commit_profiles_to_storage().await {
+            error!(
+                "failed to commit profile store when removing wifi profile. err: {e}"
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn wifi_scan(&self) -> Result<Vec<(AccessPoint, bool, bool)>> {
+        let aps = self.nm.wifi_scan().await?;
+        let profiles = self.nm.list_wifi_profiles().await?;
+        let active_conns = self
+            .nm
+            .active_connections()
+            .await
+            .inspect_err(|e| warn!("issue retrieving active connections: {e}"))
+            .unwrap_or_default();
+
+        let aps = aps
+            .into_iter()
+            .map(|ap| {
+                let is_saved = profiles.iter().any(|profile| ap.eq_profile(profile));
+
+                let is_active = active_conns.iter().any(|conn| {
+                    conn.id == ap.ssid && conn.state == ActiveConnState::Activated
+                });
+
+                (ap, is_saved, is_active)
+            })
+            .collect();
+
+        Ok(aps)
     }
 
     /// increments priority of newly added networks up to 999

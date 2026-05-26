@@ -24,6 +24,11 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 );
                 self.operator_pulse.trigger(1., 1., false, false);
             }
+            Event::InternetConnecting => {
+                self.sound.try_queue(sound::Type::Melody(
+                    sound::Melody::InternetConnecting,
+                ))?;
+            }
             Event::NetworkConnectionSuccess => {
                 self.sound.queue(
                     sound::Type::Melody(sound::Melody::InternetConnectionSuccessful),

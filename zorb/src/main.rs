@@ -5,7 +5,7 @@ use color_eyre::{
 };
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::OrbId;
-use std::{net::IpAddr, process::Stdio, str::FromStr};
+use std::{net::IpAddr, process::Stdio, str::FromStr, time::Duration};
 use tokio::process::Command;
 use zenorb::{zenoh::bytes::Encoding, Zenorb};
 use zorb::{color, Example};
@@ -34,6 +34,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     /// Publish a message to a key expression
+    #[command(visible_alias = "p")]
     Pub {
         /// The key expression to publish to
         keyexpr: String,
@@ -42,9 +43,28 @@ enum Cmd {
     },
 
     /// Subscribe to a key expression
+    #[command(visible_alias = "s")]
     Sub {
         /// The key expression to subscribe to
         keyexpr: String,
+    },
+
+    /// Query a key expression
+    #[command(visible_alias = "q")]
+    Query {
+        /// The key expression to query
+        keyexpr: String,
+        /// Optional payload
+        payload: Option<String>,
+    },
+
+    /// Query a liveliness token.
+    /// Assumed to be `<orb_id>/<name>`
+    #[command(visible_alias = "l")]
+    Live {
+        /// The name of the service registered in Zenoh
+        name: String,
+        timeout: Option<u64>,
     },
 
     /// Execute a command when a message is received
@@ -120,7 +140,7 @@ async fn main() -> Result<()> {
         }
 
         Cmd::Sub { keyexpr } => {
-            println!("Subscribing to {keyexpr}");
+            println!("{} :: subscribing to {keyexpr}", color::timestamp());
 
             let rx = zenorb
                 .declare_subscriber(&keyexpr)
@@ -157,10 +177,98 @@ async fn main() -> Result<()> {
                     }
 
                     other => {
-                        println!("received message with unsupported encoding {other}")
+                        println!(
+                            "{} :: received message with unsupported encoding {other}",
+                            color::timestamp()
+                        )
                     }
                 }
             }
+        }
+
+        Cmd::Query { keyexpr, payload } => {
+            println!("{} :: querying {keyexpr}", color::timestamp());
+
+            let rx = zenorb
+                .get(&keyexpr)
+                .payload(payload.unwrap_or_default())
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            loop {
+                let reply = match rx.recv_async().await {
+                    Err(e) => {
+                        println!("{} :: query ended with: \"{e}\"", color::timestamp());
+                        break;
+                    }
+
+                    Ok(reply) => reply,
+                };
+
+                let result = reply.into_result();
+
+                let (encoding, payload) = match &result {
+                    Ok(v) => (v.encoding(), v.payload()),
+                    Err(e) => (e.encoding(), e.payload()),
+                };
+
+                match encoding {
+                    &Encoding::TEXT_PLAIN => {
+                        let txt = payload.try_to_string()?;
+                        println!(
+                            "{} {} :: {txt}",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr)
+                        );
+                    }
+
+                    &Encoding::TEXT_JSON | &Encoding::APPLICATION_JSON => {
+                        let txt = payload.try_to_string()?;
+                        println!(
+                            "{} {} :: {}",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr),
+                            color::json(&txt)
+                        );
+                    }
+
+                    &Encoding::ZENOH_BYTES => {
+                        println!(
+                            "{} {} :: could not deserialize",
+                            color::timestamp(),
+                            color::key_expr(&keyexpr)
+                        );
+                    }
+
+                    other => {
+                        println!(
+                            "{} :: received message with unsupported encoding {other}",
+                            color::timestamp()
+                        )
+                    }
+                }
+            }
+        }
+
+        Cmd::Live { name, timeout } => {
+            let name = format!("{}/{name}", zenorb.orb_id());
+
+            let _ = zenorb
+                .session()
+                .liveliness()
+                .get(&name)
+                .timeout(Duration::from_secs(timeout.unwrap_or(3)))
+                .await
+                .map_err(|e| eyre!("{e}"))?
+                .recv_async()
+                .await
+                .map_err(|e| eyre!("{e}"))?;
+
+            println!(
+                "{} {} :: liveliness token received",
+                color::timestamp(),
+                color::key_expr(name)
+            );
         }
 
         Cmd::When { keyexpr, command } => {

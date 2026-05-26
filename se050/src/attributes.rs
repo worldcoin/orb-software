@@ -1,10 +1,14 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use thiserror::Error;
-use zerocopy::{big_endian, FromBytes, Immutable, KnownLayout, TryFromBytes};
+use zerocopy::{
+    big_endian, FromBytes, Immutable, IntoBytes, KnownLayout, TryFromBytes,
+};
 
 /// See section 4.3.6 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum SecureObjectType {
@@ -15,6 +19,7 @@ pub enum SecureObjectType {
 
 #[derive(
     FromBytes,
+    IntoBytes,
     Immutable,
     KnownLayout,
     Eq,
@@ -62,7 +67,9 @@ impl PartialEq<u32> for ObjectId {
 }
 
 /// See section 4.3.29 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum SetIndicator {
@@ -70,20 +77,46 @@ pub enum SetIndicator {
     SET = 0x02,
 }
 
-#[derive(TryFromBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
+#[derive(TryFromBytes, IntoBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
 #[repr(C, align(1))]
-pub struct ObjectAttributes {
+pub struct ObjectAttrsHeader {
     pub object_identifier: ObjectId,
     pub object_class: SecureObjectType,
     pub authentication_indicator: SetIndicator,
     pub authentication_attempts_counter: big_endian::U16,
     pub authentication_object_identifier: ObjectId,
     pub maximum_authentication_attempts: big_endian::U16,
+}
+
+#[derive(TryFromBytes, KnownLayout, Immutable, Debug, PartialEq, Eq)]
+#[repr(C, align(1))]
+pub struct ObjectAttributes {
+    header: ObjectAttrsHeader,
     pub policy_set: AttributesSuffix,
 }
 
+impl Deref for ObjectAttributes {
+    type Target = ObjectAttrsHeader;
+
+    fn deref(&self) -> &Self::Target {
+        &self.header
+    }
+}
+
+impl ObjectAttributes {
+    pub fn iter_bytes(&self) -> impl Iterator<Item = u8> {
+        self.header
+            .as_bytes()
+            .iter()
+            .copied()
+            .chain(self.policy_set.as_bytes().iter().copied())
+    }
+}
+
 /// See section 4.3.8 of AN12413
-#[derive(TryFromBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(
+    TryFromBytes, IntoBytes, Immutable, KnownLayout, Debug, Eq, PartialEq, Clone, Copy,
+)]
 #[repr(u8)]
 #[expect(non_camel_case_types)]
 pub enum Origin {
@@ -96,7 +129,7 @@ pub enum Origin {
 #[error("failed to parse origin")]
 pub struct OriginParseErr;
 
-#[derive(TryFromBytes, KnownLayout, Immutable, Eq, PartialEq)]
+#[derive(TryFromBytes, IntoBytes, KnownLayout, Immutable, Eq, PartialEq)]
 #[repr(C)]
 pub struct AttributesSuffix([u8]);
 
@@ -181,7 +214,7 @@ pub struct Policy {
     pub access_rule: AccessRule,
 }
 
-#[derive(FromBytes, KnownLayout, Immutable, Debug, Eq, PartialEq)]
+#[derive(FromBytes, IntoBytes, KnownLayout, Immutable, Debug, Eq, PartialEq)]
 #[repr(C)]
 pub struct AccessRule {
     pub header: [u8; 4],
@@ -191,7 +224,10 @@ pub struct AccessRule {
 #[cfg(test)]
 mod test {
     use crate::{
-        example_data::{ORB_ATTESTATION_KEY, ORB_IRIS_KEY, ORB_SESSION_KEY},
+        example_data::{
+            ORB_ATTESTATION_KEY_EXTRA_DATA, ORB_IRIS_KEY_EXTRA_DATA,
+            ORB_SESSION_KEY_EXTRA_DATA,
+        },
         extra_data::ExtraData,
     };
 
@@ -217,8 +253,8 @@ mod test {
 
     #[test]
     fn test_orb_session_key_parses() {
-        let extra_data =
-            ExtraData::try_from(ORB_SESSION_KEY).expect("failed to parse extradata");
+        let extra_data = ExtraData::try_from(ORB_SESSION_KEY_EXTRA_DATA)
+            .expect("failed to parse extradata");
         let attrs = extra_data.object_attributes;
 
         assert_eq!(attrs.object_identifier, 0x60000000);
@@ -236,7 +272,7 @@ mod test {
 
     #[test]
     fn test_orb_attestation_key_parses() {
-        let extra_data = ExtraData::try_from(ORB_ATTESTATION_KEY)
+        let extra_data = ExtraData::try_from(ORB_ATTESTATION_KEY_EXTRA_DATA)
             .expect("failed to parse extradata");
         let attrs = extra_data.object_attributes;
 
@@ -260,8 +296,8 @@ mod test {
 
     #[test]
     fn test_orb_iris_key_parses() {
-        let extra_data =
-            ExtraData::try_from(ORB_IRIS_KEY).expect("failed to parse extradata");
+        let extra_data = ExtraData::try_from(ORB_IRIS_KEY_EXTRA_DATA)
+            .expect("failed to parse extradata");
         let attrs = extra_data.object_attributes;
 
         assert_eq!(attrs.object_identifier, 0x60000002);

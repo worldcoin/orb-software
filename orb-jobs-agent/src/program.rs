@@ -1,15 +1,15 @@
 use crate::{
     conn_change,
     handlers::{
-        beacon, change_name, check_my_orb, fsck, gondor, logs, mcu, netconfig_get,
+        beacon, change_name, check_my_orb, fsck, logs, mcu, netconfig_get,
         netconfig_set, orb_details, read_file, read_gimbal, reboot, reset_gimbal,
         reset_rgb_focus_calibration, sec_mcu_reboot, service, slot_switch, speed_test,
-        thermal_cam_recalibration, update_versions, wifi_add, wifi_connect, wifi_ip,
-        wifi_list, wifi_remove, wifi_scan, wipe_downloads,
+        thermal_cam_recalibration, update_versions, wifi_ip, wipe_downloads,
     },
     job_system::handler::JobHandler,
     settings::Settings,
     shell::Shell,
+    statsd::StatsdClient,
 };
 use color_eyre::Result;
 use std::sync::Arc;
@@ -23,23 +23,27 @@ pub struct Deps {
     pub zenorb: Zenorb,
     pub session_dbus: zbus::Connection,
     pub settings: Settings,
+    pub statsd: Arc<dyn StatsdClient>,
 }
 
 impl Deps {
-    pub fn new<S>(
+    pub fn new<S, SdClient>(
         shell: S,
         session_dbus: zbus::Connection,
         zenorb: Zenorb,
         settings: Settings,
+        statsd: SdClient,
     ) -> Self
     where
         S: Shell + 'static,
+        SdClient: StatsdClient + 'static,
     {
         Self {
             shell: Arc::new(shell),
             zenorb,
             session_dbus,
             settings,
+            statsd: Arc::new(statsd),
         }
     }
 }
@@ -53,19 +57,13 @@ pub async fn run(deps: Deps) -> Result<()> {
         .parallel("change_name", change_name::handler)
         .parallel("check_my_orb", check_my_orb::handler)
         .parallel("fsck", fsck::handler)
-        .parallel("gondor", gondor::handler)
         .parallel("orb_details", orb_details::handler)
         .parallel("read_gimbal", read_gimbal::handler)
         .parallel("reset_gimbal", reset_gimbal::handler)
         .parallel("mcu", mcu::handler)
         .parallel("sec_mcu_reboot", sec_mcu_reboot::handler)
         .parallel("wifi_ip", wifi_ip::handler)
-        .parallel("wifi_add", wifi_add::handler)
-        .parallel("wifi_connect", wifi_connect::handler)
-        .parallel("wifi_remove", wifi_remove::handler)
         .parallel("wipe_downloads", wipe_downloads::handler)
-        .parallel("wifi_list", wifi_list::handler)
-        .parallel("wifi_scan", wifi_scan::handler)
         .parallel("netconfig_get", netconfig_get::handler)
         .parallel("netconfig_set", netconfig_set::handler)
         .parallel("service", service::handler)
