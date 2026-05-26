@@ -9026,6 +9026,7 @@ dependencies = [
  "nix 0.28.0",
  "once_cell",
  "orb-build-info",
+ "orb-dogd",
  "orb-info",
  "orb-io-utils",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=c439077c7c1bc3a8eb6f224c32b5b4d60d094809)",
@@ -9057,12 +9058,11 @@ name = "orb-update-agent-core"
 version = "0.0.0"
 dependencies = [
  "base64 0.22.1",
- "dogstatsd",
  "ed25519-dalek",
+ "eyre",
  "gpt",
  "hex-literal 0.4.1",
  "jose-jwk",
- "once_cell",
  "orb-slot-ctrl",
  "rustix 0.38.44",
  "serde",

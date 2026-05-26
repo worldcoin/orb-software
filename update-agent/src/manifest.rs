@@ -2,17 +2,13 @@
 use std::{
     fs::{self, File},
     io,
+    path::{Path, PathBuf},
 };
 
 use eyre::WrapErr;
-use tap::TapFallible as _;
-use tracing::{debug, error, info, warn};
-
-extern crate hex;
-
-use std::path::{Path, PathBuf};
-
 use orb_update_agent_core::Manifest;
+use tap::TapFallible as _;
+use tracing::{debug, info, warn};
 
 const MANIFEST_NAME: &str = "manifest.json";
 

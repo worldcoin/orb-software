@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize, Serializer};
 use tap::TapOptional as _;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::{Component, LocalOrRemote};
 
