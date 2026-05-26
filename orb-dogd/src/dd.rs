@@ -1,6 +1,6 @@
-use dogstatsd::{Client, DogstatsdError, Options};
+use dogstatsd::Client;
 use flume::Sender;
-use std::{fs, path::Path, thread};
+use std::{fs, path::Path, thread, time::Duration};
 use tracing::{error, info, warn};
 
 use super::{MetricEmitter, MetricError};
@@ -46,11 +46,17 @@ pub(crate) enum Metric {
     },
 }
 
+impl Default for DogstatsdClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DogstatsdClient {
     /// Connect to the local statsd collector.
     ///
     /// Fails if the underlying socket cannot be bound.
-    pub fn new() -> Result<Self, DogstatsdError> {
+    pub fn new() -> Self {
         let (tx, rx) = flume::unbounded();
 
         thread::spawn(move || {
@@ -106,7 +112,7 @@ impl DogstatsdClient {
             }
         });
 
-        Ok(Self { tx })
+        Self { tx }
     }
 }
 
