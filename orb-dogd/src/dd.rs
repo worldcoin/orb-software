@@ -1,7 +1,10 @@
 use dogstatsd::Client;
-use flume::{Sender, TrySendError};
-use std::{fs, path::Path, thread, time::Duration};
-use tracing::{error, info, warn};
+use flume::Sender;
+use flume::TrySendError;
+use std::thread;
+use std::{fs, path::Path, time::Duration};
+use tracing::warn;
+use tracing::{error, info};
 
 use super::{MetricEmitter, MetricError};
 

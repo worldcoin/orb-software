@@ -31,6 +31,7 @@ orb-info = { workspace = true, features = [
 	"orb-name",
 	"orb-token",
 ] }
+orb-dogd.workspace = true
 orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
 orb-update-agent-dbus.workspace = true
 reqwest = { workspace = true, features = ["json"] }

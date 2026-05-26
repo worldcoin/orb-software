@@ -205,6 +205,7 @@ orb-build-info.path = "build-info"
 orb-connd.path = "orb-connd"
 orb-connd-dbus.path = "orb-connd/dbus"
 orb-const-concat.path = "const-concat"
+orb-dogd.path = "orb-dogd"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }

@@ -2,6 +2,7 @@ use async_tempfile::TempDir;
 use color_eyre::Result;
 use dbus_launch::BusType;
 use oes::{ActiveConnections, NetworkInterface};
+use orb_dogd::DogstatsdClient;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
@@ -219,6 +220,7 @@ impl Fixture {
 
         let task = task::spawn(async move {
             let program = orb_backend_status::program()
+                .metrics(DogstatsdClient::new())
                 .dbus(dbus)
                 .zsession(&zsession)
                 .endpoint(endpoint)
