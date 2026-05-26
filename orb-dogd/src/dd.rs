@@ -1,5 +1,14 @@
 use dogstatsd::Client;
+<<<<<<< HEAD
 use flume::Sender;
+||||||| 443f036d
+use dogstatsd::{Client, DogstatsdError, Options};
+use flume::Sender;
+use std::thread;
+use tracing::warn;
+=======
+use flume::{Sender, TrySendError};
+>>>>>>> 10b36fdc992cf4fac6e1af3f8fef72ab73c95c99
 use std::{fs, path::Path, thread, time::Duration};
 use tracing::{error, info, warn};
 
@@ -10,7 +19,12 @@ pub struct DogstatsdClient {
 }
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
+<<<<<<< HEAD
 const DOGSTATD_BACKOFF: Duration = Duration::from_secs(3);
+||||||| 443f036d
+=======
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
+>>>>>>> 10b36fdc992cf4fac6e1af3f8fef72ab73c95c99
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Metric {
@@ -57,7 +71,7 @@ impl DogstatsdClient {
     ///
     /// Fails if the underlying socket cannot be bound.
     pub fn new() -> Self {
-        let (tx, rx) = flume::unbounded();
+        let (tx, rx) = flume::bounded(512);
 
         thread::spawn(move || {
             let client = loop {
@@ -82,7 +96,7 @@ impl DogstatsdClient {
                     DOGSTATD_BACKOFF.as_secs()
                 );
 
-                thread::sleep(DOGSTATD_BACKOFF);
+                thread::sleep(DOGSTATSD_BACKOFF);
             };
 
             while let Ok(metric) = rx.recv() {
@@ -114,6 +128,14 @@ impl DogstatsdClient {
 
         Self { tx }
     }
+
+    fn emit(&self, metric: Metric) -> Result<(), MetricError> {
+        self.tx.try_send(metric).map_err(|e| match e {
+            TrySendError::Full(_) => eyre::eyre!("transport channel is full: {e:#?}"),
+            TrySendError::Disconnected(_) => eyre::eyre!("worker has died: {e:#?}"),
+        })?;
+        Ok(())
+    }
 }
 
 impl MetricEmitter for DogstatsdClient {
@@ -127,11 +149,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn incr<S, I>(&self, stat: S, tags: I) -> Result<(), MetricError>
@@ -144,11 +162,7 @@ impl MetricEmitter for DogstatsdClient {
             val: 1,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn gauge<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -161,11 +175,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn hist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -178,11 +188,7 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 
     fn dist<S, I>(&self, stat: S, val: f64, tags: I) -> Result<(), MetricError>
@@ -195,10 +201,6 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 }
