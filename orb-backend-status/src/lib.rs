@@ -20,6 +20,7 @@ use collectors::{
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_dogd::MetricEmitter;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
@@ -44,6 +45,7 @@ fn boot_id_payload(boot_id: String) -> Result<Payload> {
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
+    metrics: impl MetricEmitter,
     dbus: zbus::Connection,
     zsession: &ZSession,
     endpoint: Url,
@@ -79,6 +81,7 @@ pub async fn program(
         watch::channel(GlobalConnectivity::NotConnected);
 
     let status_client = StatusClient::builder()
+        .metrics(metrics)
         .orb_id(orb_id)
         .orb_name(orb_name)
         .jabil_id(orb_jabil_id)

@@ -1,5 +1,6 @@
 use color_eyre::eyre::Result;
 use orb_backend_status::backend::os_version::orb_os_version;
+use orb_dogd::DogstatsdClient;
 use orb_endpoints::{v2::Endpoints, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
@@ -52,6 +53,7 @@ async fn main() -> Result<()> {
         .await?;
 
     let result = orb_backend_status::program()
+        .metrics(DogstatsdClient::new())
         .dbus(zbus::Connection::session().await?)
         .zsession(&zsession)
         .endpoint(endpoint)
