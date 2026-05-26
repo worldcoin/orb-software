@@ -12,7 +12,7 @@ use reqwest::{Response, Url};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use reqwest_tracing::{OtelName, TracingMiddleware};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::{AbortHandle, JoinHandle},
@@ -132,6 +132,7 @@ impl StatusClient {
                                 ..req
                             };
 
+                            let start = Instant::now();
                             let response = client
                                 .post(endpoint.clone())
                                 .json(&req)
@@ -140,6 +141,7 @@ impl StatusClient {
                                 .await
                                 .wrap_err("failed to send request")
                                 .map_err(Err::Other);
+                            let elapsed = start.elapsed().as_millis();
 
                             let ok_tag = if response.is_ok() {
                                 "ok:true"
@@ -150,6 +152,12 @@ impl StatusClient {
                             let _ = metrics.count(
                                 "orb.platform.backend_status.client_req",
                                 1,
+                                [ok_tag]
+                            );
+
+                            let _ = metrics.dist(
+                                "orb.platform.backend_status.client_req_duration",
+                                elapsed as f64,
                                 [ok_tag]
                             );
 
