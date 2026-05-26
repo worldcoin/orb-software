@@ -1,16 +1,10 @@
 use dogstatsd::Client;
-<<<<<<< HEAD
 use flume::Sender;
-||||||| 443f036d
-use dogstatsd::{Client, DogstatsdError, Options};
-use flume::Sender;
+use flume::TrySendError;
 use std::thread;
+use std::{fs, path::Path, time::Duration};
 use tracing::warn;
-=======
-use flume::{Sender, TrySendError};
->>>>>>> 10b36fdc992cf4fac6e1af3f8fef72ab73c95c99
-use std::{fs, path::Path, thread, time::Duration};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use super::{MetricEmitter, MetricError};
 
@@ -19,12 +13,7 @@ pub struct DogstatsdClient {
 }
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
-<<<<<<< HEAD
-const DOGSTATD_BACKOFF: Duration = Duration::from_secs(3);
-||||||| 443f036d
-=======
 const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
->>>>>>> 10b36fdc992cf4fac6e1af3f8fef72ab73c95c99
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Metric {
@@ -93,7 +82,7 @@ impl DogstatsdClient {
 
                 error!(
                     "{err_msg}. waiting {}s and trying again",
-                    DOGSTATD_BACKOFF.as_secs()
+                    DOGSTATSD_BACKOFF.as_secs()
                 );
 
                 thread::sleep(DOGSTATSD_BACKOFF);
