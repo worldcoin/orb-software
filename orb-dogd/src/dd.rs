@@ -1,13 +1,16 @@
 use dogstatsd::{Client, DogstatsdError, Options};
 use flume::Sender;
-use std::thread;
-use tracing::warn;
+use std::{fs, path::Path, thread};
+use tracing::{error, info, warn};
 
 use super::{MetricEmitter, MetricError};
 
 pub struct DogstatsdClient {
     tx: Sender<Metric>,
 }
+
+const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
+const DOGSTATD_BACKOFF: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Metric {
@@ -50,10 +53,32 @@ impl DogstatsdClient {
     pub fn new() -> Result<Self, DogstatsdError> {
         let (tx, rx) = flume::unbounded();
 
-        let datadog_options = Options::default();
-        let client = Client::new(datadog_options)?;
-
         thread::spawn(move || {
+            let client = loop {
+                let err_msg =
+                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
+                        info!("datadog-agent socket found, using it for IPC");
+
+                        let opts = dogstatsd::OptionsBuilder::new()
+                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
+                            .build();
+
+                        match Client::new(opts) {
+                            Ok(client) => break client,
+                            Err(e) => format!("failed to create DD client {e}"),
+                        }
+                    } else {
+                        format!("{DOGSTATSD_SOCKET_PATH} not found")
+                    };
+
+                error!(
+                    "{err_msg}. waiting {}s and trying again",
+                    DOGSTATD_BACKOFF.as_secs()
+                );
+
+                thread::sleep(DOGSTATD_BACKOFF);
+            };
+
             while let Ok(metric) = rx.recv() {
                 match metric {
                     Metric::Count { stat, val, tags } => {
