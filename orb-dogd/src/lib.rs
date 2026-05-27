@@ -7,7 +7,6 @@
 
 mod dd;
 pub use dd::DogstatsdClient;
-pub use dogstatsd::DogstatsdError;
 
 #[cfg(any(test, feature = "testing"))]
 pub mod test;
