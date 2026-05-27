@@ -47,6 +47,13 @@ pub(crate) enum Metric {
         val: f64,
         tags: Vec<String>,
     },
+    /// Milliseconds latency value; emits Datadog's `|ms` type.
+    /// Used by [`MetricEmitter::timing`].
+    Timing {
+        stat: String,
+        val: i64,
+        tags: Vec<String>,
+    },
 }
 
 impl Default for DogstatsdClient {
@@ -108,6 +115,11 @@ impl DogstatsdClient {
                     Metric::Distribution { stat, val, tags } => {
                         if let Err(e) = client.distribution(stat, val.to_string(), tags)
                         {
+                            warn!("emitting metric failed with: {e}");
+                        }
+                    }
+                    Metric::Timing { stat, val, tags } => {
+                        if let Err(e) = client.timing(stat, val, tags) {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
@@ -191,5 +203,22 @@ impl MetricEmitter for DogstatsdClient {
             tags: tags.into_iter().map(Into::into).collect(),
         };
         self.emit(metric)
+    }
+
+    fn timing<S, I>(&self, stat: S, val: i64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        let metric = Metric::Timing {
+            stat: stat.into(),
+            val,
+            tags: tags.into_iter().map(Into::into).collect(),
+        };
+        self.tx
+            .send(metric)
+            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
+
+        Ok(())
     }
 }

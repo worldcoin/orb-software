@@ -107,6 +107,20 @@ impl MetricEmitter for MetricRecorder {
         self.records.lock().expect("mutex poisoned").push(metric);
         Ok(())
     }
+
+    fn timing<S, I>(&self, stat: S, val: i64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        let metric = Metric::Timing {
+            stat: stat.into(),
+            val,
+            tags: tags.into_iter().map(Into::into).collect(),
+        };
+        self.records.lock().expect("mutex poisoned").push(metric);
+        Ok(())
+    }
 }
 
 /// [`MetricEmitter`] that drops every metric on the floor. Useful when test
@@ -147,6 +161,14 @@ impl MetricEmitter for MetricSinkhole {
     }
 
     fn dist<S, I>(&self, _: S, _: f64, _: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        Ok(())
+    }
+
+    fn timing<S, I>(&self, _: S, _: i64, _: I) -> Result<(), MetricError>
     where
         S: Into<String>,
         I: IntoIterator<Item: Into<String>>,
