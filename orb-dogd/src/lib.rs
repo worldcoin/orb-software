@@ -51,4 +51,11 @@ pub trait MetricEmitter: Send + Sync + 'static {
     where
         S: Into<String>,
         I: IntoIterator<Item: Into<String>>;
+
+    /// Latency in milliseconds; emits Datadog's `|ms` type, which the
+    /// backend treats as a timing-flavored histogram.
+    fn timing<S, I>(&self, stat: S, val: i64, tags: I) -> Result<(), MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>;
 }
