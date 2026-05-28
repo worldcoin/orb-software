@@ -1,19 +1,17 @@
-use crate::{
-    statsd::StatsdClient,
-    systemd::{IpAccounting, ServiceProxyExt, Systemd},
-};
+use crate::systemd::{IpAccounting, ServiceProxyExt, Systemd};
 use color_eyre::Result;
+use orb_dogd::MetricEmitter;
 use speare::mini;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::time;
 use tracing::{info, warn};
 
-pub struct Args {
-    pub statsd: Arc<dyn StatsdClient>,
+pub struct Args<M: MetricEmitter> {
+    pub statsd: Arc<M>,
     pub systemd: Systemd,
 }
 
-pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
     info!("starting data usage reporter");
 
     let mut data_usage_map: HashMap<String, IpAccounting> = HashMap::new();
@@ -46,23 +44,19 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             let tags = vec![format!("service:{unit}")];
 
             if ingress_diff > 0 {
-                ctx.statsd
-                    .count(
-                        "orb.platform.connd.service_ingress_bytes",
-                        ingress_diff as i64,
-                        tags.clone(),
-                    )
-                    .await?;
+                let _ = ctx.statsd.count(
+                    "orb.platform.connd.service_ingress_bytes",
+                    ingress_diff as i64,
+                    tags.clone(),
+                );
             }
 
             if egress_diff > 0 {
-                ctx.statsd
-                    .count(
-                        "orb.platform.connd.service_egress_bytes",
-                        egress_diff as i64,
-                        tags,
-                    )
-                    .await?;
+                let _ = ctx.statsd.count(
+                    "orb.platform.connd.service_egress_bytes",
+                    egress_diff as i64,
+                    tags,
+                );
             }
         }
 

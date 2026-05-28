@@ -9,10 +9,10 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    statsd::dd::DogstatsdClient,
     systemd::Systemd,
     wpa_ctrl::cli::WpaCli,
 };
+use orb_dogd::DogstatsdClient;
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease},
     OrbId,

@@ -14,7 +14,6 @@ pub mod program;
 pub mod test_utils;
 
 pub struct OrbSlotCtrl {
-    orb_type: OrbOsPlatform,
     rootfs: PathBuf,
     current_slot: EfiVar,
     next_slot: EfiVar,
@@ -45,7 +44,6 @@ impl OrbSlotCtrl {
         };
 
         Ok(Self {
-            orb_type,
             rootfs,
             reg_retry_count_a: reg_path_a.into(),
             reg_retry_count_b: reg_path_b.into(),

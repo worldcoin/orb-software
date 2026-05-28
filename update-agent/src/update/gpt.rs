@@ -5,10 +5,10 @@ use std::{
 };
 
 use eyre::{ensure, WrapErr as _};
+use orb_dogd::MetricEmitter;
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
     components::{self, Gpt},
-    telemetry::{LogOnError, DATADOG},
     Claim, Component, Components, Slot, VersionMap,
 };
 use tracing::{debug, warn};
@@ -18,6 +18,8 @@ use crate::{
     component::Component as RuntimeComponent, confirm_read_works_at_bounds,
     mount::unmount_partition_by_label, write_json_and_sync,
 };
+
+const METRIC_NAME: &str = "orb.platform.update.component.gpt";
 
 // Find all redundant GPT components that are listed in `system_components` buit
 // which were not updated as part of the base update
@@ -41,12 +43,13 @@ fn find_not_updated_redundant_gpt_components<'a: 'c, 'b: 'c, 'c>(
 
 /// Update all redundant GPT components that were not explicitly updated as part of the manifest
 /// by copying them from the currently active.
-pub fn copy_not_updated_redundant_components(
+pub fn copy_not_updated_redundant_components<M: MetricEmitter>(
     claim: &Claim,
     update_components: &[RuntimeComponent],
     active_slot: Slot,
     version_map: &mut VersionMap,
     version_map_dst: &Path,
+    metrics: &M,
 ) -> eyre::Result<()> {
     let target_slot = active_slot.opposite();
     for (name, gpt_component) in find_not_updated_redundant_gpt_components(
@@ -74,7 +77,7 @@ pub fn copy_not_updated_redundant_components(
             ClampedSeek::new(disk_file, ..part_len)?
         };
 
-        gpt_component.update(target_slot, &mut disk_partition_reader)?;
+        gpt_component.update(target_slot, &mut disk_partition_reader, metrics)?;
         if !version_map.mirror_redundant_component_version(name, target_slot.opposite())
         {
             warn!("gpt_component `{name}` is either missing from source group or not redundant");
@@ -86,9 +89,10 @@ pub fn copy_not_updated_redundant_components(
 }
 
 impl Update for components::Gpt {
-    fn update<R>(&self, slot: Slot, mut src: R) -> eyre::Result<()>
+    fn update<R, M>(&self, slot: Slot, mut src: R, metrics: &M) -> eyre::Result<()>
     where
         R: io::Read + io::Seek,
+        M: MetricEmitter,
     {
         let src_len = src
             .seek(SeekFrom::End(0))
@@ -98,9 +102,9 @@ impl Update for components::Gpt {
             return Ok(());
         }
 
-        DATADOG
-            .incr("orb.update.count.component.gpt", ["status:started"])
-            .or_log();
+        let _ = metrics
+            .incr(METRIC_NAME, ["status:started"])
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         let disk = self
             .get_disk(true)
@@ -163,11 +167,10 @@ impl Update for components::Gpt {
                     self.label
                 )
             })
-            .map_err({
-                DATADOG
-                    .incr("orb.update.count.component.gpt", ["status:write_error"])
-                    .or_log();
-                |e| e
+            .inspect_err(|_| {
+                let _ = metrics
+                    .incr(METRIC_NAME, ["status:write_error"])
+                    .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
 
@@ -177,9 +180,9 @@ impl Update for components::Gpt {
             .wrap_err_with(|| format!("GPT disk `{}` flush failed", self.device))?;
         debug!("-- flushed!");
 
-        DATADOG
-            .incr("orb.update.count.component.gpt", ["status:write_complete"])
-            .or_log();
+        let _ = metrics
+            .incr(METRIC_NAME, ["status:write_complete"])
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         Ok(())
     }
 }

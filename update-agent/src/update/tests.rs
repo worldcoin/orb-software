@@ -1,5 +1,7 @@
 use std::fs::File;
 
+use orb_dogd::test::MetricSinkhole;
+
 use crate::update::Update;
 
 /// test updating the main mcu
@@ -16,7 +18,7 @@ pub fn try_can_update() -> eyre::Result<()> {
         bus: "can0".to_string(),
         redundancy: orb_update_agent_core::components::Redundancy::Single,
     };
-    can.update(orb_update_agent_core::Slot::A, &mut file)?;
+    can.update(orb_update_agent_core::Slot::A, &mut file, &MetricSinkhole)?;
 
     Ok(())
 }

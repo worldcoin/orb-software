@@ -322,12 +322,12 @@ async fn get_bss_list<'a>(
 ///   wpa_supplicant.conf(5). Within that conf, a PSK can either be represented as a
 ///   quoted plaintext string, or as an unquoted 64-character hex representation of the
 ///   PBKDF2-derived key.
-///  
+///
 ///   When wpa_supplicant handles `AddNetwork`'s network kv-map argument, the values get
 ///   parsed into the `wpa_ssid` struct based on the DBus value type. In the case of
 ///   strings, they get filtered through the `should_quote_opt` method which simply
 ///   looks up the field name in a `dont_quote` map.
-///  
+///
 ///   The PSK is missing from this map, and so our password is always quoted, meaning we
 ///   are only able to configure a network with plaintext passwords.
 ///

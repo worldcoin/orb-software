@@ -12,6 +12,7 @@ use std::{
 };
 
 use eyre::{bail, ensure, ContextCompat, WrapErr as _};
+use orb_dogd::MetricEmitter;
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
     components::{self, Gpt},
@@ -264,7 +265,12 @@ impl Component {
         }
     }
 
-    fn do_install(&self, slot: Slot, claim: &Claim) -> eyre::Result<()> {
+    fn do_install<M: MetricEmitter>(
+        &self,
+        slot: Slot,
+        claim: &Claim,
+        metrics: &M,
+    ) -> eyre::Result<()> {
         if self.name() == "main_mcu" {
             let file = self
                 .on_disk
@@ -335,16 +341,17 @@ impl Component {
                     name = self.name(),
                 )
             })
-            .update(slot, &mut component_file)
+            .update(slot, &mut component_file, metrics)
             .wrap_err("failed to execute update step of component")?;
         Ok(())
     }
 
-    pub fn run_update(
+    pub fn run_update<M: MetricEmitter>(
         &self,
         slot: Slot,
         claim: &Claim,
         recovery: bool,
+        metrics: &M,
     ) -> eyre::Result<()> {
         let name = self.name();
         match (self.manifest_component.installation_phase(), recovery) {
@@ -357,7 +364,7 @@ impl Component {
                     "installing component `{name}` because installation phase is normal and \
                      recovery is unset"
                 );
-                self.do_install(slot, claim)
+                self.do_install(slot, claim, metrics)
                     .wrap_err("failed copying update")?;
             }
             (InstallationPhase::Recovery, true) => {
@@ -365,7 +372,7 @@ impl Component {
                     "installing component `{name}` because installation phase is recovery and \
                      recovery is set"
                 );
-                self.do_install(slot, claim)
+                self.do_install(slot, claim, metrics)
                     .wrap_err("failed copying update")?;
             }
             (InstallationPhase::Recovery, false) => {

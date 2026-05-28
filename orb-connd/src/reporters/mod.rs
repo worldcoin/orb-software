@@ -1,8 +1,6 @@
-use crate::{
-    network_manager::NetworkManager, resolved::Resolved, statsd::StatsdClient,
-    systemd::Systemd,
-};
+use crate::{network_manager::NetworkManager, resolved::Resolved, systemd::Systemd};
 use color_eyre::Result;
+use orb_dogd::MetricEmitter;
 use speare::{mini::OnErr, Backoff, Limit};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tracing::info;
@@ -20,7 +18,7 @@ pub async fn spawn(
     nm: NetworkManager,
     resolved: Resolved,
     session_bus: zbus::Connection,
-    statsd: Arc<dyn StatsdClient>,
+    statsd: Arc<impl MetricEmitter>,
     systemd: Systemd,
     zsender: zenorb::Sender,
     sysfs: PathBuf,

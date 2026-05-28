@@ -1,22 +1,22 @@
 use eyre::{ensure, WrapErr as _};
-use orb_update_agent_core::{
-    components,
-    telemetry::{LogOnError, DATADOG},
-    Slot,
-};
+use orb_dogd::MetricEmitter;
+use orb_update_agent_core::{components, Slot};
 use std::io::{self, Seek as _, Write};
 use tracing::debug;
 
 use super::Update;
 
+const METRIC_NAME: &str = "orb.platform.update.component.raw";
+
 impl Update for components::Raw {
-    fn update<R>(&self, slot: Slot, mut src: R) -> eyre::Result<()>
+    fn update<R, M>(&self, slot: Slot, mut src: R, metrics: &M) -> eyre::Result<()>
     where
         R: io::Read + io::Seek,
+        M: MetricEmitter,
     {
-        DATADOG
-            .incr("orb.update.count.component.raw", ["status:started"])
-            .or_log();
+        let _ = metrics
+            .incr(METRIC_NAME, ["status:started"])
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
         let mut block_dev =
             self.get_file().wrap_err("failed to open target raw file")?;
 
@@ -73,11 +73,10 @@ impl Update for components::Raw {
                     self.device
                 )
             })
-            .map_err({
-                DATADOG
-                    .incr("orb.update.count.component.raw", ["status:write_error"])
-                    .or_log();
-                |e| e
+            .inspect_err(|_| {
+                let _ = metrics
+                    .incr(METRIC_NAME, ["status:write_error"])
+                    .inspect_err(|me| tracing::error!("metric emit failed: {me:#?}"));
             })?;
         debug!("-- copied!");
 
@@ -86,9 +85,9 @@ impl Update for components::Raw {
             .wrap_err_with(|| format!("block device `{}` flush failed", self.device))?;
         debug!("-- flushed!");
 
-        DATADOG
-            .incr("orb.update.count.component.raw", ["status:write_complete"])
-            .or_log();
+        let _ = metrics
+            .incr(METRIC_NAME, ["status:write_complete"])
+            .inspect_err(|e| tracing::error!("metric emit failed: {e:#?}"));
 
         Ok(())
     }

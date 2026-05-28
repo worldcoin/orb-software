@@ -3,6 +3,8 @@
 // other tests (and potentially cause non-deterministic error successes/failures depending on
 // concurrent execution order).
 
+#![allow(clippy::result_large_err)] // `figment::Error` shape is dictated by `Jail::expect_with`
+
 use std::{path::Path, time::Duration};
 
 use clap::Parser as _;

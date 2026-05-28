@@ -8,7 +8,6 @@ pub mod manifest;
 pub mod pubkeys;
 mod signatures;
 mod slot;
-pub mod telemetry;
 pub mod version_map;
 pub mod versions;
 
