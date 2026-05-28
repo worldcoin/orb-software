@@ -295,7 +295,7 @@ pub struct TraceCtx {
 /// use orb_telemetry::TraceCtx;
 ///
 /// fn remote_method(param: &str, trace_ctx: TraceCtx) {
-///     let span = tracing::span!(tracing::Level::INFO, "remote_method");       
+///     let span = tracing::span!(tracing::Level::INFO, "remote_method");
 ///     trace_ctx.apply(&span);
 ///     // ...
 /// }
