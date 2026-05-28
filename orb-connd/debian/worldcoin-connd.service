@@ -40,8 +40,9 @@ NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
 
-# /usr/persistent is used on Pearl to read/write wifi profile state (legacy wpa_supplicant
-# config import, NetworkManager state cleanup). It lives under /usr which ProtectSystem=strict
+# /usr/persistent is used to read/write wifi profile state:
+# on first boot, connd imports any legacy wpa_supplicant config found there into
+# NetworkManager, then deletes the legacy file. It lives under /usr which ProtectSystem=strict
 # makes read-only, so carve it out explicitly.
 ReadWritePaths=/usr/persistent /run /tmp
 
