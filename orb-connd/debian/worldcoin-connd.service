@@ -52,7 +52,7 @@ PrivateTmp=no
 # Diamond subprocess needs /dev/tee0 and /dev/teepriv0 for OP-TEE context init.
 # Pearl doesn't use the OP-TEE path but the setting must be the same service file.
 PrivateDevices=no
-DeviceAllow=char-tee rw
+DeviceAllow=/dev/tee0 rw
 # Needs outbound TCP (zenoh :7447), UDP (StatsD/dogstatsd), HTTPS (connectivity checks),
 # AF_UNIX (D-Bus system/session buses, wpa_supplicant control socket), and AF_CAN
 # (modem power-cycle via orb-mcu-util which calls socket(AF_CAN, ...))
