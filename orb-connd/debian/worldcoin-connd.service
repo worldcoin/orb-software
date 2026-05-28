@@ -15,7 +15,7 @@ User=orb-connd
 Group=orb-connd
 # wpa_cli accesses /var/run/wpa_supplicant/wlan0 (GROUP=netdev MODE=0660, set by wpa_supplicant
 # ctrl_interface config). The subprocess inherits group membership from the parent.
-SupplementaryGroups=netdev tee
+SupplementaryGroups=worldcoin-dbus netdev tee
 
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
