@@ -12,7 +12,6 @@ pub mod reporters;
 pub mod resolved;
 pub mod secure_storage;
 pub mod service;
-pub mod statsd;
 pub mod systemd;
 pub mod wpa_ctrl;
 
