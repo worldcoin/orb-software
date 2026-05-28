@@ -24,7 +24,7 @@ impl TryFrom<&Query> for UpdateRequest {
             Ok(req) => Ok(req),
             Err(_) => Ok(UpdateRequest {
                 version: query.payload_str()?.into_owned(),
-                restart: false,
+                restart: true,
             }),
         }
     }
@@ -114,7 +114,7 @@ async fn trigger_update(ctx: &ZociContext, query: &Query) -> Result<()> {
     );
 
     info!(
-        "`gondor` handler executing with: version={} & restart={}",
+        "`gondor` handler executing with: version={} & restart-service={}",
         version, update_to.restart
     );
 
