@@ -4,8 +4,6 @@ use color_eyre::{
     Result,
 };
 
-const GONDOR_CALLS_FOR_OTA_PATH: &str = "/usr/local/bin/gondor-calls-for-ota";
-
 /// Reboot the Orb device using orb-mcu-util and shutdown
 pub async fn reboot_orb(session: &RemoteSession) -> Result<()> {
     session
@@ -66,40 +64,35 @@ fn parse_slot_from_output(output: &str) -> Result<String> {
     Ok(format!("slot_{slot_letter}"))
 }
 
-/// Kick off the update-agent flow for OTA using gondor-calls-for-ota.
-///
-/// The target is passed through verbatim; gondor itself handles stripping any
-/// `-{platform}-{release}` suffix, rewriting `/etc/os-release`, and restarting
-/// the update agent.
+/// Kick off the update-agent flow for OTA.
 pub async fn kickoff_update_agent_for_ota(
     session: &RemoteSession,
     target_version: &str,
+    orb_id: &str,
+    orb_ip: &str,
 ) -> Result<String> {
     let start_timestamp = get_current_timestamp(session).await?;
 
-    let escaped_target = shell_single_quote_escape(target_version.trim());
-    let command =
-        format!("TERM=dumb sudo {GONDOR_CALLS_FOR_OTA_PATH} '{escaped_target}'");
-    let result = session
-        .execute_command(&command)
+    let payload = serde_json::json!({
+        "version": target_version.trim(),
+        "restart": true,
+    })
+    .to_string();
+
+    let output = tokio::process::Command::new("zorb")
+        .args(["-o", orb_id, "-r", orb_ip])
+        .args(["query", "supervisor/job/gondor", &payload])
+        .output()
         .await
-        .wrap_err("Failed to execute gondor-calls-for-ota")?;
+        .wrap_err("failed to spawn zorb on the runner")?;
 
     ensure!(
-        result.is_success(),
-        "gondor-calls-for-ota failed: {}",
-        if result.stderr.trim().is_empty() {
-            result.stdout.trim()
-        } else {
-            result.stderr.trim()
-        }
+        output.status.success(),
+        "failed to trigger OTA: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
     );
 
     Ok(start_timestamp)
-}
-
-fn shell_single_quote_escape(value: &str) -> String {
-    value.replace('\'', "'\"'\"'")
 }
 
 /// Wait for system time to be synchronized via NTP/chrony
@@ -206,12 +199,6 @@ pub async fn get_current_timestamp(session: &RemoteSession) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn shell_single_quote_escape_escapes_correctly() {
-        let escaped = shell_single_quote_escape("abc'def");
-        assert_eq!(escaped, "abc'\"'\"'def");
-    }
 
     #[test]
     fn parse_chrony_reference_id_returns_id_when_synced() {
