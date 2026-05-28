@@ -163,6 +163,17 @@ fn run(args: &Args) -> eyre::Result<()> {
     let settings = Settings::get(args, config_path, ENV_VAR_PREFIX, active_slot.into())
         .wrap_err("failed reading settings")?;
 
+    let platform_version =
+        if let Some(overwrite) = settings.version_overwrite.as_deref() {
+            warn!(
+            "ORB_UPDATE_AGENT_VERSION_OVERWRITE is set; overriding platform_version \
+             `{platform_version}` with `{overwrite}` for the claim request",
+        );
+            overwrite.to_string()
+        } else {
+            platform_version
+        };
+
     let settings_ser = match serde_json::to_string(&settings) {
         Ok(ser) => ser,
         Err(e) => {
