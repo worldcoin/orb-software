@@ -3,10 +3,10 @@ use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
-use crate::statsd::StatsdClient;
 use crate::systemd::Systemd;
 use crate::{modem, reporters, OrbCapabilities};
 use color_eyre::eyre::{Context, Result};
+use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbOsRelease;
 use speare::mini::{self, OnErr};
 use speare::Backoff;
@@ -26,7 +26,7 @@ pub async fn program(
     resolved: Resolved,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
-    statsd_client: impl StatsdClient,
+    statsd_client: impl MetricEmitter,
     modem_manager: impl ModemManager,
     mcu_util: impl McuUtil,
     connect_timeout: Duration,
@@ -37,7 +37,7 @@ pub async fn program(
     let procfs = procfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
     let mcu_util: Arc<dyn McuUtil> = Arc::new(mcu_util);
-    let statsd_client: Arc<dyn StatsdClient> = Arc::new(statsd_client);
+    let statsd_client = Arc::new(statsd_client);
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 

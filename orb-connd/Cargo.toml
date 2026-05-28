@@ -22,7 +22,6 @@ clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
-dogstatsd.workspace = true
 flume.workspace = true
 futures.workspace = true
 hex.workspace = true
@@ -33,6 +32,7 @@ oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
 orb-connd-dbus.workspace = true
+orb-dogd.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
 orb-secure-storage-ca = { workspace = true, default-features = false, features = [
 	"backend-in-memory",

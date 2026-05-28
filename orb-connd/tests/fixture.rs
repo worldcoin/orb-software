@@ -17,12 +17,12 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    statsd::StatsdClient,
     systemd::Systemd,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
+use orb_dogd::MetricEmitter;
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
     OrbId,
@@ -509,22 +509,77 @@ mock! {
 
 pub struct MockStatsd;
 
-#[async_trait]
-impl StatsdClient for MockStatsd {
-    async fn count(&self, _stat: &str, _count: i64, _tags: Vec<String>) -> Result<()> {
-        Ok(())
-    }
-
-    async fn incr_by_value(
+impl MetricEmitter for MockStatsd {
+    fn count<S, I>(
         &self,
-        _stat: &str,
-        _value: i64,
-        _tags: Vec<String>,
-    ) -> Result<()> {
+        _stat: S,
+        _val: i64,
+        _tags: I,
+    ) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
         Ok(())
     }
 
-    async fn gauge(&self, _stat: &str, _val: &str, _tags: Vec<String>) -> Result<()> {
+    fn incr<S, I>(&self, _stat: S, _tags: I) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        Ok(())
+    }
+
+    fn gauge<S, I>(
+        &self,
+        _stat: S,
+        _val: f64,
+        _tags: I,
+    ) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        Ok(())
+    }
+
+    fn hist<S, I>(
+        &self,
+        _stat: S,
+        _val: f64,
+        _tags: I,
+    ) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        Ok(())
+    }
+
+    fn dist<S, I>(
+        &self,
+        _stat: S,
+        _val: f64,
+        _tags: I,
+    ) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
+        Ok(())
+    }
+
+    fn timing<S, I>(
+        &self,
+        _stat: S,
+        _val: i64,
+        _tags: I,
+    ) -> Result<(), orb_dogd::MetricError>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item: Into<String>>,
+    {
         Ok(())
     }
 }
