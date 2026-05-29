@@ -3,6 +3,16 @@
 //! [`MetricEmitter`] is an abstraction trait bounding the API;
 //! [`DogstatsdClient`] is used for the default  implementation.
 //! Test implementations are gated behind the `testing` feature.
+//!
+//! # Fork safety
+//!
+//! [`DogstatsdClient`] owns a background worker thread that does the actual
+//! socket I/O. `fork(2)` only clones the calling thread, so the worker does not
+//! exist in the child. To stay usable across a fork the client records the PID
+//! that owns its worker and, on the first emit after a fork, notices the PID
+//! changed and transparently respawns the worker in the child. A process-global
+//! `static DATADOG: Lazy<DogstatsdClient>` therefore keeps working in children
+//! whether it is first touched before or after the fork. See `tests/fork.rs`.
 #![forbid(unsafe_code)]
 
 mod dd;

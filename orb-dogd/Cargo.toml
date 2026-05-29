@@ -17,5 +17,11 @@ testing = []
 dogstatsd.workspace = true
 eyre.workspace = true
 flume.workspace = true
+rustix = { workspace = true, features = ["process"] }
 thiserror.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+libc.workspace = true
+nix = { workspace = true, features = ["process"] }
+once_cell = "1"

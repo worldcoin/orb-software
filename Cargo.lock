@@ -8372,6 +8372,10 @@ dependencies = [
  "dogstatsd",
  "eyre",
  "flume",
+ "libc",
+ "nix 0.28.0",
+ "once_cell",
+ "rustix 0.38.44",
  "thiserror 2.0.17",
  "tracing",
 ]

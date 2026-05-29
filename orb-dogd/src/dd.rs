@@ -1,6 +1,8 @@
 use dogstatsd::Client;
 use flume::Sender;
 use flume::TrySendError;
+use rustix::process::{getpid, Pid};
+use std::sync::Mutex;
 use std::thread;
 use std::{fs, path::Path, time::Duration};
 use tracing::warn;
@@ -9,6 +11,16 @@ use tracing::{error, info};
 use super::{MetricEmitter, MetricError};
 
 pub struct DogstatsdClient {
+    socket_path: String,
+    worker: Mutex<Worker>,
+}
+
+/// The current worker thread's channel, and the PID that owns it. `fork(2)`
+/// clones only the calling thread, so a worker spawned before a fork does not
+/// exist in the child. Tracking the owning PID lets [`DogstatsdClient`] notice
+/// it has been forked and respawn the worker in the child.
+struct Worker {
+    owner_pid: Pid,
     tx: Sender<Metric>,
 }
 
@@ -62,76 +74,121 @@ impl Default for DogstatsdClient {
     }
 }
 
-impl DogstatsdClient {
-    /// Connect to the local statsd collector.
-    ///
-    /// Fails if the underlying socket cannot be bound.
-    pub fn new() -> Self {
-        let (tx, rx) = flume::bounded(512);
+/// Spawn the worker thread that owns the socket connection and drains `rx`,
+/// returning the channel that feeds it. Lives outside `impl` so it can be
+/// called both at construction and when respawning after a fork.
+fn spawn_worker(socket_path: String) -> Sender<Metric> {
+    let (tx, rx) = flume::bounded(512);
 
-        thread::spawn(move || {
-            let client = loop {
-                let err_msg =
-                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
-                        info!("datadog-agent socket found, using it for IPC");
+    thread::spawn(move || {
+        let client = loop {
+            let err_msg = if fs::exists(Path::new(&socket_path)).unwrap_or(false) {
+                info!("datadog-agent socket found, using it for IPC");
 
-                        let opts = dogstatsd::OptionsBuilder::new()
-                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
-                            .build();
+                let opts = dogstatsd::OptionsBuilder::new()
+                    .socket_path(Some(socket_path.clone()))
+                    .build();
 
-                        match Client::new(opts) {
-                            Ok(client) => break client,
-                            Err(e) => format!("failed to create DD client {e}"),
-                        }
-                    } else {
-                        format!("{DOGSTATSD_SOCKET_PATH} not found")
-                    };
-
-                error!(
-                    "{err_msg}. waiting {}s and trying again",
-                    DOGSTATSD_BACKOFF.as_secs()
-                );
-
-                thread::sleep(DOGSTATSD_BACKOFF);
+                match Client::new(opts) {
+                    Ok(client) => break client,
+                    Err(e) => format!("failed to create DD client {e}"),
+                }
+            } else {
+                format!("{socket_path} not found")
             };
 
-            while let Ok(metric) = rx.recv() {
-                match metric {
-                    Metric::Count { stat, val, tags } => {
-                        if let Err(e) = client.count(stat, val, tags) {
-                            warn!("emitting metric failed with: {e}");
-                        }
+            error!(
+                "{err_msg}. waiting {}s and trying again",
+                DOGSTATSD_BACKOFF.as_secs()
+            );
+
+            thread::sleep(DOGSTATSD_BACKOFF);
+        };
+
+        while let Ok(metric) = rx.recv() {
+            match metric {
+                Metric::Count { stat, val, tags } => {
+                    if let Err(e) = client.count(stat, val, tags) {
+                        warn!("emitting metric failed with: {e}");
                     }
-                    Metric::Gauge { stat, val, tags } => {
-                        if let Err(e) = client.gauge(stat, val.to_string(), tags) {
-                            warn!("emitting metric failed with: {e}");
-                        }
+                }
+                Metric::Gauge { stat, val, tags } => {
+                    if let Err(e) = client.gauge(stat, val.to_string(), tags) {
+                        warn!("emitting metric failed with: {e}");
                     }
-                    Metric::Histogram { stat, val, tags } => {
-                        if let Err(e) = client.histogram(stat, val.to_string(), tags) {
-                            warn!("emitting metric failed with: {e}");
-                        }
+                }
+                Metric::Histogram { stat, val, tags } => {
+                    if let Err(e) = client.histogram(stat, val.to_string(), tags) {
+                        warn!("emitting metric failed with: {e}");
                     }
-                    Metric::Distribution { stat, val, tags } => {
-                        if let Err(e) = client.distribution(stat, val.to_string(), tags)
-                        {
-                            warn!("emitting metric failed with: {e}");
-                        }
+                }
+                Metric::Distribution { stat, val, tags } => {
+                    if let Err(e) = client.distribution(stat, val.to_string(), tags) {
+                        warn!("emitting metric failed with: {e}");
                     }
-                    Metric::Timing { stat, val, tags } => {
-                        if let Err(e) = client.timing(stat, val, tags) {
-                            warn!("emitting metric failed with: {e}");
-                        }
+                }
+                Metric::Timing { stat, val, tags } => {
+                    if let Err(e) = client.timing(stat, val, tags) {
+                        warn!("emitting metric failed with: {e}");
                     }
                 }
             }
-        });
+        }
+    });
 
-        Self { tx }
+    tx
+}
+
+impl DogstatsdClient {
+    /// Connect to the local statsd collector at the default socket path.
+    pub fn new() -> Self {
+        Self::with_socket_path(DOGSTATSD_SOCKET_PATH)
+    }
+
+    /// Connect to the statsd collector listening at `socket_path`.
+    ///
+    /// The connection is established lazily on a dedicated worker thread: if
+    /// the socket is not present yet the worker backs off and retries until it
+    /// appears.
+    ///
+    /// The client is fork-safe: it records the PID that owns the worker, and on
+    /// the first emit after a `fork(2)` it notices the PID changed and respawns
+    /// the worker in the child (the parent's worker thread does not survive the
+    /// fork). See the crate-level docs.
+    pub fn with_socket_path(socket_path: impl Into<String>) -> Self {
+        let socket_path = socket_path.into();
+        let tx = spawn_worker(socket_path.clone());
+
+        Self {
+            socket_path,
+            worker: Mutex::new(Worker {
+                owner_pid: getpid(),
+                tx,
+            }),
+        }
+    }
+
+    /// Return the sender for this process's worker, respawning it first if we
+    /// have been forked since the worker was last created.
+    ///
+    /// The lock is held only for a PID compare and a cheap `Sender` clone, not
+    /// for the send. Respawning only ever happens in a child (the parent's PID
+    /// always matches), so the parent never holds this lock when a fork copies
+    /// it, and the child cannot inherit it locked.
+    fn sender(&self) -> Sender<Metric> {
+        let pid = getpid();
+        let mut worker = self.worker.lock().expect("dogd worker mutex poisoned");
+        if worker.owner_pid != pid {
+            warn!("dogd: detected fork; respawning metrics worker in new process");
+            worker.tx = spawn_worker(self.socket_path.clone());
+            worker.owner_pid = pid;
+        }
+
+        worker.tx.clone()
     }
 
     fn emit(&self, metric: Metric) -> Result<(), MetricError> {
-        self.tx.try_send(metric).map_err(|e| match e {
+        self.sender().try_send(metric).map_err(|e| match e {
             TrySendError::Full(_) => eyre::eyre!("transport channel is full: {e:#?}"),
             TrySendError::Disconnected(_) => eyre::eyre!("worker has died: {e:#?}"),
         })?;
