@@ -1,7 +1,8 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use color_eyre::eyre::WrapErr as _;
 use futures::{future::TryFutureExt as _, FutureExt as _};
+use orb_info::orb_os_release::OrbOsRelease;
 use tracing::debug;
 use zbus::{Connection, ConnectionBuilder};
 use zenorb::Zenorb;
@@ -12,8 +13,11 @@ use crate::{
     proxies::core::{
         SIGNUP_PROXY_DEFAULT_OBJECT_PATH, SIGNUP_PROXY_DEFAULT_WELL_KNOWN_NAME,
     },
-    tasks,
-    tasks::zoci::GONDOR_BIN,
+    tasks::{
+        self,
+        update::UPDATE_AGENT_SERVICE,
+        zoci::{ZociContext, UPDATE_AGENT_VERSION},
+    },
 };
 
 pub const DBUS_WELL_KNOWN_NAME: &str = "org.worldcoin.OrbSupervisor1";
@@ -42,7 +46,6 @@ pub struct Settings {
     pub well_known_name: String,
     pub download_throttle: Duration,
     pub stop_core_after_signup: Duration,
-    pub gondor_bin: PathBuf,
 }
 
 impl Settings {
@@ -57,7 +60,6 @@ impl Settings {
             well_known_name: DBUS_WELL_KNOWN_NAME.to_string(),
             download_throttle: DEFAULT_DURATION_TO_ALLOW_DOWNLOADS,
             stop_core_after_signup: DURATION_TO_STOP_CORE_AFTER_LAST_SIGNUP,
-            gondor_bin: PathBuf::from(GONDOR_BIN),
         }
     }
 }
@@ -149,15 +151,22 @@ impl Application {
     }
 
     /// Runs `Application` by spawning its constituent tasks.
-    pub async fn run(self) -> color_eyre::Result<()> {
+    pub async fn run(self, os_release: OrbOsRelease) -> color_eyre::Result<()> {
         let signup_started_task =
             tasks::spawn_signup_started_task(&self.settings, &self.session_connection)
                 .await?;
 
-        let _ =
-            tasks::spawn_zoci_receiver(&self.zenorb, self.settings.gondor_bin.clone())
-                .await
-                .wrap_err("failed to spawn zoci receiver")?;
+        let _ = tasks::spawn_zoci_receiver(
+            &self.zenorb,
+            ZociContext {
+                os_release,
+                system_conn: self.system_connection.clone(),
+                update_agent_unit: UPDATE_AGENT_SERVICE,
+                target_version_env: UPDATE_AGENT_VERSION,
+            },
+        )
+        .await
+        .wrap_err("failed to spawn zoci receiver")?;
 
         let ((),) = tokio::try_join!(
             // All tasks are joined here

@@ -1,8 +1,16 @@
-use std::{io, str::FromStr, time::Duration};
+use std::{
+    io,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
-use orb_info::OrbId;
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
+    OrbId,
+};
 use orb_supervisor::startup::{Application, Settings};
 use tokio::task::JoinHandle;
 use zbus::{
@@ -62,6 +70,17 @@ pub async fn spawn_supervisor_service(
     Lazy::force(&TRACING);
     let application = Application::build(settings.clone(), zenorb).await?;
     Ok(application)
+}
+
+/// Fixture `OrbOsRelease` for tests — Diamond/Prod, fixed version metadata.
+pub fn fixture_os_release() -> OrbOsRelease {
+    OrbOsRelease {
+        release_type: OrbRelease::Prod,
+        orb_os_platform_type: OrbOsPlatform::Diamond,
+        orb_os_version: "7.0.0".to_string(),
+        expected_main_mcu_version: "v3.0.15".to_string(),
+        expected_sec_mcu_version: "v3.0.15".to_string(),
+    }
 }
 
 /// A self-contained `Zenorb` that doesn't connect to anything. Suitable for tests
@@ -169,7 +188,16 @@ pub async fn start_signup_service_and_send_signal(
     Ok(())
 }
 
-struct Manager;
+/// Shared handle to record calls captured by the mock `org.freedesktop.systemd1.Manager`.
+#[derive(Clone, Default)]
+pub struct SystemdCaptured {
+    pub set_environment: Arc<Mutex<Vec<Vec<String>>>>,
+    pub restart_unit: Arc<Mutex<Vec<String>>>,
+}
+
+pub struct Manager {
+    captured: SystemdCaptured,
+}
 
 #[interface(name = "org.freedesktop.systemd1.Manager")]
 impl Manager {
@@ -197,6 +225,33 @@ impl Manager {
     ) -> fdo::Result<OwnedObjectPath> {
         tracing::debug!(name, _mode, "StopUnit called");
         OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/1234")
+            .map_err(move |_| fdo::Error::UnknownObject(name))
+    }
+
+    #[zbus(name = "SetEnvironment")]
+    async fn set_environment(&self, assignments: Vec<String>) -> fdo::Result<()> {
+        tracing::debug!(?assignments, "SetEnvironment called");
+        self.captured
+            .set_environment
+            .lock()
+            .unwrap()
+            .push(assignments);
+        Ok(())
+    }
+
+    #[zbus(name = "RestartUnit")]
+    async fn restart_unit(
+        &self,
+        name: String,
+        _mode: String,
+    ) -> fdo::Result<OwnedObjectPath> {
+        tracing::debug!(name, _mode, "RestartUnit called");
+        self.captured
+            .restart_unit
+            .lock()
+            .unwrap()
+            .push(name.clone());
+        OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/4242")
             .map_err(move |_| fdo::Error::UnknownObject(name))
     }
 }
@@ -233,10 +288,14 @@ impl CoreService {
 
 pub async fn start_interfaces(
     dbus_instances: &DbusInstances,
-) -> zbus::Result<zbus::Connection> {
+) -> zbus::Result<(zbus::Connection, SystemdCaptured)> {
+    let captured = SystemdCaptured::default();
+    let manager = Manager {
+        captured: captured.clone(),
+    };
     let conn = zbus::ConnectionBuilder::address(dbus_instances.system.address())?
         .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION.unwrap())?
-        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH.unwrap(), Manager)?
+        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH.unwrap(), manager)?
         .serve_at(WORLDCOIN_CORE_SERVICE_OBJECT_PATH, CoreService)?
         .serve_at(
             WORLDCOIN_CORE_SERVICE_OBJECT_PATH,
@@ -246,5 +305,5 @@ pub async fn start_interfaces(
         )?
         .build()
         .await?;
-    Ok(conn)
+    Ok((conn, captured))
 }

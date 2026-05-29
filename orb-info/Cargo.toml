@@ -27,7 +27,7 @@ orb-token = [
 serde = ["dep:serde"]
 
 [dependencies]
-derive_more.workspace = true
+derive_more = { workspace = true, features = ["display", "from_str"] }
 hex = { workspace = true, optional = true }
 orb-attest-dbus = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }

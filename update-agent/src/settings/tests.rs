@@ -100,6 +100,7 @@ fn test_cli_args_override_config_file_and_env_vars() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
@@ -163,6 +164,7 @@ fn test_cli_args_override_config_file() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
@@ -209,6 +211,7 @@ fn test_only_setting_config_file_works() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
         assert_eq!(workspace, Path::new("/config/workspace"));
@@ -251,6 +254,7 @@ fn test_env_override_config_file() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace, Path::new("/env/workspace"));
@@ -312,6 +316,7 @@ fn production_config() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
         assert_eq!(workspace, Path::new("/config/workspace"));

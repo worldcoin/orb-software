@@ -109,16 +109,29 @@ impl Ota {
             })?;
         info!("System time synchronized");
 
-        info!("Starting OTA via gondor-calls-for-ota");
-        let start_timestamp =
-            system::kickoff_update_agent_for_ota(&session, &self.target_version)
-                .await
-                .inspect_err(|e| {
-                    println!("OTA_RESULT=FAILED");
-                    println!("OTA_ERROR=OTA_KICKOFF_FAILED: {e}");
-                })?;
+        info!("Starting OTA");
+        let orb_id = orb_config
+            .orb_id
+            .as_deref()
+            .wrap_err("orb-id is required to kick off OTA")?;
+        let host = self
+            .remote
+            .hostname
+            .as_deref()
+            .wrap_err("--hostname (orb IP) is required to kick off OTA")?;
+        let start_timestamp = system::kickoff_update_agent_for_ota(
+            &session,
+            &self.target_version,
+            orb_id,
+            host,
+        )
+        .await
+        .inspect_err(|e| {
+            println!("OTA_RESULT=FAILED");
+            println!("OTA_ERROR=OTA_KICKOFF_FAILED: {e}");
+        })?;
         info!(
-            "gondor-calls-for-ota completed, start timestamp: {}",
+            "OTA kickoff completed, start timestamp: {}",
             start_timestamp
         );
 

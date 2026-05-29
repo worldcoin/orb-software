@@ -10,6 +10,8 @@ use zbus_systemd::systemd1;
 
 use crate::consts::WORLDCOIN_CORE_UNIT_NAME;
 
+pub const UPDATE_AGENT_SERVICE: &str = "worldcoin-update-agent.service";
+
 /// Calculates the instant that is `stop_core_after_signup` after the last signup event.
 fn calculate_stop_deadline(
     last_signup_started_event: Instant,
@@ -94,7 +96,7 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
         }
         info!("calling `org.freedesktop.systemd1.Manager.StartUnit` to start update agent");
         proxy
-            .start_unit("worldcoin-update-agent.service".into(), "replace".into())
+            .start_unit(UPDATE_AGENT_SERVICE.into(), "replace".into())
             .await
             .map(|_| {})
             .map_err(Into::into)
