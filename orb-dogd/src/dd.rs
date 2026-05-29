@@ -215,10 +215,6 @@ impl MetricEmitter for DogstatsdClient {
             val,
             tags: tags.into_iter().map(Into::into).collect(),
         };
-        self.tx
-            .send(metric)
-            .map_err(|_| eyre::eyre!("metrics worker has died"))?;
-
-        Ok(())
+        self.emit(metric)
     }
 }
