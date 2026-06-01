@@ -331,9 +331,23 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::InternetConnecting => {
-                self.sound.try_queue(sound::Type::Melody(
-                    sound::Melody::InternetConnecting,
-                ))?;
+                self.set_center(
+                    LEVEL_BACKGROUND,
+                    animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_CENTER_WIFI_CONNECTING,
+                        Argb::OFF,
+                        4.0,
+                        0.0,
+                    )
+                    .fade_in(1.5),
+                );
+                let master_volume = self.sound.volume();
+                self.sound.set_master_volume(40);
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::ShowWifiHotspotQrCode),
+                    Duration::ZERO,
+                )?;
+                self.sound.set_master_volume(master_volume);
             }
             Event::NetworkConnectionSuccess => {
                 self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
@@ -596,6 +610,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     );
                 }
                 QrScanSchema::Wifi => {
+                    self.set_center(
+                        LEVEL_FOREGROUND,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_WIFI_CONNECTING,
+                            None,
+                        )
+                        .fade_in(0.5),
+                    );
                     self.sound.queue(
                         sound::Type::Melody(sound::Melody::QrLoadSuccess),
                         Duration::ZERO,
