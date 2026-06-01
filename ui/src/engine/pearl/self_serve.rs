@@ -818,6 +818,31 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
+            Event::VoiceOcclusionGlasses | Event::VoiceOcclusionSunglasses => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceGlasses),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionMask => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceMask),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionHair => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::HairOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionEye => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::EyeOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionSegmentation | Event::VoiceOcclusionOther => {}
             _ => {}
         }
         Ok(())

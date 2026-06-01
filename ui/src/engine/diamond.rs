@@ -1155,6 +1155,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     Duration::ZERO,
                 )?;
             }
+            Event::VoiceOcclusionGlasses => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceGlasses),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionMask => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceMask),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionHair => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::HairOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionSunglasses => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::FaceGlasses),
+                    Duration::ZERO,
+                )?;
+            }
+            Event::VoiceOcclusionSegmentation | Event::VoiceOcclusionOther => {}
+            Event::VoiceOcclusionEye => {
+                self.sound.queue(
+                    sound::Type::Voice(sound::Voice::EyeOcclusion),
+                    Duration::ZERO,
+                )?;
+            }
 
             Event::GoodInternet => {
                 self.operator_idle.good_internet();
