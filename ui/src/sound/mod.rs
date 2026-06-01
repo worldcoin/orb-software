@@ -265,7 +265,7 @@ sound_enum! {
         SignupSuccess,
         #[sound_enum(file = "sound_overheating")]
         Overheating, // TODO: Play when the overheating logic is implemented.
-        #[sound_enum(file = "sound_connecting")]
+        #[sound_enum(file = "sound_qr_load_success")]
         InternetConnecting,
         #[sound_enum(file = "sound_internet_connection_successful")]
         InternetConnectionSuccessful,
@@ -416,7 +416,7 @@ async fn load_sound_file(
         Ok(d) => d,
         Err(e) => {
             if config.ignore_missing_sounds {
-                tracing::error!("ignoring missing sound: {e}");
+                tracing::error!("ignoring missing sound {}: {e}", file.display());
                 Vec::new()
             } else {
                 return Err(SoundError::MissingFile(e.to_string()));
