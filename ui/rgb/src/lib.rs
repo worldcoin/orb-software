@@ -149,6 +149,9 @@ impl Argb {
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW: Argb =
         Argb(Some(6), 95, 31, 2);
+    /// Cool white ~5000K used for user QR scan success blinks
+    pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE: Argb =
+        Argb(Some(10), 90, 88, 80);
 
     /// Biometric Capture - diamond
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(6), 248, 86, 4);

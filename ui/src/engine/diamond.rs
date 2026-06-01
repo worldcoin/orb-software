@@ -590,24 +590,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                     self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                     self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
-                    self.set_ring(
-                        LEVEL_NOTICE,
-                        animations::composites::positioning::Positioning::<
-                            DIAMOND_RING_LED_COUNT,
-                        >::new(
-                            Argb::DIAMOND_RING_ERROR_SALMON, Duration::from_secs(5)
-                        )
-                        .with_delay(Duration::from_secs(4)),
-                    );
                     self.set_center(
                         LEVEL_FOREGROUND,
-                        animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS,
-                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW,
-                            4.0,
-                            0.0,
-                        )
+                        animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
+                            BlinkDurations::from(vec![0.0, 0.3, 0.2, 0.3, 0.2, 0.3]),
+                            None,
+                            true,
+                        )?,
                     );
+                    self.sound.queue(
+                        sound::Type::Melody(sound::Melody::QrLoadSuccess),
+                        Duration::ZERO,
+                    )?;
                 }
                 QrScanSchema::Wifi => {
                     self.set_center(
