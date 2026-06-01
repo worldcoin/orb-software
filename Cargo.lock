@@ -8019,9 +8019,11 @@ dependencies = [
  "event-listener 5.4.1",
  "eyre",
  "futures",
+ "oes",
  "orb-attest-dbus",
  "orb-build-info",
  "orb-const-concat",
+ "orb-dogd",
  "orb-endpoints",
  "orb-info",
  "orb-security-utils",
@@ -8042,6 +8044,7 @@ dependencies = [
  "url",
  "wiremock",
  "zbus",
+ "zenorb",
 ]
 
 [[package]]

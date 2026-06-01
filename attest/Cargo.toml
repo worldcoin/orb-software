@@ -16,9 +16,11 @@ data-encoding = "2.3"
 event-listener = "*"
 eyre.workspace = true
 futures.workspace = true
+oes.workspace = true
 orb-attest-dbus.workspace = true
 orb-build-info.workspace = true
 orb-const-concat.workspace = true
+orb-dogd.workspace = true
 orb-endpoints.workspace = true
 orb-info.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
@@ -36,6 +38,7 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
+zenorb.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

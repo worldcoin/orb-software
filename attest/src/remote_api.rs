@@ -1,10 +1,12 @@
 use data_encoding::BASE64;
+use orb_dogd::MetricEmitter;
 use ring::{digest, digest::digest};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use serde_with::{base64::Base64, serde_as};
 use std::num::Saturating;
 use std::sync::RwLock;
+use std::time::Instant;
 use std::{
     fmt,
     io::Write,
@@ -556,22 +558,33 @@ async fn get_token_inner(
 /// Panics
 ///
 /// if fails to construct API URL
-#[tracing::instrument]
-pub async fn get_token(orb_id: &str, base_url: &Url) -> Token {
+#[tracing::instrument(skip(metrics))]
+pub async fn get_token(
+    orb_id: &str,
+    base_url: &Url,
+    metrics: &impl MetricEmitter,
+) -> Token {
     let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
     let token_url = base_url.join("token").unwrap();
 
     let mut delay = MIN_TOKEN_DELAY;
     loop {
+        let start = Instant::now();
+
         match get_token_inner(orb_id, &tokenchallenge_url, &token_url).await {
             Ok(token) => {
+                let elapsed = start.elapsed();
+
                 return token;
             }
+
             Err(e) => {
                 let retry_delay = e.retry_delay(delay);
                 error!("failed to get token: {e}, retrying in {retry_delay:?}");
                 sleep(retry_delay).await;
                 delay = e.next_retry_delay(delay);
+
+                let elapsed = start.elapsed();
             }
         }
     }

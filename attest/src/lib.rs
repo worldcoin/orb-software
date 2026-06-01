@@ -5,12 +5,13 @@ pub mod config;
 pub mod dbus;
 pub mod remote_api;
 
-use std::sync::Arc;
+mod conn_change;
 
 use eyre::{self, bail, WrapErr};
 use futures::{FutureExt, StreamExt};
 use orb_build_info::{make_build_info, BuildInfo};
 use secrecy::ExposeSecret;
+use std::sync::Arc;
 use tokio::{select, sync::Notify, time::sleep};
 use tracing::{info, warn};
 use url::Url;
