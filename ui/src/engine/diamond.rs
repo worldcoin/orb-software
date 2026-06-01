@@ -497,6 +497,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.sound.set_master_volume(master_volume);
                     }
                     QrScanSchema::User => {
+                        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+                        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+                        self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+                        self.set_ring(
+                            LEVEL_BACKGROUND,
+                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                                Argb::OFF,
+                                None,
+                            ),
+                        );
                         self.set_center(
                             LEVEL_BACKGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -522,6 +532,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                         self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
+                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                                Argb::DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE,
+                                None,
+                            ),
+                        );
                         self.set_center(
                             LEVEL_FOREGROUND,
                             animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(

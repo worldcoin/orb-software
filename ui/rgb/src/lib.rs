@@ -149,12 +149,16 @@ impl Argb {
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_BREATHING_LOW: Argb =
         Argb(Some(6), 95, 31, 2);
-    /// Cool white ~5000K used for user QR scan success blinks
+    /// Cool white ~5000K for user QR scan success center breathing
     pub const DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE: Argb =
-        Argb(Some(10), 90, 88, 80);
+        Argb(Some(10), 90, 90, 90);
+    /// Cool white ~5000K for user QR scan success outer ring fill
+    pub const DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE: Argb =
+        Argb(Some(15), 90, 90, 90);
 
     /// Biometric Capture - diamond
-    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(6), 248, 86, 4);
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb =
+        Self::DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE;
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
