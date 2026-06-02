@@ -138,6 +138,9 @@ impl Argb {
     pub const DIAMOND_CONE_AMBER: Argb = Argb(Some(Self::DIMMING_MAX_VALUE), 25, 18, 1);
     /// Error color for outer ring
     pub const DIAMOND_RING_ERROR_SALMON: Argb = Argb(Some(8), 127, 20, 0);
+    /// Solid red for signup failure
+    pub const DIAMOND_RING_FAILURE_RED: Argb = Argb(Some(10), 100, 0, 0);
+    pub const DIAMOND_CENTER_FAILURE_RED: Argb = Argb(Some(10), 100, 0, 0);
 
     /// QR Phase colors - diamond
     pub const DIAMOND_CENTER_WIFI_CONNECTING: Argb = Argb(Some(6), 0, 20, 80);
@@ -161,6 +164,10 @@ impl Argb {
         Self::DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE;
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
         Self::DIAMOND_CENTER_USER_QR_SCAN_COMPLETED;
+    pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
+        Argb(Some(15), 0, 100, 0);
+    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
+        Argb(Some(10), 0, 100, 0);
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =
         Self::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS;
 

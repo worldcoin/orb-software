@@ -604,6 +604,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     operator_signup_phase: operator::SignupPhase,
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
+    capture_succeeded: bool,
     state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
