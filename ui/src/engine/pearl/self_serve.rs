@@ -760,9 +760,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             sound::Type::Melody(sound::Melody::IrisScanSuccess),
             Duration::from_millis((fade_out_duration * 1000.0) as u64),
         )?;
-        // custom alert animation on ring
-        // a bit off for 500ms then on with fade out animation
-        // twice: first faster than the other
+
         self.stop_center(LEVEL_FOREGROUND, Transition::FadeOut(fade_out_duration));
         // in case nothing is running on center, make sure we set the background to off
         self.set_center(
