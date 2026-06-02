@@ -21,11 +21,5 @@ orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
-assets = [
-	[
-		"target/release/orbd",
-		"/usr/local/bin/",
-		"755",
-	],
-]
+assets = [["target/release/orbd", "/usr/local/bin/", "755"]]
 systemd-units = [{ unit-name = "worldcoin-orbd" }]
