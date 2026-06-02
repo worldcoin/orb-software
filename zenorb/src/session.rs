@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     receiver,
@@ -8,6 +8,8 @@ use bon::bon;
 use color_eyre::{eyre::eyre, Result};
 use orb_info::OrbId;
 use serde::Serialize;
+use tokio::time;
+use tracing::warn;
 use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
@@ -39,9 +41,26 @@ impl Zenorb {
         #[builder(start_fn)] cfg: zenoh::Config,
         #[builder(finish_fn)] name: impl Into<String>,
         #[builder(default = true)] liveliness: bool,
+        #[builder(default = 4)] retries: u8,
+        #[builder(default = Duration::from_secs(10))] backoff: Duration,
         orb_id: OrbId,
     ) -> Result<Self> {
-        let session = zenoh::open(cfg).await.map_err(|e| eyre!("{e}"))?;
+        let mut curr_retries = 0;
+        let session = loop {
+            match zenoh::open(cfg.clone()).await.map_err(|e| eyre!("{e}")) {
+                Ok(session) => break session,
+                Err(e) => {
+                    if curr_retries >= retries {
+                        return Err(e);
+                    }
+
+                    curr_retries += 1;
+                    warn!("failed to connect to zenoh [{curr_retries}/{retries}]. trying again in {}ms", backoff.as_millis());
+                    time::sleep(backoff).await;
+                }
+            }
+        };
+
         let name = name.into();
 
         let liveliness = if liveliness {
