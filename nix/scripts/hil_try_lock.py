@@ -29,16 +29,30 @@ def _error_msg(resp: requests.Response) -> str:
 def main() -> int:
     orchestrator = os.environ["HIL_ORCHESTRATOR_URL"]
     orb_id = os.environ["HIL_ORB_ID"]
-    note = " ".join(sys.argv[1:]).strip() or None
+    first = sys.argv[1] if len(sys.argv) > 1 else None
+    if first in ("diamond", "pearl"):
+        platform = first
+        note = " ".join(sys.argv[2:]).strip() or None
+    else:
+        platform = None
+        note = " ".join(sys.argv[1:]).strip() or None
 
-    resp = requests.post(f"{orchestrator}/runners/{orb_id}/lock", timeout=TIMEOUT)
+    if platform:
+        resp = requests.post(f"{orchestrator}/lock/{platform}", timeout=TIMEOUT)
+    else:
+        resp = requests.post(f"{orchestrator}/runners/{orb_id}/lock", timeout=TIMEOUT)
+
     if resp.status_code != 200:
         print(
             f"try_lock failed (HTTP {resp.status_code}): {_error_msg(resp)}",
             file=sys.stderr,
         )
         return 1
-    print(f"lock queued for {orb_id}")
+    if platform:
+        locked_runner = resp.json().get("runner_id", "unknown")
+        print(f"lock queued for {locked_runner}")
+    else:
+        print(f"lock queued for {orb_id}")
 
     if note:
         resp = requests.put(
