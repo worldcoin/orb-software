@@ -8826,6 +8826,7 @@ dependencies = [
  "hex-literal 0.4.1",
  "reqwest 0.12.24",
  "ring",
+ "x509-parser 0.17.0",
 ]
 
 [[package]]
