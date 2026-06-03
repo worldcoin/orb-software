@@ -854,6 +854,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // do nothing
             }
             Event::BiometricCaptureDistance { in_range } => {
+                if *in_range {
+                    self.set_center(
+                        LEVEL_NOTICE,
+                        animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                            Argb::OFF,
+                            2.0,
+                            0.0,
+                        ),
+                    );
+                } else {
+                    self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                }
                 // play the sound only once we start the progress bar.
                 if let Some(biometric_flow) = self
                     .ring_animations_stack
