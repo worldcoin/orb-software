@@ -186,6 +186,8 @@ pub mod blocking {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, SystemTime};
+
     use super::*;
 
     #[test]
@@ -209,5 +211,46 @@ mod tests {
             .expect("Failed to make GTS R3 cert");
         make_cert(GTS_ROOT_R4_CERT, &GTS_ROOT_R4_SHA256)
             .expect("Failed to make GTS R4 cert");
+    }
+
+    #[test]
+    fn pinned_certificates_do_not_expire_soon() {
+        for (name, cert_pem) in [
+            ("AmazonRootCA1.pem", AWS_ROOT_CA1_CERT),
+            ("AmazonRootCA2.pem", AWS_ROOT_CA2_CERT),
+            ("AmazonRootCA3.pem", AWS_ROOT_CA3_CERT),
+            ("AmazonRootCA4.pem", AWS_ROOT_CA4_CERT),
+            ("SFSRootCAG2.pem", SFS_ROOT_G2_CERT),
+            ("GTS_Root_R1.pem", GTS_ROOT_R1_CERT),
+            ("GTS_Root_R2.pem", GTS_ROOT_R2_CERT),
+            ("GTS_Root_R3.pem", GTS_ROOT_R3_CERT),
+            ("GTS_Root_R4.pem", GTS_ROOT_R4_CERT),
+        ] {
+            let (_, pem) = x509_parser::pem::parse_x509_pem(cert_pem)
+                .unwrap_or_else(|e| panic!("{name} should parse as PEM: {e}"));
+            let cert = pem
+                .parse_x509()
+                .unwrap_or_else(|e| panic!("{name} should parse as X.509: {e}"));
+
+            // assert expiration date is under 6 months
+            const EXPIRATION_GATE: Duration = Duration::from_secs(180 * 24 * 60 * 60);
+
+            let now = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("system time should be after UNIX epoch");
+            let expiry = Duration::from_secs(
+                cert.validity()
+                    .not_after
+                    .timestamp()
+                    .try_into()
+                    .expect("certificate expiry should be after UNIX epoch"),
+            );
+            let remaining = expiry.saturating_sub(now);
+
+            assert!(
+                remaining >= EXPIRATION_GATE,
+                "{name} expires in {remaining:?}"
+            );
+        }
     }
 }

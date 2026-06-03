@@ -21,3 +21,6 @@ reqwest = { workspace = true, default-features = false, features = [
 	"rustls-tls-manual-roots",
 ], optional = true }
 ring = "0.17.0"
+
+[dev-dependencies]
+x509-parser.workspace = true
