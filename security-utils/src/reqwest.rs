@@ -213,6 +213,9 @@ mod tests {
             .expect("Failed to make GTS R4 cert");
     }
 
+    // assert expiration date is under 6 months
+    const EXPIRATION_GATE: Duration = Duration::from_secs(180 * 24 * 60 * 60);
+
     #[test]
     fn pinned_certificates_do_not_expire_soon() {
         for (name, cert_pem) in [
@@ -231,9 +234,6 @@ mod tests {
             let cert = pem
                 .parse_x509()
                 .unwrap_or_else(|e| panic!("{name} should parse as X.509: {e}"));
-
-            // assert expiration date is under 6 months
-            const EXPIRATION_GATE: Duration = Duration::from_secs(180 * 24 * 60 * 60);
 
             let now = SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
