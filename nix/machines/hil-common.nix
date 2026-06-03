@@ -347,7 +347,10 @@ in
         runnerGroup = "hardware-in-the-loop-server";
 
         serviceOverrides = {
-          Environment = ''"PATH=/run/wrappers/bin:/run/current-system/sw/bin"''; # fixes missing sudo
+          Environment = [
+            "PATH=/run/wrappers/bin:/run/current-system/sw/bin" # fixes missing sudo
+            "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+          ];
           # Override the NixOS github-runner module's UMask=0066 so artifacts
           # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.
           UMask = lib.mkForce "0022";
