@@ -322,9 +322,9 @@ class OrbRegistration:
         self.logger.info(f"Creating Orb record in Management API for Orb ID: {orb_id}")
 
         data = {
-            "BuildVersion": self.args.hardware_version,
-            "ManufacturerName": self.args.manufacturer,
-            "Platform": platform,
+            "buildVersion": self.args.hardware_version,
+            "manufacturerName": self.args.manufacturer,
+            "platform": platform,
         }
 
         req = urllib.request.Request(
