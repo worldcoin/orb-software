@@ -162,8 +162,61 @@ flow, PolicySecret explanation, and backend EK cert registry design lives in:
 
 ## What is NOT in scope
 
-- No persistent NV handle management — SRK and AIK are always transient.
-- No EK certificate retrieval — `aik_cert_der` is always empty against swtpm; production
-  would read NV index 0x01C0000A (ECC EK cert).
-- No AIK certification flow (`ActivateCredential`).
 - No PCR event log parsing.
+- No EK certificate chain (currently seed-derived EK pub, no manufacturing CA).
+
+## Enrollment infrastructure (bash + Python)
+
+AK enrollment runs as a bash script + Python test server duo:
+
+| Component | File | Role |
+|-----------|------|------|
+| Device-side enrollment | `scripts/orb-tpm-provision.sh` | Runs tpm2-tools to create EK/AK and drive ActivateCredential |
+| Device-side quoting | `scripts/orb-tpm-quote.sh` | Produces TPM2 quote JSON on demand |
+| Backend mock server | `tests/orb-attestation-test-server.py` | MakeCredential, AK cert issuance, quote verify |
+| E2E test | `tests/e2e_enrollment_test.sh` | Orchestrates entire flow inside Docker |
+
+### Key bugs to avoid
+
+**`tpm2_activatecredential` missing `--encrypted-seed`**: tpm2-tools v5 requires
+both `--credential-blob` (TPM2B_ID_OBJECT) and `--encrypted-seed` (TPM2B_ENCRYPTED_SECRET)
+as separate inputs. Omitting `--encrypted-seed` causes silent failure or TPM_RC_VALUE.
+
+**`tpm2_nvwrite` before `tpm2_nvdefine`**: swtpm does not pre-define NV indexes.
+Always call `tpm2_nvdefine -C o INDEX -s SIZE -a "authread|authwrite|no_da"` before
+`tpm2_nvwrite -C o INDEX -i file`.
+
+**TPM2B_PUBLIC parser for AK vs EK**: The EK uses AES-128-CFB symmetric (6 bytes of
+parms) + NULL scheme (2 bytes). The AK uses NULL symmetric (2 bytes) + ECDSA-SHA256
+scheme (4 bytes). The parser must dynamically read algIds rather than using fixed offsets.
+
+### Running the full e2e scenario
+
+
+```sh
+# From the orb-software workspace root:
+docker compose -f orb-tpm/docker-compose.yml run --rm --build enrollment-runner
+```
+
+Services started automatically:
+- `tpm-sim` (swtpm) — software TPM2 at port 2321/2322
+- `attestation-backend` (Python) — REST API at port 8080
+- `enrollment-runner` — runs `e2e_enrollment_test.sh`, exits 0 on success
+
+### REST API exposed by the backend
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/v1/attestation/ak/challenge` | MakeCredential challenge |
+| `POST` | `/v1/attestation/ak/complete` | Verify ActivateCredential + issue AK cert |
+| `GET`  | `/v1/attestation/ak/status` | Check enrollment status |
+| `POST` | `/v1/attestation/quote/verify` | Verify TPM2 quote using tpm2_checkquote |
+| `GET`  | `/health` | Health probe |
+
+### Rust public API (src/lib.rs)
+
+| Function | Description |
+|----------|-------------|
+| `quote(nonce)` | Quote with transient SRK+AK (no persistent handles needed) |
+| `quote_from_persistent_ak(nonce)` | Quote with persistent AK at `0x81010003` (needs enrollment) |
+| `read_ak_cert_from_nv()` | Read AK cert DER from NV `0x01800003` (empty pre-enrollment) |

@@ -1,0 +1,42 @@
+# Enrollment + attestation client image for local e2e testing.
+#
+# Installs tpm2-tools, curl, jq, and python3 so that:
+#   - orb-tpm-provision.sh  — EK/AK creation + AK cert enrollment
+#   - orb-tpm-quote.sh      — on-demand TPM2 quote production
+#   - tests/e2e_enrollment_test.sh — orchestrates the full scenario
+#
+# Configure via environment variables:
+#   TPM2TOOLS_TCTI   swtpm:host=tpm-sim,port=2321  (or device:/dev/tpmrm0)
+#   BACKEND_URL      http://attestation-backend:8080
+#   DEVICE_ID        test-device-001
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        tpm2-tools \
+        curl \
+        jq \
+        xxd \
+        openssl \
+        python3 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Scripts installed from the build context (orb-software workspace root)
+COPY orb-tpm/scripts/orb-tpm-provision.sh  /usr/local/bin/orb-tpm-provision
+COPY orb-tpm/scripts/orb-tpm-quote.sh      /usr/local/bin/orb-tpm-quote
+COPY orb-tpm/tests/e2e_enrollment_test.sh  /usr/local/bin/e2e-enrollment-test
+
+RUN chmod +x \
+        /usr/local/bin/orb-tpm-provision \
+        /usr/local/bin/orb-tpm-quote \
+        /usr/local/bin/e2e-enrollment-test
+
+# tmpfs mount for provisioning state; mirror the systemd RuntimeDirectory path
+RUN mkdir -p /run/orb-tpm
+
+ENV STATE_DIR=/run/orb-tpm
+ENV BACKEND_URL=http://attestation-backend:8080
+ENV DEVICE_ID=test-device-001
+
+CMD ["/usr/local/bin/e2e-enrollment-test"]

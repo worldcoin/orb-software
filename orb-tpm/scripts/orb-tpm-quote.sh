@@ -31,7 +31,8 @@ tpm2_quote \
     --qualification  "$OUT/nonce.bin" \
     --message        "$OUT/quote.bin" \
     --signature      "$OUT/sig.bin" \
-    --hash-algorithm sha256
+    --hash-algorithm sha256 \
+    > /dev/null
 
 # Output the §14.2 job result schema as JSON using python3 (Orb has no jq).
 # quoted_b64 / signature_b64 are raw TPM binary structures — do NOT decompose.
@@ -53,3 +54,4 @@ print(json.dumps({
     'signature_b64':  signature_b64,
     'timestamp':      datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
 }))
+PY_EOF

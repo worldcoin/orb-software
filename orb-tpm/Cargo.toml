@@ -12,4 +12,4 @@ rust-version.workspace = true
 [dependencies]
 thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
-tss-esapi = { workspace = true }
+tss-esapi = { version = "=7.7.0" }

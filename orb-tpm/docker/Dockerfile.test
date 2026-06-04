@@ -23,6 +23,9 @@ RUN apt-get update && \
 
 WORKDIR /workspace
 
+# Reduce peak memory usage during heavy dependency builds in Docker Desktop.
+ENV CARGO_BUILD_JOBS=1
+
 # Copy the entire workspace (needed because Cargo.toml references all members).
 COPY . .
 

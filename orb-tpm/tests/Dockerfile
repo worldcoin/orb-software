@@ -1,7 +1,9 @@
 FROM python:3.11-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tpm2-tools \
+ && apt-get install -y --no-install-recommends \
+        tpm2-tools \
+        libtss2-tcti-swtpm0 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir cryptography

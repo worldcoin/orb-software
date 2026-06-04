@@ -13945,7 +13945,6 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7f972672926a3d3d18ecc04524720e4d20b7d1664a3fb73dbf7d4274196dbd9"
 dependencies = [
- "bindgen 0.72.1",
  "pkg-config",
  "target-lexicon 0.12.16",
 ]

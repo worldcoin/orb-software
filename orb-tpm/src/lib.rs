@@ -3,6 +3,24 @@
 //! Callers pass a 32-byte nonce and receive a [`QuoteResult`] containing the
 //! raw TPM wire structures needed for remote attestation.
 //!
+//! # Key hierarchy
+//!
+//! | Handle        | Key  | Used for                             |
+//! |---------------|------|--------------------------------------|
+//! | `0x81010001`  | EK   | ActivateCredential (enrollment)      |
+//! | `0x81010003`  | AK   | TPM2_Quote (attestation)             |
+//! | NV `0x01800003` | AK cert | DER cert written after enrollment |
+//!
+//! The AK is created under the Endorsement hierarchy (sibling of the EK) via
+//! `tpm2_createak --ek-context`, so the EK certificate chain certifies the AK.
+//! No SRK is needed.
+//!
+//! Enrollment is handled by `orb-tpm-provision.sh` (bash + tpm2-tools) and the
+//! Python test backend.  The Rust library provides:
+//!   - [`quote`]                    — transient SRK+AK (no persistent handles)
+//!   - [`quote_from_persistent_ak`] — uses persistent AK at `0x81010003`
+//!   - [`read_ak_cert_from_nv`]     — reads the AK cert from NV `0x01800003`
+//!
 //! # Transport selection
 //!
 //! The TSS2 TCTI is taken from the `TCTI` environment variable at
@@ -21,10 +39,13 @@ use tracing::instrument;
 use tss_esapi::{
     Context, TctiNameConf,
     attributes::ObjectAttributesBuilder,
+    constants::Tss2ResponseCodeKind,
+    handles::{NvIndexHandle, NvIndexTpmHandle, PersistentTpmHandle, TpmHandle},
     interface_types::{
         algorithm::{HashingAlgorithm, PublicAlgorithm},
         ecc::EccCurve,
         resource_handles::Hierarchy,
+        resource_handles::NvAuth,
         session_handles::AuthSession,
     },
     structures::{
@@ -202,12 +223,13 @@ pub fn quote(nonce: &[u8]) -> Result<QuoteResult, Error> {
         )?;
         eprintln!("[orb-tpm] quote done");
 
-        // Flush transient handles — best-effort, log on error.
-        if let Err(e) = ctx.flush_context(srk_handle.into()) {
-            eprintln!("[orb-tpm] warn: flush SRK: {e}");
-        }
+        // Flush transient handles in child-first order.
+        // Flushing the parent SRK first can fail while the AIK child is still loaded.
         if let Err(e) = ctx.flush_context(aik_handle.into()) {
             eprintln!("[orb-tpm] warn: flush AIK: {e}");
+        }
+        if let Err(e) = ctx.flush_context(srk_handle.into()) {
+            eprintln!("[orb-tpm] warn: flush SRK: {e}");
         }
 
         let quoted_bytes = attest.marshall()?;
@@ -225,6 +247,109 @@ pub fn quote(nonce: &[u8]) -> Result<QuoteResult, Error> {
         // index 0x01C00002 (RSA EK) or 0x01C0000A (ECC EK).
         aik_cert_der: vec![],
     })
+}
+
+/// Produce a TPM2 quote using the **persistent** AK at handle `0x81010003`.
+///
+/// The AK must already be persisted (e.g. by `orb-tpm-provision.sh`).
+/// Unlike [`quote`] which creates transient keys on every call, this function
+/// loads the persistent AK via its TPM handle — no key material is created.
+///
+/// The AK cert is read from NV `0x01800003` when present; `aik_cert_der` is
+/// empty when the NV index is not yet written (e.g. before enrollment).
+///
+/// `nonce` must be exactly 32 bytes.
+#[instrument(skip(nonce), fields(nonce_len = nonce.len()))]
+pub fn quote_from_persistent_ak(nonce: &[u8]) -> Result<QuoteResult, Error> {
+    if nonce.len() != 32 {
+        return Err(Error::InvalidNonceLength(nonce.len()));
+    }
+
+    let tcti = TctiNameConf::from_environment_variable()?;
+    let mut ctx = Context::new(tcti)?;
+    let qualifying_data = Data::try_from(nonce.to_vec())?;
+
+    // Convert the raw TPM persistent handle to an ESAPI resource handle (ESYS_TR).
+    let persistent_handle = PersistentTpmHandle::new(0x81010003).map_err(tss_esapi::Error::from)?;
+    let ak_tpm_handle = TpmHandle::Persistent(persistent_handle);
+    let ak_esys_handle = ctx.tr_from_tpm_public(ak_tpm_handle)?;
+
+    let (quoted, sig_bytes) = ctx.execute_with_session(Some(AuthSession::Password), |ctx| {
+        let pcr_selection = PcrSelectionListBuilder::new()
+            .with_selection(
+                HashingAlgorithm::Sha256,
+                &[
+                    PcrSlot::Slot0,
+                    PcrSlot::Slot1,
+                    PcrSlot::Slot2,
+                    PcrSlot::Slot3,
+                    PcrSlot::Slot4,
+                    PcrSlot::Slot5,
+                    PcrSlot::Slot6,
+                    PcrSlot::Slot7,
+                ],
+            )
+            .build()?;
+
+        let (attest, signature) = ctx.quote(
+            ak_esys_handle.into(),
+            qualifying_data.clone(),
+            SignatureScheme::Null,
+            pcr_selection,
+        )?;
+
+        let quoted_bytes = attest.marshall()?;
+        let sig_bytes = signature.marshall()?;
+        Ok::<_, Error>((quoted_bytes, sig_bytes))
+    })?;
+
+    // Best-effort: read the AK cert from NV 0x01800003.
+    let aik_cert_der = read_ak_cert_from_nv().unwrap_or_default();
+
+    tracing::info!("TPM quote from persistent AK produced successfully");
+
+    Ok(QuoteResult {
+        quoted,
+        signature: sig_bytes,
+        aik_cert_der,
+    })
+}
+
+/// Read the AK certificate DER from TPM NV index `0x01800003`.
+///
+/// Returns `Ok(vec![])` when the NV index does not exist or has not been
+/// written (e.g. before enrollment completes).  Returns `Err` only on
+/// unexpected TSS2 errors unrelated to a missing index.
+pub fn read_ak_cert_from_nv() -> Result<Vec<u8>, Error> {
+    let tcti = TctiNameConf::from_environment_variable()?;
+    let mut ctx = Context::new(tcti)?;
+
+    let nv_handle = NvIndexTpmHandle::new(0x01800003u32)
+        .map_err(|e| Error::Tss2(tss_esapi::Error::from(e)))?;
+
+    let nv_handle = ctx.execute_with_session(Some(AuthSession::Password), |ctx| {
+        // tr_from_tpm_public converts the raw NV index handle to ESYS_TR.
+        ctx.tr_from_tpm_public(TpmHandle::NvIndex(nv_handle))
+    })?;
+    let nv_handle: NvIndexHandle = nv_handle.into();
+
+    // Read up to 2048 bytes — AK certs for P-256 are ~400–600 bytes.
+    let nv_data = ctx.execute_with_session(Some(AuthSession::Password), |ctx| {
+        // NV index is owner-defined and owner-authorized.
+        ctx.nv_read(NvAuth::Owner, nv_handle, 2048, 0)
+    });
+
+    match nv_data {
+        Ok(buf) => Ok(buf.to_vec()),
+        Err(tss_esapi::Error::Tss2Error(rc)) if matches!(
+            rc.kind(),
+            Some(Tss2ResponseCodeKind::NvUninitialized | Tss2ResponseCodeKind::Handle)
+        ) => {
+            // Index absent or not written — no cert yet (expected pre-enrollment).
+            Ok(vec![])
+        }
+        Err(e) => Err(Error::Tss2(e)),
+    }
 }
 
 #[cfg(test)]
@@ -246,6 +371,12 @@ mod tests {
     #[test]
     fn rejects_empty_nonce() {
         assert!(matches!(quote(&[]).unwrap_err(), Error::InvalidNonceLength(0)));
+    }
+
+    #[test]
+    fn persistent_ak_quote_rejects_short_nonce() {
+        let err = quote_from_persistent_ak(&[0u8; 16]).unwrap_err();
+        assert!(matches!(err, Error::InvalidNonceLength(16)));
     }
 
     // Without TSS2_TCTI the ESAPI context creation fails — this is expected.

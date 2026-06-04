@@ -5,8 +5,11 @@
 #
 # Usage (from the orb-software workspace root):
 #
-#   Run integration tests fully inside Docker (no host TSS2 libs required):
+#   Run Rust unit + ignored integration tests inside Docker (recommended):
 #     docker compose -f orb-tpm/docker-compose.yml run --rm --build test-runner
+#
+#   Run the full end-to-end enrollment + attestation scenario:
+#     docker compose -f orb-tpm/docker-compose.yml run --rm --build enrollment-runner
 #
 #   Or start the simulator alone and run tests from the host (Linux only):
 #     docker compose -f orb-tpm/docker-compose.yml up -d tpm-sim
@@ -14,9 +17,10 @@
 #     cargo test -p orb-tpm --test integration -- --include-ignored
 #     docker compose -f orb-tpm/docker-compose.yml down -v
 #
-# Ports (when tpm-sim is started with host port bindings):
+# Ports (when services are started with host port bindings):
 #   2321 — swtpm TPM data channel  (TCTI connects here)
 #   2322 — swtpm control channel   (used by swtpm_ioctl for healthcheck)
+#   8080 — attestation backend     (enrollment API + quote verify)
 
 services:
   tpm-sim:
@@ -46,10 +50,39 @@ services:
       retries: 15
       start_period: 3s
 
+  # Python attestation backend: MakeCredential + AK cert issuance + quote verify.
+  # Implements:
+  #   POST /v1/attestation/ak/challenge  — issue MakeCredential challenge
+  #   POST /v1/attestation/ak/complete   — verify ActivateCredential + issue AK cert
+  #   GET  /v1/attestation/ak/status     — check enrollment status
+  #   POST /v1/attestation/quote/verify  — verify TPM2 quote
+  attestation-backend:
+    build:
+      context: tests
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - PYTHONUNBUFFERED=1
+      # tpm2_makecredential and tpm2_checkquote both need a TCTI connection.
+      # Using the same swtpm as enrollment-runner is safe: MakeCredential reads
+      # the EK public key and uses local crypto (no persistent state modified).
+      - TPM2TOOLS_TCTI=swtpm:host=tpm-sim,port=2321
+    depends_on:
+      tpm-sim:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
+
   # Runs orb-tpm integration tests inside a Linux container that has libtss2
   # installed from apt. This works on any host OS (macOS, Linux, CI).
   # docker compose -f orb-tpm/docker-compose.yml run --rm --build test-runner
   test-runner:
+    platform: linux/amd64
     build:
       # Build context is the workspace root so COPY can access all Cargo files.
       context: ../
@@ -62,6 +95,28 @@ services:
       tpm-sim:
         condition: service_healthy
 
+  # End-to-end enrollment + attestation scenario.
+  # Runs:
+  #   1. orb-tpm-provision — EK/AK creation + AK cert enrollment via ActivateCredential
+  #   2. orb-tpm-quote     — on-demand TPM2_Quote with the persistent AK
+  #   3. POST /v1/attestation/quote/verify — backend verifies the quote signature + nonce
+  # docker compose -f orb-tpm/docker-compose.yml run --rm --build enrollment-runner
+  enrollment-runner:
+    build:
+      context: ../
+      dockerfile: orb-tpm/docker/Dockerfile.enrollment
+    environment:
+      TPM2TOOLS_TCTI: "swtpm:host=tpm-sim,port=2321"
+      BACKEND_URL:    "http://attestation-backend:8080"
+      DEVICE_ID:      "${DEVICE_ID:-test-device-001}"
+      STATE_DIR:      "/run/orb-tpm"
+    depends_on:
+      tpm-sim:
+        condition: service_healthy
+      attestation-backend:
+        condition: service_started
+
 volumes:
   tpm-state:
     driver: local
+
