@@ -182,6 +182,10 @@ impl CurrentStatus {
                 .core_stats
                 .as_ref()
                 .and_then(|core_stats| core_stats.orb_stand_qr_id.clone()),
+            orb_stand_qr_type: self
+                .core_stats
+                .as_ref()
+                .and_then(|core_stats| core_stats.orb_stand_qr_type.clone()),
             timestamp: Utc::now(),
         }
     }
