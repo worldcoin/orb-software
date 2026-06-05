@@ -37,6 +37,7 @@ pub struct OrbStatusApiV2 {
     pub oes: Option<Vec<Event>>,
     pub oes_cached: bool,
     pub orb_stand_qr_id: Option<String>,
+    pub orb_stand_qr_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
