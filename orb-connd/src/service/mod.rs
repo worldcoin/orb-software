@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs::{self, File};
 use tokio::io::{self};
@@ -32,7 +33,6 @@ mod wifi;
 mod wpa_conf;
 pub mod zoci;
 
-#[derive(Clone)]
 pub struct ConndService<M: MetricEmitter> {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
@@ -41,7 +41,7 @@ pub struct ConndService<M: MetricEmitter> {
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
-    metrics: M,
+    metrics: Arc<M>,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +53,24 @@ pub enum ProfileStorage {
 impl ProfileStorage {
     pub fn should_persist(&self) -> bool {
         matches!(self, Self::NetworkManager)
+    }
+}
+
+impl<M> Clone for ConndService<M>
+where
+    M: MetricEmitter,
+{
+    fn clone(&self) -> Self {
+        Self {
+            session_dbus: self.session_dbus.clone(),
+            nm: self.nm.clone(),
+            release: self.release,
+            cap: self.cap,
+            magic_qr_applied_at: self.magic_qr_applied_at.clone(),
+            connect_timeout: self.connect_timeout,
+            profile_storage: self.profile_storage.clone(),
+            metrics: self.metrics.clone(),
+        }
     }
 }
 
@@ -71,6 +89,7 @@ where
     const NM_STATE_MAX_SIZE_KB: u64 = 1024;
     const SECURE_STORAGE_KEY: &str = "nmprofiles";
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         session_dbus: zbus::Connection,
         nm: NetworkManager,
@@ -79,7 +98,7 @@ where
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
         profile_storage: ProfileStorage,
-        metrics: M,
+        metrics: Arc<M>,
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
 
@@ -130,7 +149,7 @@ where
         .flat_map(|r| r.err());
 
         for error in startup_errors {
-            warn!(?error, "non fatal startup failure")
+            warn!("non fatal startup failure, err: {error:?}")
         }
 
         match connd.nm.list_wifi_profiles().await {

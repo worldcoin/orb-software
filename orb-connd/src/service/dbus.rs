@@ -166,8 +166,6 @@ where
 
         let _ = self.metrics.count("orb.platform.connd.wifi_qr", 1, tags);
 
-        warn!("bing bing wahoo");
-
         result
     }
 
