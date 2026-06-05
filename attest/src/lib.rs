@@ -5,15 +5,28 @@ pub mod config;
 pub mod dbus;
 pub mod remote_api;
 
-use std::sync::Arc;
-
 use eyre::{self, bail, WrapErr};
 use futures::{FutureExt, StreamExt};
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_dogd::{DogstatsdClient, MetricEmitter};
+use orb_info::OrbId;
 use secrecy::ExposeSecret;
-use tokio::{select, sync::Notify, time::sleep};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tokio::{
+    select,
+    sync::{watch, Notify},
+    task::{self, JoinHandle},
+    time::sleep,
+};
 use tracing::{info, warn};
 use url::Url;
+use zenorb::{zenoh::sample::Sample, Zenorb};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 
@@ -25,9 +38,8 @@ pub const SYSLOG_IDENTIFIER: &str = "worldcoin-attest";
 pub async fn main() -> eyre::Result<()> {
     info!("Version: {}", BUILD_INFO.version);
 
-    let orb_id =
-        std::env::var("ORB_ID").wrap_err("env variable `ORB_ID` should be set")?;
-    let config = config::Config::new(config::default_backend(), &orb_id);
+    let orb_id = OrbId::read().await?;
+    let config = config::Config::new(config::default_backend(), orb_id.as_str());
 
     let force_refresh_token = Arc::new(Notify::new());
 
@@ -35,12 +47,32 @@ pub async fn main() -> eyre::Result<()> {
         .await
         .wrap_err("Initialization failed")?;
     let conn = iface_ref.signal_context().connection().clone();
+
+    let (is_online_tx, is_online_rx) = watch::channel(false);
+
+    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
+        .orb_id(orb_id.clone())
+        .with_name("attest")
+        .await?;
+
+    let _ = zenorb
+        .receiver(is_online_tx)
+        .querying_subscriber(
+            "connd/oes/active_connections",
+            Duration::from_secs(1),
+            update_is_online,
+        )
+        .run()
+        .await?;
+
     let run_fut = run(
-        &orb_id,
+        orb_id.as_str(),
         iface_ref,
         force_refresh_token.clone(),
         config.auth_url,
         config.ping_url,
+        is_online_rx,
+        DogstatsdClient::new(),
     );
 
     let mut msg_stream = zbus::MessageStream::from(conn);
@@ -55,19 +87,6 @@ pub async fn main() -> eyre::Result<()> {
             .map(|r| r.wrap_err("dbus monitor task terminated abnormally")?)
     )?;
     Ok(())
-}
-
-/// Return either a *proovenly working* static token, or a short lived token.
-#[tracing::instrument]
-async fn get_working_token(
-    orb_id: &str,
-    auth_url: &Url,
-    ping_url: &Url,
-) -> crate::remote_api::Token {
-    select! {
-        Ok(token) = get_working_static_token(orb_id, ping_url) => token,
-        token = remote_api::get_token(orb_id, auth_url) => token,
-    }
 }
 
 /// Return proovenly working static token, or error if the token was rejected by the backend.
@@ -124,10 +143,17 @@ async fn run(
     force_refresh_token: Arc<Notify>,
     auth_url: Url,
     ping_url: Url,
+    is_online_rx: watch::Receiver<bool>,
+    metrics: impl MetricEmitter,
 ) -> eyre::Result<()> {
     loop {
-        let token = get_working_token(orb_id, &auth_url, &ping_url).await;
+        let token = select! {
+            Ok(token) = get_working_static_token(orb_id, &ping_url) => token,
+            token = remote_api::get_token(orb_id, &auth_url, &metrics, &is_online_rx) => token,
+        };
+
         let token_refresh_delay = token.get_best_refresh_time();
+
         // get_mut() blocks access to the iface_ref object. So we never bind its result to be safe.
         // https://docs.rs/zbus/3.7.0/zbus/struct.InterfaceRef.html#method.get_mut
         iface_ref
@@ -144,8 +170,66 @@ async fn run(
 
         //  Wait for whatever happens first: token expires or a refresh is requested
         select! {
-            () = sleep(token_refresh_delay).fuse() => {info!("token is about to expire, refreshing it");},
-            () = force_refresh_token.notified().fuse() => {info!("refresh was requested, refreshing the token");},
+            () = sleep(token_refresh_delay).fuse() => {
+                info!("token is about to expire, refreshing it");
+            },
+
+            () = force_refresh_token.notified().fuse() => {
+                info!("refresh was requested, refreshing the token");
+            },
         };
+    }
+}
+
+async fn update_is_online(
+    is_online: watch::Sender<bool>,
+    sample: Sample,
+) -> color_eyre::Result<()> {
+    let active_conns: oes::ActiveConnections =
+        serde_json::from_slice(&sample.payload().to_bytes())
+            .context("failed to parse ActiveConnections json")?;
+
+    let has_internet = active_conns.connections.iter().any(|c| c.has_internet);
+    is_online
+        .send(has_internet)
+        .context("failed to send is_online watch value")?;
+
+    Ok(())
+}
+
+pub struct ConnectivityTracker {
+    stable_connection: Arc<AtomicBool>,
+    handle: JoinHandle<()>,
+}
+
+impl Drop for ConnectivityTracker {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+impl ConnectivityTracker {
+    pub fn start(mut is_online_rx: watch::Receiver<bool>) -> Self {
+        let stable_connection = Arc::new(AtomicBool::new(*is_online_rx.borrow()));
+        let sc = stable_connection.clone();
+
+        let handle = task::spawn(async move {
+            while let Ok(()) = is_online_rx.changed().await {
+                if !*is_online_rx.borrow() {
+                    sc.store(false, Ordering::Release);
+                }
+            }
+        });
+
+        Self {
+            stable_connection,
+            handle,
+        }
+    }
+
+    /// Returns true if internet connection was stable (did not lose connection) for the lifetime of
+    /// this ConnectivityTracker
+    pub fn stable_connection(&self) -> bool {
+        self.stable_connection.load(Ordering::Acquire)
     }
 }
