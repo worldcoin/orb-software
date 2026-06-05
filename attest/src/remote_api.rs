@@ -12,12 +12,15 @@ use std::{
     io::Write,
     process::{Command, Stdio},
 };
+use tokio::sync::watch;
 use tokio::{
     fs::read_to_string,
     time::{self, sleep},
 };
 use tracing::{error, event, info, warn, Level};
 use url::Url;
+
+use crate::ConnectivityTracker;
 
 /// Path to persistent token, don't use it directly, use `Token::from_usr_persistent()` instead
 #[cfg(test)]
@@ -563,17 +566,33 @@ pub async fn get_token(
     orb_id: &str,
     base_url: &Url,
     metrics: &impl MetricEmitter,
+    is_online_rx: &watch::Receiver<bool>,
 ) -> Token {
     let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
     let token_url = base_url.join("token").unwrap();
 
     let mut delay = MIN_TOKEN_DELAY;
     loop {
+        // We do not count metrics for when we lose connectivity in between requests as it introduces
+        // only noise in determining success and speed of challenge flow.
+        let conn_tracker = ConnectivityTracker::start(is_online_rx.clone());
         let start = Instant::now();
 
         match get_token_inner(orb_id, &tokenchallenge_url, &token_url).await {
             Ok(token) => {
-                let elapsed = start.elapsed();
+                if conn_tracker.stable_connection() {
+                    let _ = metrics.dist(
+                        "orb.platform.attest.token_refresh_duration",
+                        start.elapsed().as_millis() as f64,
+                        ["success:true"],
+                    );
+
+                    let _ = metrics.count(
+                        "orb.platform.attest.token_refresh",
+                        1,
+                        ["success:true"],
+                    );
+                }
 
                 return token;
             }
@@ -584,9 +603,54 @@ pub async fn get_token(
                 sleep(retry_delay).await;
                 delay = e.next_retry_delay(delay);
 
-                let elapsed = start.elapsed();
+                if conn_tracker.stable_connection() {
+                    let _ = metrics.count(
+                        "orb.platform.attest.token_refresh",
+                        1,
+                        ["success:false", &format!("cause:{}", error_cause(&e))],
+                    );
+                }
             }
         }
+    }
+}
+
+fn error_cause(e: &RefreshTokenError) -> &'static str {
+    match e {
+        RefreshTokenError::ChallengeError(challenge_error) => match challenge_error {
+            ChallengeError::HTTPClientInitFailed(_) => "ChallengeHTTPClientInitFailed",
+            ChallengeError::PostFailed(_) => "ChallengePostFailed",
+            ChallengeError::JsonParseFailed(_) => "ChallengeJsonParseFailed",
+            ChallengeError::ServerReturnedError(_, _) => "ChallengeServerReturnedError",
+        },
+
+        RefreshTokenError::SignError(sign_error) => match sign_error {
+            SignError::NoSignBinary => "NoSignBinary",
+            SignError::SpawnFailed(_) => "SpawnFailed",
+            SignError::WriteFailed(_) => "WriteFailed",
+            SignError::ReadFailed(_) => "ReadFailed",
+            SignError::LockFailed => "LockFailed",
+            SignError::SignFailed => "SignFailed",
+            SignError::NotProvisioned => "NotProvisioned",
+            SignError::BadInput => "BadInput",
+            SignError::InternalError => "InternalError",
+            SignError::NonZeroExitCode(_) => "NonZeroExitCode",
+            SignError::TerminatedBySignal => "TerminatedBySignal",
+            SignError::Timeout => "Timeout",
+            SignError::CommunicationError => "CommunicationError",
+            SignError::BadOutput(_, _) => "BadOutput",
+        },
+
+        RefreshTokenError::TokenError(token_error) => match token_error {
+            TokenError::PostFailed(_) => "RefreshPostFailed",
+            TokenError::ServerReturnedError(_, _) => "RefreshServerReturnedError",
+            TokenError::JsonParseFailed(_) => "RefreshJsonParseFailed",
+            TokenError::EmptyResponse => "RefreshEmptyResponse",
+        },
+
+        RefreshTokenError::ChallengeExpired => "ChallengeExpired",
+
+        RefreshTokenError::JoinError(_) => "JoinError",
     }
 }
 
