@@ -68,6 +68,7 @@ pub async fn program(
         connect_timeout,
         &usr_persistent,
         profile_storage,
+        statsd_client.clone(),
     )
     .await?;
 
