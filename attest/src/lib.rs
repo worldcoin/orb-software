@@ -216,7 +216,7 @@ impl ConnectivityTracker {
         let handle = task::spawn(async move {
             while let Ok(()) = is_online_rx.changed().await {
                 if !*is_online_rx.borrow() {
-                    sc.store(true, Ordering::Release);
+                    sc.store(false, Ordering::Release);
                 }
             }
         });
