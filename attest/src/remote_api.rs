@@ -600,8 +600,6 @@ pub async fn get_token(
             Err(e) => {
                 let retry_delay = e.retry_delay(delay);
                 error!("failed to get token: {e}, retrying in {retry_delay:?}");
-                sleep(retry_delay).await;
-                delay = e.next_retry_delay(delay);
 
                 if conn_tracker.stable_connection() {
                     let _ = metrics.count(
@@ -610,6 +608,9 @@ pub async fn get_token(
                         ["success:false", &format!("cause:{}", error_cause(&e))],
                     );
                 }
+
+                sleep(retry_delay).await;
+                delay = e.next_retry_delay(delay);
             }
         }
     }
