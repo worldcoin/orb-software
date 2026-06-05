@@ -124,6 +124,9 @@ pub struct CoreStats {
     pub version: OrbVersion,
     pub mac_address: String,
     pub orb_stand_qr_id: Option<String>,
+    /// "tablet" or "static": whether the stand QR came from a tablet screen (its
+    /// /orbVerification URL carried a tablet utm_source) or a static printed sign.
+    pub orb_stand_qr_type: Option<String>,
 }
 
 #[allow(missing_docs)]
