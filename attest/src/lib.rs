@@ -210,7 +210,7 @@ impl Drop for ConnectivityTracker {
 
 impl ConnectivityTracker {
     pub fn start(mut is_online_rx: watch::Receiver<bool>) -> Self {
-        let stable_connection = Arc::new(AtomicBool::new(true));
+        let stable_connection = Arc::new(AtomicBool::new(!*is_online_rx.borrow()));
         let sc = stable_connection.clone();
 
         let handle = task::spawn(async move {
