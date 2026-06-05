@@ -11,6 +11,7 @@ use color_eyre::{
     Result,
 };
 use orb_connd_dbus::{Connd, OBJ_PATH, SERVICE};
+use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbRelease;
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -32,7 +33,7 @@ mod wpa_conf;
 pub mod zoci;
 
 #[derive(Clone)]
-pub struct ConndService {
+pub struct ConndService<M: MetricEmitter> {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
@@ -40,6 +41,7 @@ pub struct ConndService {
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
+    metrics: M,
 }
 
 #[derive(Debug, Clone)]
@@ -54,7 +56,10 @@ impl ProfileStorage {
     }
 }
 
-impl ConndService {
+impl<M> ConndService<M>
+where
+    M: MetricEmitter,
+{
     const NM_FOLDER: &str = "network-manager";
     const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
     const DEFAULT_CELLULAR_APN: &str = "em";
@@ -74,6 +79,7 @@ impl ConndService {
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
         profile_storage: ProfileStorage,
+        metrics: M,
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
 
@@ -85,6 +91,7 @@ impl ConndService {
             magic_qr_applied_at: State::new(DateTime::default()),
             connect_timeout,
             profile_storage,
+            metrics,
         };
 
         // we start after NM, but NM slow (c++ haha), we also slow, but they slower
