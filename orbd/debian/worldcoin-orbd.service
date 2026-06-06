@@ -1,0 +1,17 @@
+[Unit]
+Description=Worldcoin Orb Daemon
+After=zenohd.service
+Wants=zenohd.service
+
+[Service]
+Type=exec
+User=worldcoin
+Environment=RUST_BACKTRACE=1
+SyslogIdentifier=worldcoin-orbd
+WorkingDirectory=/home/worldcoin
+ExecStart=/usr/local/bin/orbd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

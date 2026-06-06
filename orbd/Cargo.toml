@@ -1,0 +1,25 @@
+[package]
+name = "orbd"
+version = "0.1.0"
+description = "Orb daemon (orbd) - monolith deployment unit"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+color-eyre.workspace = true
+orb-build-info.workspace = true
+orb-health.workspace = true
+orb-telemetry.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orbd", "/usr/local/bin/", "755"]]
+systemd-units = [{ unit-name = "worldcoin-orbd" }]

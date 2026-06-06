@@ -8407,6 +8407,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-health"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
 name = "orb-hil"
 version = "0.0.2"
 dependencies = [
@@ -9243,6 +9252,19 @@ dependencies = [
  "tracing",
  "zbus",
  "zenoh",
+]
+
+[[package]]
+name = "orbd"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "orb-health",
+ "orb-telemetry",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

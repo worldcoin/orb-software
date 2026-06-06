@@ -1,0 +1,13 @@
+[package]
+name = "orb-health"
+version = "0.1.0"
+description = "Orb Health service (orbd service)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+tracing.workspace = true
+walkdir.workspace = true
