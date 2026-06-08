@@ -6,7 +6,7 @@ use crate::service::{self, ConndService, ProfileStorage};
 use crate::systemd::Systemd;
 use crate::{modem, reporters, OrbCapabilities};
 use color_eyre::eyre::{Context, Result};
-use orb_dogd::MetricEmitter;
+use orb_dogd::{MetricEmitter, NO_TAGS};
 use orb_info::orb_os_release::OrbOsRelease;
 use speare::mini::{self, OnErr};
 use speare::Backoff;
@@ -99,6 +99,8 @@ pub async fn program(
     .await?;
 
     if let OrbCapabilities::CellularAndWifi = cap {
+        let _ = statsd_client.gauge("orb.platform.connd.lte_capable", 1.0, NO_TAGS);
+
         speare
             .task_with()
             .args(modem::Args {
