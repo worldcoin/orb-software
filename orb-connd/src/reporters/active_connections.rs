@@ -62,10 +62,6 @@ where
             .await
             .wrap_err("building active connections report")?;
 
-        let _ = ctx
-            .metrics
-            .gauge("orb.platform.connd.primary_conn", 1.0, ["kind:"]);
-
         emit_metrics(&report, ctx.metrics.as_ref());
 
         publish_report(&ctx, report)
