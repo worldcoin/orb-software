@@ -18,8 +18,7 @@ async fn main() -> Result<()> {
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    // Build info stuff
-    let _args = Args::parse();
+    Args::parse();
 
     let result = run().await;
     tel_flusher.flush_blocking();
@@ -35,8 +34,6 @@ async fn run() -> Result<()> {
         .await?
         .map_err(|e| warn!("orb-health::file_sizes failed: {e}"))
         .ok();
-
-    // I can see a spear happening....someday
 
     let mut sigterm = unix::signal(SignalKind::terminate())?;
     let mut sigint = unix::signal(SignalKind::interrupt())?;
