@@ -2,6 +2,8 @@
 
 CLI tool for Zenoh introspection and conditional command execution.
 
+`zorb` is a developer tool and is not included on production Orb devices.
+
 ## Usage
 
 ```bash
