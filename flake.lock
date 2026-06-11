@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "crane": {
+      "locked": {
+        "lastModified": 1778106249,
+        "narHash": "sha256-cM/AuKy5tMhwOOQIbha8ZRRMHVfNf7cv2aljIw+qoCg=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "6d015ea29630b7ad2402841386da2cb617a470a7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "6d015ea29630b7ad2402841386da2cb617a470a7",
+        "type": "github"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -129,6 +145,34 @@
         "type": "github"
       }
     },
+    "orb-internal": {
+      "inputs": {
+        "crane": "crane",
+        "fenix": [
+          "fenix"
+        ],
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781186671,
+        "narHash": "sha256-83dAUFCt2vNWUr+PRwGzReQ0SUTVz5RXMnIE80hhEbk=",
+        "owner": "worldcoin",
+        "repo": "orb-internal",
+        "rev": "b0bb40b9b1f84f0402facb873d6a32e7c8da38cf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "worldcoin",
+        "ref": "vlad/orchestra",
+        "repo": "orb-internal",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -184,6 +228,7 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-23_11": "nixpkgs-23_11",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "orb-internal": "orb-internal",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "seekSdk": "seekSdk",

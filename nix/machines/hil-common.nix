@@ -4,6 +4,8 @@
   pkgs,
   lib,
   hostname,
+  inputs,
+  system,
   ...
 }:
 let
@@ -12,6 +14,8 @@ let
   unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   zorb = pkgs.callPackage ../packages/zorb.nix { };
+  # HIL orchestrator client binaries built from the orb-internal flake.
+  hilOrchestrator = inputs.orb-internal.packages.${system};
   mkRcmConnection = (
     number:
     let
@@ -86,6 +90,10 @@ in
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
+      # HIL orchestrator clients: orb-hil-agent, hiltop, hil
+      hilOrchestrator.hil-agent
+      hilOrchestrator.hiltop
+      hilOrchestrator.hil-cli
       zorb
       zenoh
       tcpdump
@@ -301,7 +309,7 @@ in
         User = username;
         Environment = "ORCHESTRATOR_URL=${config.worldcoin.hilOrchestratorUrl}";
         ExecStart = ''
-          /home/${username}/orb-hil-agent \
+          ${lib.getExe hilOrchestrator.hil-agent} \
             --results-dir /var/lib/hil-agent/results \
             --orb-config-path /etc/worldcoin/orb.yaml
         '';
