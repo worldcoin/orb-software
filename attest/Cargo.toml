@@ -39,6 +39,7 @@ tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
 zenorb.workspace = true
+zbus_systemd = { workspace = true, features = ["systemd1"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

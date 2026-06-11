@@ -253,15 +253,15 @@ impl Challenge {
         elapsed > (self.duration / 2)
     }
 
-    /// Try to sign the challenge using SE050. Could fail for multiple reasons,
-    /// it is probably a good idea to retry signing.
-    #[tracing::instrument]
-    pub fn sign(&self) -> Result<Signature, SignError> {
+    /// Try to sign the challenge with an arbitrary signing binary.
+    ///
+    /// Unlike [`sign`], this does NOT update `SIGNING_FAILURE_ERROR_COUNT` or
+    /// trigger an MCU powercycle. Use it for probing only.
+    pub fn sign_with_binary(&self, binary: &str) -> Result<Signature, SignError> {
         let digest = digest(&digest::SHA256, &self.challenge);
-
         let encoded = BASE64.encode(digest.as_ref());
 
-        let command = Command::new("orb-sign-attestation")
+        let command = Command::new(binary)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -280,40 +280,21 @@ impl Challenge {
 
         // TODO check errkind
         if !output.status.success() {
-            event!(Level::ERROR, sign_tool_log = ?sign_tool_log, orb_sign_attestation_success = output.status.success(), orb_sign_attestation_code = output.status.code());
+            event!(Level::WARN, sign_tool_log = ?sign_tool_log, binary, exit_code = output.status.code());
             return match output.status.code() {
                 Some(127) => Err(SignError::NoSignBinary),
-                Some(err @ 1 /* sign failed */)
-                | Some(err @ 2 /* signature timeout */)
-                | Some(err @ 7 /* communication error */) => {
-                    let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
-                    *lock += 1;
-                    if *lock == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
-                        if let Err(err) = powercycle_security_mcu() {
-                            error!("Failed to powercycle Security MCU: {err}")
-                        } else {
-                            info!(
-                                "Powercycled Security MCU, trying to reset stuck se050."
-                            );
-                        }
-                    }
-                    match err {
-                        1 => Err(SignError::SignFailed),
-                        2 => Err(SignError::Timeout),
-                        7 => Err(SignError::CommunicationError),
-                        _ => unreachable!(),
-                    }
-                }
+                Some(1) => Err(SignError::SignFailed),
+                Some(2) => Err(SignError::Timeout),
                 Some(3) => Err(SignError::NotProvisioned),
                 Some(4) => Err(SignError::BadInput),
                 Some(5) => Err(SignError::InternalError),
                 Some(6) => Err(SignError::LockFailed),
+                Some(7) => Err(SignError::CommunicationError),
                 Some(code) => Err(SignError::NonZeroExitCode(code)),
                 None => Err(SignError::TerminatedBySignal),
             };
-        } else {
-            *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = Saturating(0);
         }
+
         Ok(Signature {
             signature: BASE64.decode(&output.stdout).map_err(|e| {
                 SignError::BadOutput(
@@ -322,6 +303,34 @@ impl Challenge {
                 )
             })?,
         })
+    }
+
+    /// Try to sign the challenge using SE050. Could fail for multiple reasons,
+    /// it is probably a good idea to retry signing.
+    ///
+    /// On repeated SE050 communication failures, triggers a Security MCU
+    /// powercycle to recover the stuck SE050.
+    #[tracing::instrument]
+    pub fn sign(&self) -> Result<Signature, SignError> {
+        let result = self.sign_with_binary("orb-sign-attestation");
+        match &result {
+            Err(e) if e.requires_security_mcu_cooldown() => {
+                let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
+                *lock += 1;
+                if *lock == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
+                    if let Err(err) = powercycle_security_mcu() {
+                        error!("Failed to powercycle Security MCU: {err}")
+                    } else {
+                        info!("Powercycled Security MCU, trying to reset stuck se050.");
+                    }
+                }
+            }
+            Ok(_) => {
+                *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = Saturating(0);
+            }
+            _ => {}
+        }
+        result
     }
 }
 
@@ -653,6 +662,245 @@ fn error_cause(e: &RefreshTokenError) -> &'static str {
 
         RefreshTokenError::JoinError(_) => "JoinError",
     }
+}
+
+/// Errors that can occur during SE050 key proof submission.
+#[derive(Debug, thiserror::Error)]
+pub enum ProofError {
+    #[error("failed to get keys challenge: {0}")]
+    ChallengeRequest(#[source] reqwest::Error),
+    #[error("keys challenge: server returned {0}: {1}")]
+    ChallengeServerError(reqwest::StatusCode, String),
+    #[error("failed to parse keys challenge response: {0}")]
+    ChallengeJsonParseFailed(#[source] reqwest::Error),
+    #[error("invalid base64 in server nonce: {0}")]
+    InvalidNonce(#[source] data_encoding::DecodeError),
+    #[error("read-keys-with-attest failed: {0}")]
+    ReadKeysFailed(String),
+    #[error("sign tool error during proof: {0}")]
+    SignFailed(#[source] SignError),
+    #[error("failed to serialize proof payload: {0}")]
+    SerializeFailed(#[source] serde_json::Error),
+    #[error("failed to submit proof: {0}")]
+    ProofRequest(#[source] reqwest::Error),
+    #[error("proof submission: server returned {0}: {1}")]
+    ProofServerError(reqwest::StatusCode, String),
+}
+
+#[derive(serde::Deserialize)]
+struct KeysChallengeResponse {
+    server_nonce: String,
+}
+
+#[derive(serde::Serialize)]
+struct ProofPayload {
+    orb_id: String,
+    server_nonce: String,
+    attested_keys: serde_json::Value,
+    signature: String,
+}
+
+/// Verify that the **backend** accepts the migrated SE050 key set for token
+/// issuance by performing a full challenge → sign (migrated) → token
+/// round-trip.
+///
+/// Returns `true` only if the backend returns a valid token. A `false` result
+/// may mean the backend hasn't registered the migrated key yet (proof not yet
+/// submitted or not yet processed), or that the SE050 hardware doesn't have
+/// the migrated key at all.
+///
+/// Does NOT update `SIGNING_FAILURE_ERROR_COUNT` or trigger an MCU powercycle.
+#[tracing::instrument]
+pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
+    let tokenchallenge_url = match auth_url.join("tokenchallenge") {
+        Ok(u) => u,
+        Err(e) => {
+            warn!("migrated key probe: failed to build challenge URL: {e}");
+            return false;
+        }
+    };
+    let token_url = match auth_url.join("token") {
+        Ok(u) => u,
+        Err(e) => {
+            warn!("migrated key probe: failed to build token URL: {e}");
+            return false;
+        }
+    };
+
+    let challenge = match Challenge::request(orb_id, &tokenchallenge_url).await {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("migrated key probe: challenge request failed: {e}");
+            return false;
+        }
+    };
+
+    let challenge_clone = challenge.clone();
+    let sig = match tokio::task::spawn_blocking(move || {
+        challenge_clone.sign_with_binary("orb-sign-attestation-migrated")
+    })
+    .await
+    {
+        Ok(Ok(sig)) => sig,
+        Ok(Err(e)) => {
+            warn!("migrated key probe: signing failed: {e}");
+            return false;
+        }
+        Err(e) => {
+            warn!("migrated key probe: spawn_blocking panicked: {e}");
+            return false;
+        }
+    };
+
+    match Token::request(&token_url, orb_id, &challenge, &sig).await {
+        Ok(_) => true,
+        Err(e) => {
+            warn!("migrated key probe: token request failed (backend not yet activated): {e}");
+            false
+        }
+    }
+}
+
+/// Submit an NXP-attested key proof to the backend, proving the SE050 holds
+/// the new migrated key set (0x6000000X).
+///
+/// Flow:
+/// 1. POST `keys_challenge_url` → receive 16-byte `server_nonce`
+/// 2. Pipe raw nonce bytes to `read-keys-with-attest` → receive attested keys JSON
+/// 3. Sign `compact_json(attested_keys)` with `orb-sign-attestation-legacy`
+/// 4. POST `keys_proof_url` with the assembled payload
+#[tracing::instrument]
+pub async fn submit_proof(
+    orb_id: &str,
+    keys_challenge_url: &Url,
+    keys_proof_url: &Url,
+) -> Result<(), ProofError> {
+    let client = crate::client::client();
+
+    // 1. Get challenge nonce
+    let resp = client
+        .post(keys_challenge_url.clone())
+        .json(&serde_json::json!({"orbId": orb_id}))
+        .send()
+        .await
+        .map_err(ProofError::ChallengeRequest)?;
+
+    let status = resp.status();
+    if status.is_client_error() || status.is_server_error() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(ProofError::ChallengeServerError(status, body));
+    }
+
+    let challenge: KeysChallengeResponse = resp
+        .json()
+        .await
+        .map_err(ProofError::ChallengeJsonParseFailed)?;
+
+    let nonce_bytes = BASE64
+        .decode(challenge.server_nonce.as_bytes())
+        .map_err(ProofError::InvalidNonce)?;
+
+    // 2. Run read-keys-with-attest with nonce on stdin
+    let server_nonce = challenge.server_nonce.clone();
+    let attested_keys_json =
+        tokio::task::spawn_blocking(move || -> Result<String, ProofError> {
+            let command = Command::new("read-keys-with-attest")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|e| {
+                    ProofError::ReadKeysFailed(format!("spawn failed: {e}"))
+                })?;
+
+            command
+                .stdin
+                .as_ref()
+                .expect("child should have stdin")
+                .write_all(&nonce_bytes)
+                .map_err(|e| {
+                    ProofError::ReadKeysFailed(format!("write failed: {e}"))
+                })?;
+
+            let output = command
+                .wait_with_output()
+                .map_err(|e| ProofError::ReadKeysFailed(format!("wait failed: {e}")))?;
+
+            if !output.status.success() {
+                return Err(ProofError::ReadKeysFailed(format!(
+                    "exited with {:?}",
+                    output.status.code()
+                )));
+            }
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        })
+        .await
+        .map_err(|e| ProofError::ReadKeysFailed(format!("task panic: {e}")))??;
+
+    // Parse and re-serialize to compact JSON for deterministic signature input
+    let attested_keys: serde_json::Value = serde_json::from_str(&attested_keys_json)
+        .map_err(|e| ProofError::ReadKeysFailed(format!("JSON parse failed: {e}")))?;
+    let attested_keys_compact =
+        serde_json::to_string(&attested_keys).map_err(ProofError::SerializeFailed)?;
+
+    // 3. Sign compact JSON of attested_keys with legacy attestation key
+    let sign_digest = digest(&digest::SHA256, attested_keys_compact.as_bytes());
+    let digest_b64 = BASE64.encode(sign_digest.as_ref());
+
+    let sig_b64 = tokio::task::spawn_blocking(move || -> Result<String, ProofError> {
+        let command = Command::new("orb-sign-attestation-legacy")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| ProofError::SignFailed(SignError::SpawnFailed(e)))?;
+
+        writeln!(
+            command.stdin.as_ref().expect("child should have stdin"),
+            "{digest_b64}"
+        )
+        .map_err(|e| ProofError::SignFailed(SignError::WriteFailed(e)))?;
+
+        let output = command
+            .wait_with_output()
+            .map_err(|e| ProofError::SignFailed(SignError::ReadFailed(e)))?;
+
+        if !output.status.success() {
+            return Err(ProofError::SignFailed(match output.status.code() {
+                Some(127) => SignError::NoSignBinary,
+                Some(3) => SignError::NotProvisioned,
+                Some(6) => SignError::LockFailed,
+                _ => SignError::SignFailed,
+            }));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    })
+    .await
+    .map_err(|e| ProofError::ReadKeysFailed(format!("task panic: {e}")))??;
+
+    // 4. Submit proof
+    let payload = ProofPayload {
+        orb_id: orb_id.to_string(),
+        server_nonce,
+        attested_keys,
+        signature: sig_b64,
+    };
+
+    let resp = client
+        .post(keys_proof_url.clone())
+        .json(&payload)
+        .send()
+        .await
+        .map_err(ProofError::ProofRequest)?;
+
+    let status = resp.status();
+    if status.is_client_error() || status.is_server_error() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(ProofError::ProofServerError(status, body));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
