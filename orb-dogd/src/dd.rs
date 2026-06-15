@@ -11,9 +11,9 @@ use tracing::{error, info};
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
 const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
-const QUEUE_SIZE: usize = 1024;
-const MAX_EMIT_PER_TICK: usize = 20;
-const TICK: Duration = Duration::from_millis(100);
+const QUEUE_SIZE: usize = 2048;
+const MAX_EMIT_PER_TICK: usize = 25;
+const TICK: Duration = Duration::from_millis(50);
 
 #[derive(Clone)]
 pub struct DogstatsdClient {
