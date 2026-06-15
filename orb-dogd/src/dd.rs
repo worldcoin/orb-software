@@ -11,8 +11,8 @@ use tracing::{error, info};
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
 const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
-const QUEUE_SIZE: usize = 2048;
-const MAX_EMIT_PER_TICK: usize = 3;
+const QUEUE_SIZE: usize = 1024;
+const MAX_EMIT_PER_TICK: usize = 20;
 const TICK: Duration = Duration::from_millis(100);
 
 pub struct DogstatsdClient {
@@ -73,7 +73,7 @@ impl DogstatsdClient {
     pub fn new() -> Self {
         let (tx, rx) = flume::bounded(QUEUE_SIZE);
 
-        thread::spawn(move || loop {
+        thread::spawn(move || {
             let client = loop {
                 let err_msg =
                     if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
@@ -154,7 +154,7 @@ impl DogstatsdClient {
             loop {
                 let msg = match rx.recv() {
                     Err(RecvError::Disconnected) => {
-                        error!("main datadog channel disconnected!");
+                        warn!("main datadog channel disconnected, all clients were dropped, exiting thread!");
                         break;
                     }
 
@@ -167,9 +167,6 @@ impl DogstatsdClient {
                     send(msg);
                 }
             }
-
-            warn!("recreating dogstatsd::Client");
-            thread::sleep(DOGSTATSD_BACKOFF);
         });
 
         Self { tx }
