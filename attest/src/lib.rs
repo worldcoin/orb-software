@@ -45,9 +45,6 @@ const BACKEND_REACHABILITY_RETRY_INTERVAL: std::time::Duration =
 const MIGRATED_IRIS_CODE_PUBKEY: &str = "sss_60000002_0002_0040.bin";
 /// Relative path of legacy iris-code public key blob.
 const LEGACY_IRIS_CODE_PUBKEY: &str = "sss_70000002_0002_0040.bin";
-/// Absolute path of the symlink that always points to the active pubkey.
-const ACTIVE_IRIS_CODE_PUBKEY_LINK: &str =
-    "/usr/persistent/se/keystore/active_iris_code_pubkey.bin";
 
 pub const SYSLOG_IDENTIFIER: &str = "worldcoin-attest";
 
@@ -73,7 +70,11 @@ pub async fn main() -> eyre::Result<()> {
     )
     .await;
 
-    update_iris_code_pubkey_symlink(new_keys_active);
+    if new_keys_active {
+        info!("using {MIGRATED_IRIS_CODE_PUBKEY} as a signup key");
+    } else {
+        info!("using {LEGACY_IRIS_CODE_PUBKEY} as a signup key");
+    }
 
     iface_ref
         .get_mut()
@@ -214,6 +215,12 @@ async fn startup_key_selection(
         return false;
     }
 
+    // TODO: drop when other parts are ready, ORBS-1618, ORBS-1620
+    if cfg!(not(feature = "se050_key_migration")) {
+        warn!("skipping se050 migration due to feature flag");
+        return false;
+    }
+
     // Wait for connectivity: ensures the 60 s activation window is spent on
     // actual key-state probes, not wasted on network unreachability.
     wait_for_backend_reachable(orb_id, auth_url).await;
@@ -244,7 +251,6 @@ async fn startup_key_selection(
     // backend has swapped the registered public key and migration is complete.
     let deadline = tokio::time::Instant::now() + KEY_ACTIVATION_POLL_TIMEOUT;
     loop {
-        sleep(KEY_ACTIVATION_POLL_INTERVAL).await;
         if remote_api::try_token_with_migrated_key(orb_id, auth_url).await {
             info!("backend now accepts migrated keys");
             return true;
@@ -252,6 +258,7 @@ async fn startup_key_selection(
         if tokio::time::Instant::now() >= deadline {
             break;
         }
+        sleep(KEY_ACTIVATION_POLL_INTERVAL).await;
     }
 
     warn!(
@@ -259,30 +266,6 @@ async fn startup_key_selection(
         KEY_ACTIVATION_POLL_TIMEOUT.as_secs()
     );
     false
-}
-
-/// Write (or replace) a relative symlink at [`ACTIVE_IRIS_CODE_PUBKEY_LINK`]
-/// pointing to the appropriate public-key blob for the active SE050 key set.
-fn update_iris_code_pubkey_symlink(new_keys_active: bool) {
-    let target = if new_keys_active {
-        MIGRATED_IRIS_CODE_PUBKEY
-    } else {
-        LEGACY_IRIS_CODE_PUBKEY
-    };
-
-    // Remove existing symlink/file so we can replace it atomically.
-    let _ = std::fs::remove_file(ACTIVE_IRIS_CODE_PUBKEY_LINK);
-
-    // TODO: Check Phillip's PR with hardening, once it in, we have to take care of permissions here
-    // and share common group with priv-orb-core to allow it to read the file.
-    if let Err(e) = std::os::unix::fs::symlink(target, ACTIVE_IRIS_CODE_PUBKEY_LINK) {
-        warn!(
-            "failed to create iris-code pubkey symlink {ACTIVE_IRIS_CODE_PUBKEY_LINK} \
-             -> {target}: {e}"
-        );
-    } else {
-        info!("iris-code pubkey symlink: {ACTIVE_IRIS_CODE_PUBKEY_LINK} -> {target}");
-    }
 }
 
 /// Return proovenly working static token, or error if the token was rejected by the backend.
