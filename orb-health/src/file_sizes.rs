@@ -10,7 +10,7 @@ pub fn run() -> Result<()> {
     entries.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
     for (path, size_bytes) in entries {
-        info!(path = %path.display(), size_bytes, "size");
+        info!("{}: {size_bytes} bytes", path.display());
     }
 
     Ok(())
