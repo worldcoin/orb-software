@@ -1,19 +1,24 @@
+use super::{MetricEmitter, MetricError};
 use dogstatsd::Client;
+use flume::RecvError;
 use flume::Sender;
 use flume::TrySendError;
 use std::thread;
+use std::time::Instant;
 use std::{fs, path::Path, time::Duration};
 use tracing::warn;
 use tracing::{error, info};
 
-use super::{MetricEmitter, MetricError};
+const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
+const QUEUE_SIZE: usize = 2048;
+const MAX_EMIT_PER_TICK: usize = 25;
+const TICK: Duration = Duration::from_millis(50);
 
+#[derive(Clone)]
 pub struct DogstatsdClient {
     tx: Sender<Metric>,
 }
-
-const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
-const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Metric {
@@ -67,7 +72,7 @@ impl DogstatsdClient {
     ///
     /// Fails if the underlying socket cannot be bound.
     pub fn new() -> Self {
-        let (tx, rx) = flume::bounded(512);
+        let (tx, rx) = flume::bounded(QUEUE_SIZE);
 
         thread::spawn(move || {
             let client = loop {
@@ -95,34 +100,72 @@ impl DogstatsdClient {
                 thread::sleep(DOGSTATSD_BACKOFF);
             };
 
-            while let Ok(metric) = rx.recv() {
+            let mut tick = Instant::now();
+            let mut count = 0;
+
+            let mut send = |metric| {
+                use Metric::*;
+
                 match metric {
-                    Metric::Count { stat, val, tags } => {
+                    Count { stat, val, tags } => {
                         if let Err(e) = client.count(stat, val, tags) {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
-                    Metric::Gauge { stat, val, tags } => {
+
+                    Gauge { stat, val, tags } => {
                         if let Err(e) = client.gauge(stat, val.to_string(), tags) {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
-                    Metric::Histogram { stat, val, tags } => {
+
+                    Histogram { stat, val, tags } => {
                         if let Err(e) = client.histogram(stat, val.to_string(), tags) {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
-                    Metric::Distribution { stat, val, tags } => {
+
+                    Distribution { stat, val, tags } => {
                         if let Err(e) = client.distribution(stat, val.to_string(), tags)
                         {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
-                    Metric::Timing { stat, val, tags } => {
+
+                    Timing { stat, val, tags } => {
                         if let Err(e) = client.timing(stat, val, tags) {
                             warn!("emitting metric failed with: {e}");
                         }
                     }
+                }
+
+                count += 1;
+
+                if tick.elapsed() >= TICK || count >= MAX_EMIT_PER_TICK {
+                    let sleep = TICK.saturating_sub(tick.elapsed());
+                    if sleep > Duration::ZERO {
+                        thread::sleep(sleep);
+                    }
+
+                    count = 0;
+                    tick = Instant::now();
+                }
+            };
+
+            loop {
+                let msg = match rx.recv() {
+                    Err(RecvError::Disconnected) => {
+                        warn!("main datadog channel disconnected, all clients were dropped, exiting thread!");
+                        break;
+                    }
+
+                    Ok(msg) => msg,
+                };
+
+                send(msg);
+
+                while let Ok(msg) = rx.try_recv() {
+                    send(msg);
                 }
             }
         });
