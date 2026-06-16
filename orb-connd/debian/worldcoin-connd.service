@@ -31,10 +31,12 @@ SupplementaryGroups=zenohd
 # setresgid() in the child after fork() but before exec(); those syscalls require CAP_SETUID
 # and CAP_SETGID in the effective capability set. Both caps are in AmbientCapabilities so
 # they are inherited into the child's effective set across fork().
-# On Pearl, the subprocess path is never taken (ProfileStorage::NetworkManager used instead);
-# these capabilities are unused there.
-AmbientCapabilities=CAP_SETUID CAP_SETGID
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+# CAP_NET_RAW is also needed on CellularAndWifi devices because the modem recovery path shells
+# out to orb-mcu-util, which opens a raw CAN socket to power-cycle the modem.
+# On Pearl, the secure storage subprocess path is never taken (ProfileStorage::NetworkManager
+# used instead), so only CAP_NET_RAW is relevant.
+AmbientCapabilities=CAP_SETUID CAP_SETGID CAP_NET_RAW
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_NET_RAW
 
 NoNewPrivileges=yes
 ProtectHome=yes
@@ -49,7 +51,7 @@ ReadWritePaths=/usr/persistent /run /tmp
 # The session D-Bus socket lives at /tmp/worldcoin_bus_socket. PrivateTmp=yes would mount a
 # fresh empty tmpfs over /tmp, hiding the socket from the service.
 PrivateTmp=no
-# Diamond subprocess needs /dev/tee0 and /dev/teepriv0 for OP-TEE context init.
+# Diamond subprocess needs /dev/tee0
 # Pearl doesn't use the OP-TEE path but the setting must be the same service file.
 PrivateDevices=no
 DeviceAllow=/dev/tee0 rw

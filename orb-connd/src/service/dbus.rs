@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     conn_http_check::ConnHttpCheck,
     network_manager::{self, WifiSec},
@@ -9,13 +11,17 @@ use async_trait::async_trait;
 use chrono::Utc;
 use color_eyre::eyre::eyre;
 use orb_connd_dbus::{ConndT, ConnectionState};
+use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbRelease;
 use rusty_network_manager::dbus_interface_types::NMConnectivityState;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 #[async_trait]
-impl ConndT for ConndService {
+impl<M> ConndT for ConndService<M>
+where
+    M: MetricEmitter,
+{
     /// d-bus impl
     async fn netconfig_set(
         &self,
@@ -93,7 +99,9 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
-        async {
+        let started = Instant::now();
+
+        let result = async {
             info!("applying wifi qr code");
             let skip_wifi_qr_restrictions = self.release == OrbRelease::Dev;
 
@@ -142,7 +150,23 @@ impl ConndT for ConndService {
             Ok(())
         }
         .await
-        .inspect_err(|e| error!("failed to apply wifi qr with {e}"))
+        .inspect_err(|e| error!("failed to apply wifi qr with {e}"));
+
+        let tags = if result.is_ok() {
+            ["success:true"]
+        } else {
+            ["success:false"]
+        };
+
+        let _ = self.metrics.dist(
+            "orb.platform.connd.wifi_qr_duration",
+            started.elapsed().as_millis() as f64,
+            tags,
+        );
+
+        let _ = self.metrics.count("orb.platform.connd.wifi_qr", 1, tags);
+
+        result
     }
 
     /// d-bus impl
@@ -151,7 +175,9 @@ impl ConndT for ConndService {
         contents: String,
         check_ts: bool,
     ) -> ZResult<()> {
-        async {
+        let started = Instant::now();
+
+        let result = async {
             info!("trying to apply netconfig qr code");
             NetConfig::verify_signature(&contents, self.release).into_z()?;
             let netconf = NetConfig::parse(&contents).into_z()?;
@@ -218,7 +244,25 @@ impl ConndT for ConndService {
             connect_result.into_z()
         }
         .await
-        .inspect_err(|e| error!("failed to apply netconfig qr with {e}"))
+        .inspect_err(|e| error!("failed to apply netconfig qr with {e}"));
+
+        let tags = if result.is_ok() {
+            ["success:true"]
+        } else {
+            ["success:false"]
+        };
+
+        let _ = self.metrics.dist(
+            "orb.platform.connd.netconfig_qr_duration",
+            started.elapsed().as_millis() as f64,
+            tags,
+        );
+
+        let _ = self
+            .metrics
+            .count("orb.platform.connd.netconfig_qr", 1, tags);
+
+        result
     }
 
     /// d-bus impl

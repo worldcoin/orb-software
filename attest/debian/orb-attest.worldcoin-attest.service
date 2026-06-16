@@ -13,7 +13,7 @@ Wants=worldcoin-dbus.socket
 Type=simple
 User=orb-attest
 Group=orb-attest
-SupplementaryGroups=worldcoin-dbus i2c tee
+SupplementaryGroups=worldcoin-dbus i2c tee zenohd
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest

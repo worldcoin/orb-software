@@ -11,11 +11,13 @@ use color_eyre::{
     Result,
 };
 use orb_connd_dbus::{Connd, OBJ_PATH, SERVICE};
+use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbRelease;
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs::{self, File};
 use tokio::io::{self};
@@ -31,8 +33,7 @@ mod wifi;
 mod wpa_conf;
 pub mod zoci;
 
-#[derive(Clone)]
-pub struct ConndService {
+pub struct ConndService<M: MetricEmitter> {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
@@ -40,6 +41,7 @@ pub struct ConndService {
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
+    metrics: Arc<M>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,7 +56,28 @@ impl ProfileStorage {
     }
 }
 
-impl ConndService {
+impl<M> Clone for ConndService<M>
+where
+    M: MetricEmitter,
+{
+    fn clone(&self) -> Self {
+        Self {
+            session_dbus: self.session_dbus.clone(),
+            nm: self.nm.clone(),
+            release: self.release,
+            cap: self.cap,
+            magic_qr_applied_at: self.magic_qr_applied_at.clone(),
+            connect_timeout: self.connect_timeout,
+            profile_storage: self.profile_storage.clone(),
+            metrics: self.metrics.clone(),
+        }
+    }
+}
+
+impl<M> ConndService<M>
+where
+    M: MetricEmitter,
+{
     const NM_FOLDER: &str = "network-manager";
     const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
     const DEFAULT_CELLULAR_APN: &str = "em";
@@ -66,6 +89,7 @@ impl ConndService {
     const NM_STATE_MAX_SIZE_KB: u64 = 1024;
     const SECURE_STORAGE_KEY: &str = "nmprofiles";
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         session_dbus: zbus::Connection,
         nm: NetworkManager,
@@ -74,6 +98,7 @@ impl ConndService {
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
         profile_storage: ProfileStorage,
+        metrics: Arc<M>,
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
 
@@ -85,6 +110,7 @@ impl ConndService {
             magic_qr_applied_at: State::new(DateTime::default()),
             connect_timeout,
             profile_storage,
+            metrics,
         };
 
         // we start after NM, but NM slow (c++ haha), we also slow, but they slower
@@ -123,7 +149,7 @@ impl ConndService {
         .flat_map(|r| r.err());
 
         for error in startup_errors {
-            warn!(?error, "non fatal startup failure")
+            warn!("non fatal startup failure, err: {error:?}")
         }
 
         match connd.nm.list_wifi_profiles().await {

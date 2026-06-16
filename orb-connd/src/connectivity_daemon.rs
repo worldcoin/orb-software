@@ -68,6 +68,7 @@ pub async fn program(
         connect_timeout,
         &usr_persistent,
         profile_storage,
+        statsd_client.clone(),
     )
     .await?;
 
@@ -89,7 +90,7 @@ pub async fn program(
         network_manager,
         resolved,
         session_bus,
-        statsd_client,
+        statsd_client.clone(),
         systemd.clone(),
         zsender,
         sysfs,
@@ -105,6 +106,7 @@ pub async fn program(
                 modem_manager,
                 mcu_util,
                 systemd,
+                metrics: statsd_client,
             })
             .on_err(OnErr::Restart {
                 max: 10.into(),
