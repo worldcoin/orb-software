@@ -90,7 +90,7 @@ Truly reproducible build systems shouldn't be using tags without pinning the
 checksum regardless, and should be building from source anyway.
 
 [delete job]: https://github.com/worldcoin/orb-software/blob/main/.github/workflows/delete-tmp-release.yaml
-[release workflow]: https://github.com/worldcoin/orb-software/actions/workflows/release.yaml
+[release workflow]: https://github.com/worldcoin/orb-software/actions/workflows/single-release.yaml
 [retagging]: https://git-scm.com/docs/git-tag#_on_re_tagging
 [semver metadata]: https://semver.org/spec/v2.0.0.html#spec-item-10 
 [semver prerelease]: https://semver.org/spec/v2.0.0.html#spec-item-9
