@@ -6,12 +6,11 @@ use flume::TrySendError;
 use std::thread;
 use std::time::Instant;
 use std::{fs, path::Path, time::Duration};
-use tracing::warn;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
-const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(3);
-const QUEUE_SIZE: usize = 2048;
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(6);
+const QUEUE_SIZE: usize = 4096;
 const MAX_EMIT_PER_TICK: usize = 25;
 const TICK: Duration = Duration::from_millis(50);
 
@@ -92,7 +91,7 @@ impl DogstatsdClient {
                         format!("{DOGSTATSD_SOCKET_PATH} not found")
                     };
 
-                error!(
+                warn!(
                     "{err_msg}. waiting {}s and trying again",
                     DOGSTATSD_BACKOFF.as_secs()
                 );
