@@ -1,27 +1,9 @@
 # Release Process
 
-Releases are done on a per-component basis, and triggered manually. There are a
-couple types of release channels, here is how you decide which one to pick:
-
-- `tmp`: Can be cut from any git ref. These releases are [intentionally
-  deleted][delete job] after a week from creation. This allows developers to
-  temporarily test out a release, but forces them to avoid shipping the release
-  to production, as its inherently ephemeral. It also allows us to create as
-  many releases as we want for testing purposes, without permanently polluting
-  our release history. These releases are always marked as a draft.
-- `beta`: Can only be cut from `main`. These are the go-to release type that
-  should be consumed by third parties.
+Releases are done on a per-component basis, and triggered manually, with the commit used to build the release attached to the generate artifact.
 
 ## How to cut a new release
-
-1. Check that the `Cargo.toml` of the software component you wish to release is
-up to date. We don't use prereleases (`-beta.0`) in the
-Cargo.toml, it should just be the regular X.Y.Z format.
-2. When in doubt, bump the first non-zero digit. Cargo treats the first
-non-zero digit as the "major" version, and unless you are quite sure that your
-release has not introduced a breaking change, you should bump this number if
-you changed anything in the actual code since the last release.
-3. [Trigger the release workflow][release workflow]. This will provide you some
+Simply [trigger the release workflow][release workflow]. This will provide you some
 text boxes where you will input information about the release. You can also
 control which git rev you are initiating the release on.
 
@@ -39,27 +21,6 @@ individual binaries that have independent versions (rather than a single
 version number shared across the entire repo), we need per-binary releases. To
 disambiguate these releases, the releases are prefixed with the name of the
 binary.
-
-> Why do the version numbers have `-beta.2` in them?
-
-This is called a [prerelease][semver prerelease] in semver. The way we use it
-is a bit more specific - we do this so that we can cut multiple releases for
-the *same* version number of the underlying software component. For example,
-one may release v0.0.1 of the `foo` daemon, and then realize that some setting
-in the .service file was misconfigured. If we didn't always use the `-beta.X`
-suffix, we would be forced to update the numerical version number of the
-underlying software component, including updating the Cargo.toml, even though
-the actual software didn't change. This is pretty annoying, and prone to people
-getting lazy and not doing it right. So instead we make the numerical version
-number less scary by letting you cut as many prereleases as you want on the
-same numerical version.
-
-> Its annoying to have such long version numbers like
-> `orb-thermal-cam-ctrl/v0.0.43-beta.27`! Why can't we keep it simple and
-> just do `orb-thermal-cam-ctrl/v0.0.43`?
-
-Its better to have a descriptive and consistent version scheme than one that is
-short and inconsistent.
 
 > Why don't we use `latest` tags?
 
@@ -81,16 +42,7 @@ tag and publish the release at the same time. This also allows more control
 over the contents that a tag points to - for example, CI can enforce that tags
 on `-beta` only can happen on the `main` branch.
 
-> Doesnt deleting tags on the `tmp` channel defeat the point of immutability?
-
-To a large extent yes. But we are being up-front here and explicitly warning
-you that `tmp` tags are *mutable* and *ephemeral*, whereas the others  are not.
-Use `tmp` tags at your own risk. They only exist for developer convenience.
-Truly reproducible build systems shouldn't be using tags without pinning the
-checksum regardless, and should be building from source anyway.
 
 [delete job]: https://github.com/worldcoin/orb-software/blob/main/.github/workflows/delete-tmp-release.yaml
 [release workflow]: https://github.com/worldcoin/orb-software/actions/workflows/single-release.yaml
 [retagging]: https://git-scm.com/docs/git-tag#_on_re_tagging
-[semver metadata]: https://semver.org/spec/v2.0.0.html#spec-item-10 
-[semver prerelease]: https://semver.org/spec/v2.0.0.html#spec-item-9
