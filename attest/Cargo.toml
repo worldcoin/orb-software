@@ -39,6 +39,7 @@ tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
 zenorb.workspace = true
+zbus_systemd = { workspace = true, features = ["systemd1"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
@@ -52,3 +53,6 @@ wiremock = "0.6"
 maintainer-scripts = "debian/"
 assets = [["target/release/orb-attest", "/usr/local/bin/", "755"]]
 systemd-units = [{ unit-name = "worldcoin-attest" }]
+
+[features]
+se050_key_migration = []

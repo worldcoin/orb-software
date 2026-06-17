@@ -32,6 +32,20 @@ const BUILD_INFO: BuildInfo = make_build_info!();
 
 const HTTP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// How long to poll for migrated key activation after proof submission.
+const KEY_ACTIVATION_POLL_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(60);
+const KEY_ACTIVATION_POLL_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(5);
+/// How long to wait between retries while waiting for the backend to become reachable.
+const BACKEND_REACHABILITY_RETRY_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(5);
+
+/// Relative path of migrated iris-code public key blob.
+const MIGRATED_IRIS_CODE_PUBKEY: &str = "sss_60000002_0002_0040.bin";
+/// Relative path of legacy iris-code public key blob.
+const LEGACY_IRIS_CODE_PUBKEY: &str = "sss_70000002_0002_0040.bin";
+
 pub const SYSLOG_IDENTIFIER: &str = "worldcoin-attest";
 
 #[allow(clippy::missing_errors_doc)]
@@ -46,24 +60,58 @@ pub async fn main() -> eyre::Result<()> {
     let iface_ref = setup_dbus(force_refresh_token.clone())
         .await
         .wrap_err("Initialization failed")?;
+
+    // Determine which SE050 key set is active before starting the token loop.
+    let new_keys_active = startup_key_selection(
+        orb_id.as_str(),
+        &config.auth_url,
+        &config.keys_challenge_url,
+        &config.keys_proof_url,
+    )
+    .await;
+
+    if new_keys_active {
+        info!("using {MIGRATED_IRIS_CODE_PUBKEY} as a signup key");
+    } else {
+        info!("using {LEGACY_IRIS_CODE_PUBKEY} as a signup key");
+    }
+
+    iface_ref
+        .get_mut()
+        .await
+        .0
+        .set_new_keys_active(new_keys_active);
+    iface_ref
+        .get_mut()
+        .await
+        .new_keys_active_changed(iface_ref.signal_context())
+        .await
+        .wrap_err("failed to send new_keys_active_changed signal")?;
+
     let conn = iface_ref.signal_context().connection().clone();
 
     let (is_online_tx, is_online_rx) = watch::channel(false);
 
-    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
+    match Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(orb_id.clone())
         .with_name("attest")
-        .await?;
-
-    let _ = zenorb
-        .receiver(is_online_tx)
-        .querying_subscriber(
-            "connd/oes/active_connections",
-            Duration::from_secs(1),
-            update_is_online,
-        )
-        .run()
-        .await?;
+        .await
+    {
+        Ok(zenorb) => {
+            let _ = zenorb
+                .receiver(is_online_tx)
+                .querying_subscriber(
+                    "connd/oes/active_connections",
+                    Duration::from_secs(1),
+                    update_is_online,
+                )
+                .run()
+                .await?;
+        }
+        Err(e) => {
+            warn!("zenoh not available, connectivity tracking disabled: {e}");
+        }
+    }
 
     let run_fut = run(
         orb_id.as_str(),
@@ -87,6 +135,143 @@ pub async fn main() -> eyre::Result<()> {
             .map(|r| r.wrap_err("dbus monitor task terminated abnormally")?)
     )?;
     Ok(())
+}
+
+/// Returns `true` if `worldcoin-se050-provision.service` is in the `active`
+/// state, meaning SE050 has migrated keys.
+async fn se050_provision_service_active() -> bool {
+    use zbus_systemd::systemd1::{ManagerProxy, UnitProxy};
+
+    let Ok(conn) = zbus::Connection::system().await else {
+        warn!("SE050: failed to connect to system D-Bus");
+        return false;
+    };
+    let Ok(manager) = ManagerProxy::new(&conn).await else {
+        warn!("SE050: failed to create systemd ManagerProxy");
+        return false;
+    };
+    // GetUnit errors if the unit has never been loaded — treat as not active.
+    let Ok(unit_path) = manager
+        .get_unit("worldcoin-se050-provision.service".to_owned())
+        .await
+    else {
+        warn!("SE050: worldcoin-se050-provision.service not found in systemd");
+        return false;
+    };
+    let builder = match UnitProxy::builder(&conn).path(unit_path) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("SE050: invalid unit object path from systemd: {e}");
+            return false;
+        }
+    };
+    let Ok(unit) = builder.build().await else {
+        warn!("SE050: failed to create systemd UnitProxy");
+        return false;
+    };
+    unit.active_state().await.ok().as_deref() == Some("active")
+}
+
+/// Block until the token-challenge endpoint returns any response (success or
+/// server error). Retries indefinitely on network/connect errors — the caller
+/// cannot do anything useful without backend connectivity.
+async fn wait_for_backend_reachable(orb_id: &str, auth_url: &Url) {
+    let tokenchallenge_url = auth_url
+        .join("tokenchallenge")
+        .expect("auth_url must have a path");
+    loop {
+        match remote_api::Challenge::request(orb_id, &tokenchallenge_url).await {
+            Ok(_) | Err(remote_api::ChallengeError::ServerReturnedError(..)) => {
+                info!("backend reachable");
+                return;
+            }
+            Err(e) => {
+                warn!(
+                    "backend not reachable ({e}), retrying in {}s",
+                    BACKEND_REACHABILITY_RETRY_INTERVAL.as_secs()
+                );
+                sleep(BACKEND_REACHABILITY_RETRY_INTERVAL).await;
+            }
+        }
+    }
+}
+
+/// Determine which SE050 key set is active.
+///
+/// 1. Service check: if `worldcoin-se050-provision.service` is not active,
+///    SE050 has no migrated keys → return `false` immediately.
+/// 2. Wait until the backend is reachable (challenge endpoint responds).
+/// 3. Backend check: attempt a full challenge→sign(migrated)→token round-trip.
+///    If the backend returns a valid token, it already has the migrated key
+///    registered → return `true`.
+/// 4. Submit the NXP-attested proof so the backend registers the migrated key.
+/// 5. Poll the same backend round-trip until it succeeds or [`KEY_ACTIVATION_POLL_TIMEOUT`]
+///    elapses. "Activation" means the backend accepted the migrated key and
+///    returned a valid token.
+async fn startup_key_selection(
+    orb_id: &str,
+    auth_url: &Url,
+    keys_challenge_url: &Url,
+    keys_proof_url: &Url,
+) -> bool {
+    // Service check: worldcoin-se050-provision.service encodes the answer to
+    // "does this Orb have migrated keys?" — it runs before us and stays active.
+    if !se050_provision_service_active().await {
+        info!("worldcoin-se050-provision.service not active, using legacy keys");
+        return false;
+    }
+
+    // TODO: drop when other parts are ready, ORBS-1618, ORBS-1620
+    if cfg!(not(feature = "se050_key_migration")) {
+        warn!("skipping se050 migration due to feature flag");
+        return false;
+    }
+
+    // Wait for connectivity: ensures the 60 s activation window is spent on
+    // actual key-state probes, not wasted on network unreachability.
+    wait_for_backend_reachable(orb_id, auth_url).await;
+
+    // Backend check: does the backend already accept the migrated key?
+    if remote_api::try_token_with_migrated_key(orb_id, auth_url).await {
+        info!("backend already accepts migrated keys");
+        return true;
+    }
+
+    // Submit proof to register the migrated public key with the backend.
+    info!("migrated keys not yet accepted by backend, submitting key proof");
+    match remote_api::submit_proof(orb_id, keys_challenge_url, keys_proof_url).await {
+        Ok(()) => {
+            info!(
+                "key proof submitted, polling for backend activation (up to {}s)",
+                KEY_ACTIVATION_POLL_TIMEOUT.as_secs()
+            );
+        }
+        Err(e) => {
+            warn!("key proof submission failed: {e}; proceeding with legacy keys");
+            return false;
+        }
+    }
+
+    // Poll until the backend accepts a token signed with the migrated key.
+    // This is the definitive test: if the token endpoint returns 200, the
+    // backend has swapped the registered public key and migration is complete.
+    let deadline = tokio::time::Instant::now() + KEY_ACTIVATION_POLL_TIMEOUT;
+    loop {
+        if remote_api::try_token_with_migrated_key(orb_id, auth_url).await {
+            info!("backend now accepts migrated keys");
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            break;
+        }
+        sleep(KEY_ACTIVATION_POLL_INTERVAL).await;
+    }
+
+    warn!(
+        "backend did not accept migrated keys after {}s; proceeding with legacy keys",
+        KEY_ACTIVATION_POLL_TIMEOUT.as_secs()
+    );
+    false
 }
 
 /// Return proovenly working static token, or error if the token was rejected by the backend.

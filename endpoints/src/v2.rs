@@ -5,6 +5,8 @@ use crate::{concat_urls, Backend, OrbId};
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct Endpoints {
     pub status: Url,
+    pub keys_challenge: Url,
+    pub keys_proof: Url,
 }
 
 impl Endpoints {
@@ -16,12 +18,11 @@ impl Endpoints {
             Backend::Local => todo!(),
         };
 
+        let base = format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/");
         Self {
-            status: concat_urls(
-                &format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/"),
-                orb_id,
-                "status",
-            ),
+            status: concat_urls(&base, orb_id, "status"),
+            keys_challenge: concat_urls(&base, orb_id, "keys/challenge"),
+            keys_proof: concat_urls(&base, orb_id, "keys/proof"),
         }
     }
 }
@@ -43,6 +44,14 @@ mod test {
         assert_eq!(
             prod.status.as_str(),
             "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
+        );
+        assert_eq!(
+            stage.keys_challenge.as_str(),
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/keys/challenge"
+        );
+        assert_eq!(
+            prod.keys_proof.as_str(),
+            "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/keys/proof"
         );
     }
 
