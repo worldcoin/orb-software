@@ -92,20 +92,26 @@ pub async fn main() -> eyre::Result<()> {
 
     let (is_online_tx, is_online_rx) = watch::channel(false);
 
-    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
+    match Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(orb_id.clone())
         .with_name("attest")
-        .await?;
-
-    let _ = zenorb
-        .receiver(is_online_tx)
-        .querying_subscriber(
-            "connd/oes/active_connections",
-            Duration::from_secs(1),
-            update_is_online,
-        )
-        .run()
-        .await?;
+        .await
+    {
+        Ok(zenorb) => {
+            let _ = zenorb
+                .receiver(is_online_tx)
+                .querying_subscriber(
+                    "connd/oes/active_connections",
+                    Duration::from_secs(1),
+                    update_is_online,
+                )
+                .run()
+                .await?;
+        }
+        Err(e) => {
+            warn!("zenoh not available, connectivity tracking disabled: {e}");
+        }
+    }
 
     let run_fut = run(
         orb_id.as_str(),
