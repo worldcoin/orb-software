@@ -7782,6 +7782,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-pcp-messages"
+version = "0.0.0"
+dependencies = [
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+]
+
+[[package]]
 name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [

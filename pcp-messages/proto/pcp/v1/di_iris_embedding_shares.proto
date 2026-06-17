@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message DiIrisEmbeddingShares {
+  DiIrisEmbeddingShareV1 share_v1 = 1;
+}
+
+message DiIrisEmbeddingShareV1 {
+  string model_version = 1;
+  string shares_version = 2;
+
+  string left_share = 3;
+  string left_mirror_share = 4;
+  string right_share = 5;
+  string right_mirror_share = 6;
+}
