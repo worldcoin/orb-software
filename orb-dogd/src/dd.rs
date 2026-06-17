@@ -71,13 +71,17 @@ impl DogstatsdClient {
     ///
     /// Fails if the underlying socket cannot be bound.
     pub fn new() -> Self {
+        let start = Instant::now();
         let (tx, rx) = flume::bounded(QUEUE_SIZE);
 
         thread::spawn(move || {
             let client = loop {
                 let err_msg =
                     if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
-                        info!("datadog-agent socket found, using it for IPC");
+                        info!(
+                            "datadog-agent socket found, using it for IPC. took {}s",
+                            start.elapsed().as_secs()
+                        );
 
                         let opts = dogstatsd::OptionsBuilder::new()
                             .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
