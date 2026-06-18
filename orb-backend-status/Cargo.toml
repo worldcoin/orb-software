@@ -32,6 +32,7 @@ orb-info = { workspace = true, features = [
 	"orb-token",
 ] }
 orb-dogd.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
 orb-update-agent-dbus.workspace = true
 reqwest = { workspace = true, features = ["json"] }
@@ -57,6 +58,7 @@ zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zenorb.workspace = true
 
 [dev-dependencies]
+orb-security-utils = { workspace = true, features = ["reqwest", "allow-http"] }
 dbus-launch.workspace = true
 eyre.workspace = true
 portpicker = "0.1.1"

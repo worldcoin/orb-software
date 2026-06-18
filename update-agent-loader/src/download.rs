@@ -74,6 +74,8 @@ pub fn download(
 }
 
 /// Creates an HTTP client with security settings similar to the update-agent
+// update-agent-loader intentionally uses system certs rather than pinned CAs.
+#[allow(clippy::disallowed_methods)]
 fn create_client() -> Result<Client, DownloadError> {
     // Compile-time assertion to ensure allow_http feature isn't enabled in release mode
     #[cfg(all(feature = "allow_http", not(debug_assertions)))]
@@ -81,6 +83,8 @@ fn create_client() -> Result<Client, DownloadError> {
 
     let builder = Client::builder()
         .tls_built_in_root_certs(true)
+        .min_tls_version(reqwest::tls::Version::TLS_1_3)
+        .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!(
             env!("CARGO_PKG_NAME"),
             "/",

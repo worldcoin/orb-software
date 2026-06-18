@@ -71,11 +71,12 @@ impl StatusClient {
                     .retry_bounds(min_req_retry_interval, max_req_retry_interval)
                     .build_with_max_retries(3);
 
-                let reqwest_client = reqwest::Client::builder()
-                    .timeout(req_timeout)
-                    .user_agent("orb-backend-status")
-                    .build()
-                    .wrap_err("failed to build reqwest client")?;
+                let reqwest_client =
+                    orb_security_utils::reqwest::client_builder()
+                        .timeout(req_timeout)
+                        .user_agent("orb-backend-status")
+                        .build()
+                        .wrap_err("failed to build reqwest client")?;
 
                 let client = ClientBuilder::new(reqwest_client)
                     .with_init(Extension(OtelName(orb_id.clone().into())))
