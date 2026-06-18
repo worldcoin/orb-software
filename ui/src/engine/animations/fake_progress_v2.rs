@@ -76,6 +76,11 @@ impl<const N: usize> FakeProgress<N> {
         self.progress_animation.get_color()
     }
 
+    /// The currently displayed (smoothed) progress value, in 0..1+.
+    pub fn progress(&self) -> f64 {
+        self.progress_animation.displayed_progress()
+    }
+
     pub fn set_completed(&mut self) -> Duration {
         self.halted = false;
         self.progress_bar.set_completed()

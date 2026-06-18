@@ -77,6 +77,11 @@ impl<const N: usize> Progress<N> {
     pub fn get_color(&self) -> Argb {
         self.color
     }
+
+    /// The currently displayed (smoothed) progress value.
+    pub fn displayed_progress(&self) -> f64 {
+        self.shape.progress
+    }
 }
 
 impl<const N: usize> Animation for Progress<N> {

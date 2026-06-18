@@ -3,17 +3,15 @@ use orb_rgb::Argb;
 use std::{any::Any, f64::consts::PI};
 
 /// Number of stacked levels per ring half (level 0 = bottom seam, `HALF` = top).
-const HALF: usize = 9;
-/// Per-step rise duration of a falling block, before time-scaling (seconds).
+/// More levels => smaller, more numerous chunks.
+const HALF: usize = 18;
+/// Per-step rise duration of a falling block (relative; the schedule is
+/// normalized to 0..1 and then driven externally by progress).
 const STEP_DUR: f64 = 0.060;
-/// Pause after a block locks into place, before time-scaling (seconds).
+/// Pause after a block locks into place (relative).
 const LOCK_PAUSE: f64 = 0.110;
-/// Gap between successive blocks, before time-scaling (seconds).
+/// Gap between successive blocks (relative).
 const GAP: f64 = 0.050;
-/// Total wall-clock duration of the stacking fill (seconds).
-const FILL_DURATION: f64 = 14.0;
-/// Brightness of a not-yet-lit section relative to a lit one.
-const BASE_INTENSITY: f64 = 0.10;
 
 struct Move {
     level: usize,
@@ -23,18 +21,15 @@ struct Move {
 
 /// OK-state outer ring animation: a "tetris" stacking fill where blocks rise
 /// from the bottom seam and lock in from the top down, mirrored on both halves
-/// of the ring. The fill color eases from `start_color` to `end_color` as the
-/// ring completes.
-///
-/// Mirrors the stacking (`frame`) phase of the HTML `startOkState` animation.
+/// of the ring. The fill is driven externally via [`OkStateRing::set_progress`]
+/// (0..1), so its timing matches whatever progress source feeds it.
 pub struct OkStateRing<const N: usize> {
     start_color: Argb,
     end_color: Argb,
     moves: Vec<Move>,
     lock_times: [f64; HALF + 1],
-    elapsed: f64,
-    transition: Option<Transition>,
-    transition_time: f64,
+    /// Fill amount in 0..1, mapped onto the normalized stacking schedule.
+    progress: f64,
 }
 
 impl<const N: usize> OkStateRing<N> {
@@ -56,14 +51,13 @@ impl<const N: usize> OkStateRing<N> {
             lock_times[target] = t;
             t += LOCK_PAUSE + GAP;
         }
-        // Scale the raw timeline so the whole fill lasts exactly FILL_DURATION.
-        let factor = FILL_DURATION / t;
+        // Normalize the schedule to 0..1 so it can be driven by `progress`.
         for m in moves.iter_mut() {
-            m.t0 *= factor;
-            m.t1 *= factor;
+            m.t0 /= t;
+            m.t1 /= t;
         }
         for lt in lock_times.iter_mut() {
-            *lt *= factor;
+            *lt /= t;
         }
 
         Self {
@@ -71,10 +65,13 @@ impl<const N: usize> OkStateRing<N> {
             end_color,
             moves,
             lock_times,
-            elapsed: 0.0,
-            transition: None,
-            transition_time: 0.0,
+            progress: 0.0,
         }
+    }
+
+    /// Sets the fill amount (0..1).
+    pub fn set_progress(&mut self, progress: f64) {
+        self.progress = progress.clamp(0.0, 1.0);
     }
 }
 
@@ -89,34 +86,11 @@ impl<const N: usize> Animation for OkStateRing<N> {
         self
     }
 
-    fn animate(&mut self, frame: &mut [Argb; N], dt: f64, idle: bool) -> AnimationState {
-        let scaling_factor = match self.transition {
-            Some(Transition::ForceStop) => return AnimationState::Finished,
-            Some(Transition::FadeOut(duration)) => {
-                self.transition_time += dt;
-                if self.transition_time >= duration {
-                    return AnimationState::Finished;
-                }
-                (self.transition_time * PI / 2.0 / duration).cos()
-            }
-            Some(Transition::FadeIn(duration)) => {
-                self.transition_time += dt;
-                if self.transition_time >= duration {
-                    self.transition = None;
-                }
-                (self.transition_time * PI / 2.0 / duration).sin()
-            }
-            _ => 1.0,
-        };
+    fn animate(&mut self, frame: &mut [Argb; N], _dt: f64, idle: bool) -> AnimationState {
+        let e = self.progress;
+        let color = self.start_color.lerp(self.end_color, e);
 
-        self.elapsed += dt;
-        let e = self.elapsed;
-
-        // Warm white while filling, easing to the success color as the ring completes.
-        let color_t = (e / FILL_DURATION).clamp(0.0, 1.0);
-        let color = self.start_color.lerp(self.end_color, color_t);
-
-        let moving = self
+        let moving_level = self
             .moves
             .iter()
             .find(|m| e >= m.t0 && e < m.t1)
@@ -130,23 +104,20 @@ impl<const N: usize> Animation for OkStateRing<N> {
                 // Height up the ring from the bottom seam, mirrored on both halves.
                 let height = if angle <= PI { angle } else { PI * 2.0 - angle };
                 let level = ((height / level_rad).round() as usize).min(HALF);
-                let lit = moving == Some(level) || e >= self.lock_times[level];
-                let intensity = if lit { 1.0 } else { BASE_INTENSITY };
-                *led = color * (intensity * scaling_factor);
+                // The rising block lights only the single nearest LED per side,
+                // so the travelling chunk is smaller than a locked one.
+                let is_moving = moving_level.is_some_and(|ml| {
+                    (height - ml as f64 * level_rad).abs() < one_led_rad / 2.0
+                });
+                let lit = is_moving || e >= self.lock_times[level];
+                *led = if lit { color } else { Argb::OFF };
             }
         }
 
-        if e >= FILL_DURATION {
-            AnimationState::Finished
-        } else {
-            AnimationState::Running
-        }
+        AnimationState::Running
     }
 
-    fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
-        self.transition = Some(transition);
-        self.transition_time = 0.0;
-
+    fn stop(&mut self, _transition: Transition) -> eyre::Result<()> {
         Ok(())
     }
 }

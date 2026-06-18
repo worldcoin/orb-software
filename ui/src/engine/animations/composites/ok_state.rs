@@ -5,11 +5,11 @@ use crate::engine::{
 use orb_rgb::Argb;
 use std::time::Duration;
 
-/// Composite OK-state ring animation, played in three phases:
+/// Composite OK-state ring animation:
 /// 1. `Waiting` — ring stays off until [`OkState::start_stacking`] is called
 ///    (i.e. the user reaches an OK position).
-/// 2. `Stacking` — the "tetris" stacking fill (warm-white → success color).
-/// 3. `Loading` — a visible fake-progress loading bar.
+/// 2. `Stacking` — the "tetris" stacking fill, whose fill amount is driven by
+///    an internal fake-progress bar (so its timing matches a loading bar).
 pub struct OkState<const N: usize> {
     phase: Phase<N>,
     start_color: Argb,
@@ -22,8 +22,10 @@ pub struct OkState<const N: usize> {
 
 enum Phase<const N: usize> {
     Waiting,
-    Stacking { ring: OkStateRing<N> },
-    Loading { progress: FakeProgress<N> },
+    Stacking {
+        ring: OkStateRing<N>,
+        progress: FakeProgress<N>,
+    },
 }
 
 impl<const N: usize> OkState<N> {
@@ -52,22 +54,28 @@ impl<const N: usize> OkState<N> {
         if matches!(self.phase, Phase::Waiting) {
             self.phase = Phase::Stacking {
                 ring: OkStateRing::<N>::new(self.start_color, self.end_color),
+                progress: FakeProgress::<N>::new(
+                    self.progress_color,
+                    self.progress_timeout,
+                    self.min_fast_forward_duration,
+                    self.max_fast_forward_duration,
+                ),
             };
         }
     }
 
-    /// Fast-forwards the loading bar to completion (no-op in other phases).
+    /// Fast-forwards the fill to completion (no-op before stacking has started).
     pub fn fast_forward(&mut self) {
-        if let Phase::Loading { progress } = &mut self.phase {
+        if let Phase::Stacking { progress, .. } = &mut self.phase {
             progress.set_completed();
         }
     }
 
-    /// Completion time of the loading bar, for sound synchronization.
+    /// Completion time of the fill, for sound synchronization.
     pub fn get_progress_completion_time(&self) -> Duration {
         match &self.phase {
-            Phase::Loading { progress } => progress.get_completion_time(),
-            _ => Duration::from_secs(0),
+            Phase::Stacking { progress, .. } => progress.get_completion_time(),
+            Phase::Waiting => Duration::from_secs(0),
         }
     }
 }
@@ -94,20 +102,14 @@ impl<const N: usize> Animation for OkState<N> {
                 frame.iter_mut().for_each(|led| *led = Argb::OFF);
                 AnimationState::Running
             }
-            Phase::Stacking { ring } => {
-                if ring.animate(frame, dt, idle) == AnimationState::Finished {
-                    self.phase = Phase::Loading {
-                        progress: FakeProgress::<N>::new(
-                            self.progress_color,
-                            self.progress_timeout,
-                            self.min_fast_forward_duration,
-                            self.max_fast_forward_duration,
-                        ),
-                    };
-                }
+            Phase::Stacking { ring, progress } => {
+                // Advance the progress bar for timing only (idle => no render),
+                // then drive the tetris fill from its displayed progress.
+                progress.animate(frame, dt, true);
+                ring.set_progress(progress.progress());
+                ring.animate(frame, dt, idle);
                 AnimationState::Running
             }
-            Phase::Loading { progress } => progress.animate(frame, dt, idle),
         }
     }
 
