@@ -244,9 +244,16 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         )?;
         self.sound.set_master_volume(master_volume);
 
-        // 3 green blinks on ring + center, then solid green
+        // ok-state outer ring: warm-white → green bloom then breathing
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.set_ring(
+            LEVEL_FOREGROUND,
+            animations::OkStateRing::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+            ),
+        );
         self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
         self.set_center(
             LEVEL_FOREGROUND,
@@ -272,40 +279,34 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     }
 
     fn play_signup_fail_ux(&mut self, sound: Option<sound::Type>) -> Result<()> {
-        self.capture_succeeded = true;
-        let master_volume = self.sound.volume();
-        let elevated = (master_volume * 2).min(100);
-        self.sound.set_master_volume(elevated);
-        // cancel_all stops whatever is currently playing (e.g. biometric scan loops)
-        self.sound
-            .build(sound::Type::Melody(sound::Melody::SoundError))?
-            .cancel_all()
-            .volume(elevated as f64 / 100.0)
-            .push()?;
         self.sound.queue(
-            sound::Type::Voice(sound::Voice::VerificationNotSuccessfulPleaseTryAgain),
-            Duration::ZERO,
+            sound::Type::Melody(sound::Melody::SoundError),
+            Duration::from_millis(2000),
         )?;
+
         if let Some(sound) = sound {
             self.sound.queue(sound, Duration::ZERO)?;
         }
-        self.sound.set_master_volume(master_volume);
 
-        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
-        self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+        // turn off center
+        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+
+        // ring, run error animation at NOTICE level, off for the rest.
         self.set_ring(
             LEVEL_BACKGROUND,
             animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
         );
-        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
-        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
         self.set_center(
-            LEVEL_FOREGROUND,
-            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                Argb::DIAMOND_CENTER_FAILURE_RED,
-                None,
-            ),
+            LEVEL_NOTICE,
+            animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
+                Argb::DIAMOND_RING_ERROR_SALMON,
+                BlinkDurations::from(vec![0.0, 1.5, 4.0]),
+                Some(vec![0.5, 1.5]),
+                true,
+            )?,
         );
 
         Ok(())
@@ -1001,29 +1002,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         sound::Voice::FaceNotFound,
                     )))?;
                 }
-                SignupFailReason::Server => {
-                    self.play_signup_fail_ux(Some(sound::Type::Voice(
-                        sound::Voice::ServerError,
-                    )))?;
-                }
-                SignupFailReason::UploadCustodyImages => {
-                    self.play_signup_fail_ux(None)?;
-                }
-                SignupFailReason::Verification => {
-                    self.play_signup_fail_ux(None)?;
-                }
-                SignupFailReason::SoftwareVersionDeprecated => {
-                    self.play_signup_fail_ux(None)?;
-                }
-                SignupFailReason::SoftwareVersionBlocked => {
-                    self.play_signup_fail_ux(None)?;
-                }
-                SignupFailReason::Duplicate => {
-                    self.play_signup_fail_ux(None)?;
-                }
-                SignupFailReason::Unknown => {
-                    self.play_signup_fail_ux(None)?;
-                }
+                SignupFailReason::Server => {}
+                SignupFailReason::UploadCustodyImages => {}
+                SignupFailReason::Verification => {}
+                SignupFailReason::SoftwareVersionDeprecated => {}
+                SignupFailReason::SoftwareVersionBlocked => {}
+                SignupFailReason::Duplicate => {}
+                SignupFailReason::Unknown => {}
                 SignupFailReason::Aborted => {
                     self.play_signup_fail_ux(None)?;
                 }
@@ -1032,6 +1017,15 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if !self.capture_succeeded {
                     self.biometric_capture_success()?;
                 }
+                self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+                self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                self.set_center(
+                    LEVEL_FOREGROUND,
+                    animations::OkStateRing::<DIAMOND_CENTER_LED_COUNT>::new(
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                    ),
+                );
             }
             Event::Idle => {
                 self.capture_succeeded = false;
