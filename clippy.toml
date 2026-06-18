@@ -1,6 +1,6 @@
 disallowed-methods = [
-	{ path = "reqwest::Client::builder", reason = "use orb_security_utils::reqwest::http_client_builder() instead" },
-	{ path = "reqwest::Client::new", reason = "use orb_security_utils::reqwest::http_client_builder().build() instead" },
-	{ path = "reqwest::blocking::Client::builder", reason = "use orb_security_utils::reqwest::blocking::http_client_builder() instead" },
-	{ path = "reqwest::blocking::Client::new", reason = "use orb_security_utils::reqwest::blocking::http_client_builder().build() instead" },
+	{ path = "reqwest::Client::builder", reason = "use orb_security_utils::reqwest::client_builder() instead" },
+	{ path = "reqwest::Client::new", reason = "use orb_security_utils::reqwest::client_builder().build() instead" },
+	{ path = "reqwest::blocking::Client::builder", allow-invalid = true, reason = "use orb_security_utils::reqwest::blocking::client_builder() instead" },
+	{ path = "reqwest::blocking::Client::new", allow-invalid = true, reason = "use orb_security_utils::reqwest::blocking::client_builder().build() instead" },
 ]
