@@ -244,32 +244,17 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         )?;
         self.sound.set_master_volume(master_volume);
 
-        // ok-state outer ring: warm-white → green bloom then breathing
-        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
-        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
-        self.set_ring(
-            LEVEL_FOREGROUND,
-            animations::OkStateRing::<DIAMOND_RING_LED_COUNT>::new(
-                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
-                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
-            ),
-        );
+        // The outer ring is owned by the OK-state composite started on the
+        // in-range trigger (see `BiometricCaptureDistance`); leave it running.
+        // ok-state center: green bloom then slow breathing
         self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
         self.set_center(
             LEVEL_FOREGROUND,
-            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+            animations::OkStateBreathe::<DIAMOND_CENTER_LED_COUNT>::new(
                 Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
-                None,
+                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
             ),
-        );
-        self.set_center(
-            LEVEL_NOTICE,
-            animations::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
-                BlinkDurations::from(vec![0.0, 0.3, 0.2, 0.3, 0.2, 0.3]),
-                None,
-                true,
-            )?,
         );
 
         // move mirror to flat (phi=0, theta=0)
@@ -868,28 +853,27 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 } else {
                     self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 }
-                // play the sound only once we start the progress bar.
-                if let Some(biometric_flow) = self
+                // The user being in an OK position is our "OK state": start the
+                // tetris stacking fill on the ring and play the capturing sound.
+                if let Some(ok_state) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
                     .and_then(|RunningAnimation { animation, .. }| {
                         animation
                             .as_any_mut()
-                            .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
+                            .downcast_mut::<animations::composites::ok_state::OkState<
                                 DIAMOND_RING_LED_COUNT,
                             >>()
                     }) {
                         if *in_range {
-                            // resume the progress bar and play the capturing sound.
-                            biometric_flow.resume_progress();
+                            tracing::info!("OKSTATE_DEBUG in range: starting tetris");
+                            ok_state.start_stacking();
                             if let Some(melody) = self.capture_sound.peekable().peek()
                                 && self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();
                                 }
                         } else {
-                            // halt the progress bar and play silence.
-                            biometric_flow.halt_progress();
                             self.capture_sound = sound::capture::CaptureLoopSound::default();
                             let _ = self
                                 .sound
@@ -902,6 +886,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
+                tracing::info!("OKSTATE_DEBUG BiometricFlowStart");
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -909,30 +894,34 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         None,
                     ),
                 );
+                // Ring stays off (Waiting phase) until the user is in an OK
+                // position, at which point `BiometricCaptureDistance` starts the
+                // tetris stacking fill, which then hands off to the loading bar.
+                self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.set_ring(
                     LEVEL_NOTICE,
-                    animations::composites::biometric_flow::BiometricFlow::<
+                    animations::composites::ok_state::OkState::<
                         DIAMOND_RING_LED_COUNT,
                     >::new(
                         Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
-                        Argb::DIAMOND_RING_ERROR_SALMON,
                     ),
                 );
             }
             Event::BiometricFlowProgressFastForward => {
-                if let Some(biometric_flow) = self
+                if let Some(ok_state) = self
                 .ring_animations_stack
                 .stack
                 .get_mut(&LEVEL_NOTICE)
                 .and_then(|RunningAnimation { animation, .. }| {
-                    animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<DIAMOND_RING_LED_COUNT>>()
+                    animation.as_any_mut().downcast_mut::<animations::composites::ok_state::OkState<DIAMOND_RING_LED_COUNT>>()
                 }) {
-                    biometric_flow.progress_fast_forward();
-                    let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
+                    ok_state.fast_forward();
+                    let ring_completion_time = ok_state.get_progress_completion_time().as_secs_f64();
 
                     // Play biometric capture sound while the progress is running.
                     let mut total_duration = 0.0;
@@ -950,8 +939,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricFlowResult { .. } => {}
+            Event::BiometricFlowResult { is_success } => {
+                tracing::info!("OKSTATE_DEBUG BiometricFlowResult is_success={is_success}");
+                if *is_success {
+                    if !self.capture_succeeded {
+                        self.biometric_capture_success()?;
+                    }
+                } else {
+                    self.play_signup_fail_ux(None)?;
+                }
+            }
             Event::BiometricCaptureSuccess | Event::BiometricCaptureSuccessGreen => {
+                tracing::info!("OKSTATE_DEBUG BiometricCaptureSuccess(Green)");
                 self.biometric_capture_success()?;
             }
             Event::BiometricPipelineProgress { progress: _ } => {
@@ -1017,11 +1016,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if !self.capture_succeeded {
                     self.biometric_capture_success()?;
                 }
+                // The outer ring is owned by the in-range-triggered OK-state
+                // composite; only (re)assert the center breathe here.
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_center(
                     LEVEL_FOREGROUND,
-                    animations::OkStateRing::<DIAMOND_CENTER_LED_COUNT>::new(
+                    animations::OkStateBreathe::<DIAMOND_CENTER_LED_COUNT>::new(
                         Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
                         Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
                     ),
