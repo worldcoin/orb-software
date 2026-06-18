@@ -420,18 +420,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
                     QrScanSchema::OperatorSelfServe | QrScanSchema::Operator => {
-                        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
-                        self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
+                        self.set_ring(
+                            LEVEL_FOREGROUND,
+                            animations::SimpleSpinner::new(
+                                Argb::DIAMOND_RING_OPERATOR_QR_SCAN_SPINNER,
+                                Some(Argb::DIAMOND_RING_OPERATOR_QR_SCAN),
+                            )
+                            .fade_in(1.5),
+                        );
                         self.set_center(
                             LEVEL_BACKGROUND,
                             animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::OFF,
-                                None,
-                            ),
-                        );
-                        self.set_ring(
-                            LEVEL_FOREGROUND,
-                            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
                                 Argb::DIAMOND_CENTER_OPERATOR_QR_SCAN,
                                 None,
                             )
@@ -834,10 +833,22 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricCaptureOcclusion {
-                occlusion_detected: _,
-            } => {
-                // do nothing
+            Event::BiometricCaptureOcclusion { occlusion_detected } => {
+                // occlusion breaks the OK state: freeze the fill and turn the ring off.
+                if let Some(ok_state) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::composites::ok_state::OkState<
+                                DIAMOND_RING_LED_COUNT,
+                            >>()
+                    })
+                {
+                    ok_state.set_occluded(*occlusion_detected);
+                }
             }
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
@@ -866,8 +877,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 DIAMOND_RING_LED_COUNT,
                             >>()
                     }) {
+                        ok_state.set_in_range(*in_range);
                         if *in_range {
-                            ok_state.start_stacking();
                             if let Some(melody) = self.capture_sound.peekable().peek()
                                 && self.sound.try_queue(sound::Type::Melody(*melody))? {
                                     self.capture_sound.next();

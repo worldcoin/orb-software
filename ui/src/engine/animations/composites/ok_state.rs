@@ -5,13 +5,16 @@ use crate::engine::{
 use orb_rgb::Argb;
 use std::time::Duration;
 
-/// Composite OK-state ring animation:
-/// 1. `Waiting` — ring stays off until [`OkState::start_stacking`] is called
-///    (i.e. the user reaches an OK position).
-/// 2. `Stacking` — the "tetris" stacking fill, whose fill amount is driven by
-///    an internal fake-progress bar (so its timing matches a loading bar).
+/// Composite OK-state ring animation. The "tetris" stacking fill only runs
+/// while the user is in the OK state (in range and not occluded); otherwise the
+/// ring is off and the fill is frozen, resuming when the OK state returns.
+///
+/// The fill amount is driven by an internal fake-progress bar, so its timing
+/// matches a loading bar.
 pub struct OkState<const N: usize> {
     phase: Phase<N>,
+    in_range: bool,
+    occluded: bool,
     start_color: Argb,
     end_color: Argb,
     progress_color: Argb,
@@ -39,6 +42,8 @@ impl<const N: usize> OkState<N> {
     ) -> Self {
         Self {
             phase: Phase::Waiting,
+            in_range: false,
+            occluded: false,
             start_color,
             end_color,
             progress_color,
@@ -48,20 +53,18 @@ impl<const N: usize> OkState<N> {
         }
     }
 
-    /// Starts the tetris stacking fill, ending the initial off/waiting phase.
-    /// No-op once the sequence has already started.
-    pub fn start_stacking(&mut self) {
-        if matches!(self.phase, Phase::Waiting) {
-            self.phase = Phase::Stacking {
-                ring: OkStateRing::<N>::new(self.start_color, self.end_color),
-                progress: FakeProgress::<N>::new(
-                    self.progress_color,
-                    self.progress_timeout,
-                    self.min_fast_forward_duration,
-                    self.max_fast_forward_duration,
-                ),
-            };
-        }
+    /// Whether the user is within capture range.
+    pub fn set_in_range(&mut self, in_range: bool) {
+        self.in_range = in_range;
+    }
+
+    /// Whether the capture is currently occluded.
+    pub fn set_occluded(&mut self, occluded: bool) {
+        self.occluded = occluded;
+    }
+
+    fn is_ok(&self) -> bool {
+        self.in_range && !self.occluded
     }
 
     /// Fast-forwards the fill to completion (no-op before stacking has started).
@@ -97,20 +100,34 @@ impl<const N: usize> Animation for OkState<N> {
         dt: f64,
         idle: bool,
     ) -> AnimationState {
+        let ok = self.is_ok();
+
+        // Start the tetris fill once the OK state is first reached.
+        if ok && matches!(self.phase, Phase::Waiting) {
+            self.phase = Phase::Stacking {
+                ring: OkStateRing::<N>::new(self.start_color, self.end_color),
+                progress: FakeProgress::<N>::new(
+                    self.progress_color,
+                    self.progress_timeout,
+                    self.min_fast_forward_duration,
+                    self.max_fast_forward_duration,
+                ),
+            };
+        }
+
         match &mut self.phase {
-            Phase::Waiting => {
-                frame.iter_mut().for_each(|led| *led = Argb::OFF);
-                AnimationState::Running
-            }
-            Phase::Stacking { ring, progress } => {
+            Phase::Stacking { ring, progress } if ok => {
                 // Advance the progress bar for timing only (idle => no render),
                 // then drive the tetris fill from its displayed progress.
                 progress.animate(frame, dt, true);
                 ring.set_progress(progress.progress());
                 ring.animate(frame, dt, idle);
-                AnimationState::Running
             }
+            // Waiting, or not in the OK state: ring off, fill frozen.
+            _ => frame.iter_mut().for_each(|led| *led = Argb::OFF),
         }
+
+        AnimationState::Running
     }
 
     fn stop(&mut self, _transition: Transition) -> eyre::Result<()> {
