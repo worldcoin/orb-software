@@ -867,7 +867,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             >>()
                     }) {
                         if *in_range {
-                            tracing::info!("OKSTATE_DEBUG in range: starting tetris");
                             ok_state.start_stacking();
                             if let Some(melody) = self.capture_sound.peekable().peek()
                                 && self.sound.try_queue(sound::Type::Melody(*melody))? {
@@ -886,7 +885,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
-                tracing::info!("OKSTATE_DEBUG BiometricFlowStart");
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -904,8 +902,8 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         DIAMOND_RING_LED_COUNT,
                     >::new(
                         Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
@@ -940,7 +938,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricFlowResult { is_success } => {
-                tracing::info!("OKSTATE_DEBUG BiometricFlowResult is_success={is_success}");
                 if *is_success {
                     if !self.capture_succeeded {
                         self.biometric_capture_success()?;
@@ -950,7 +947,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureSuccess | Event::BiometricCaptureSuccessGreen => {
-                tracing::info!("OKSTATE_DEBUG BiometricCaptureSuccess(Green)");
                 self.biometric_capture_success()?;
             }
             Event::BiometricPipelineProgress { progress: _ } => {
