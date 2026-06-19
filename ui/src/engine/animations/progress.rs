@@ -15,6 +15,7 @@ const PULSE_ANGLE_RAD: f64 = PI / 180.0 * 7.0; // 7º angle width
 /// pulse so that it's never static
 pub struct Progress<const N: usize> {
     color: Argb,
+    background_color: Argb,
     /// from 0.0 to 1.0
     pub progress: f64,
     /// once `progress` reached, maintain progress ring to set `progress` during `progress_duration`
@@ -45,6 +46,7 @@ impl<const N: usize> Progress<N> {
     ) -> Self {
         Self {
             color,
+            background_color: Argb::OFF,
             progress: initial_progress,
             progress_duration,
             pulse_angle: PULSE_ANGLE_RAD,
@@ -86,6 +88,11 @@ impl<const N: usize> Progress<N> {
 
     pub fn get_color(&self) -> Argb {
         self.color
+    }
+
+    pub fn with_background(mut self, color: Argb) -> Self {
+        self.background_color = color;
+        self
     }
 }
 
@@ -134,7 +141,11 @@ impl<const N: usize> Animation for Progress<N> {
 
         tracing::trace!("scaling: {scaling_factor}");
         if !idle {
-            self.shape.render(frame, self.color * scaling_factor);
+            self.shape.render(
+                frame,
+                self.color * scaling_factor,
+                self.background_color * scaling_factor,
+            );
         }
 
         if self.paused {
@@ -198,7 +209,7 @@ impl<const N: usize> Animation for Progress<N> {
 
 impl<const N: usize> Shape<N> {
     #[allow(clippy::cast_precision_loss)]
-    pub fn render(&self, frame: &mut RingFrame<N>, color: Argb) {
+    pub fn render(&self, frame: &mut RingFrame<N>, foreground: Argb, background: Argb) {
         let mut angle_rad = 2.0 * PI * self.progress;
         // make it pulse if phase isn't null by using the sine
         angle_rad += self.phase.sin() * self.pulse_angle;
@@ -208,6 +219,6 @@ impl<const N: usize> Shape<N> {
             PI + LIGHT_BLEEDING_OFFSET_RAD
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
-        render_lines(frame, Argb::OFF, color, &ranges);
+        render_lines(frame, background, foreground, &ranges);
     }
 }
