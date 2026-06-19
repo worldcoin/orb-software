@@ -27,6 +27,25 @@ use crate::sound::Player;
 use super::animations::alert_v2::SquarePulseTrain;
 use super::CriticalState;
 
+/// Ring color for the fake-progress loading bar.
+/// Controlled by a single feature flag at build time.
+/// Priority (first match wins): ring-white > green-v1 > green-v2 > green-v3 > green-v4 > default.
+const fn fake_progress_ring_color() -> Argb {
+    if cfg!(feature = "ring-white") {
+        Argb(Some(10), 90, 90, 90)
+    } else if cfg!(feature = "green-v1") {
+        Argb(Some(10), 0, 200, 0)
+    } else if cfg!(feature = "green-v2") {
+        Argb(Some(10), 120, 210, 0)
+    } else if cfg!(feature = "green-v3") {
+        Argb(Some(10), 0, 200, 100)
+    } else if cfg!(feature = "green-v4") {
+        Argb(Some(10), 160, 240, 100)
+    } else {
+        Argb(Some(10), 0, 100, 0)
+    }
+}
+
 struct WrappedCenterMessage(Message);
 
 struct WrappedRingMessage(Message);
@@ -726,7 +745,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb(Some(10), 0, 100, 0),
+                        fake_progress_ring_color(),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
@@ -734,7 +753,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::BiometricCaputreSuccessAndFastForwardFakeProgress => {
-                let ring_completion_time = self
+                let (ring_completion_time, ring_color) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
@@ -745,9 +764,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 DIAMOND_RING_LED_COUNT,
                             >>()
                     })
-                    .map(|fake_progress| fake_progress.set_completed())
-                    .unwrap_or_default()
-                    .as_secs_f64();
+                    .map(|fake_progress| {
+                        let color = fake_progress.get_color();
+                        let completion_time = fake_progress.set_completed();
+                        (completion_time, color)
+                    })
+                    .unwrap_or_default();
+                let ring_completion_time = ring_completion_time.as_secs_f64();
 
                 let mut total_duration = 0.0;
                 while let Some(melody) = self.capture_sound.peekable().peek() {
@@ -789,7 +812,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb(Some(10), 0, 100, 0),
+                        ring_color,
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (0.0, fade_out_duration),
@@ -1044,11 +1067,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::composites::biometric_flow::BiometricFlow::<
                         DIAMOND_RING_LED_COUNT,
                     >::new(
-                        Argb(Some(10), 0, 100, 0),
+                        fake_progress_ring_color(),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
-                        Argb(Some(10), 0, 100, 0),
+                        fake_progress_ring_color(),
                         Argb::DIAMOND_RING_ERROR_SALMON,
                     ),
                 );
