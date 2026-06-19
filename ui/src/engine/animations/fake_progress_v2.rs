@@ -39,8 +39,8 @@ impl<const N: usize> Animation for FakeProgress<N> {
         dt: f64,
         idle: bool,
     ) -> crate::engine::AnimationState {
-        self.progress_bar.update(dt);
         if !self.halted {
+            self.progress_bar.update(dt);
             self.progress_animation
                 .set_progress(self.progress_bar.progress, None);
         }
@@ -94,11 +94,13 @@ impl<const N: usize> FakeProgress<N> {
     pub fn halt(&mut self) {
         if !self.progress_bar.completed {
             self.halted = true;
+            self.progress_animation.pause();
         }
     }
 
     pub fn resume(&mut self) {
         self.halted = false;
+        self.progress_animation.resume();
     }
 }
 

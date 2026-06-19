@@ -23,6 +23,7 @@ pub struct Progress<const N: usize> {
     transition: Option<Transition>,
     transition_time: f64,
     pub(crate) shape: Shape<N>,
+    paused: bool,
 }
 
 #[derive(Clone)]
@@ -54,7 +55,16 @@ impl<const N: usize> Progress<N> {
                 phase: 0.0,
                 pulse_angle: PULSE_ANGLE_RAD,
             },
+            paused: false,
         }
+    }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
     }
 
     /// Sets the progress value for the progress ring [0.0, 1.0]
@@ -125,6 +135,10 @@ impl<const N: usize> Animation for Progress<N> {
         tracing::trace!("scaling: {scaling_factor}");
         if !idle {
             self.shape.render(frame, self.color * scaling_factor);
+        }
+
+        if self.paused {
+            return AnimationState::Running;
         }
 
         self.shape.progress = self.shape.progress

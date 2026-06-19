@@ -188,6 +188,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             capture_succeeded: false,
             occlusion_active: false,
             occlusion_sound_last_played: None,
+            capture_distance_in_range: true,
             state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
@@ -854,7 +855,37 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
             Event::BiometricCaptureOcclusion { occlusion_detected } => {
                 if *occlusion_detected {
+                    // always freeze the progress bar on every occlusion event
+                    if let Some(fake_progress) = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                                    DIAMOND_RING_LED_COUNT,
+                                >>()
+                        })
+                    {
+                        fake_progress.halt();
+                    } else if let Some(biometric_flow) = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
+                                    DIAMOND_RING_LED_COUNT,
+                                >>()
+                        })
+                    {
+                        biometric_flow.halt_progress();
+                    }
+                    // animation + sound only on the first transition into occlusion
                     if !self.occlusion_active {
+                        self.occlusion_active = true;
                         self.set_center(
                             LEVEL_NOTICE,
                             animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -864,34 +895,6 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                                 0.0,
                             ),
                         );
-                        if let Some(fake_progress) = self
-                            .ring_animations_stack
-                            .stack
-                            .get_mut(&LEVEL_NOTICE)
-                            .and_then(|RunningAnimation { animation, .. }| {
-                                animation
-                                    .as_any_mut()
-                                    .downcast_mut::<animations::fake_progress_v2::FakeProgress<
-                                        DIAMOND_RING_LED_COUNT,
-                                    >>()
-                            })
-                        {
-                            fake_progress.halt();
-                        } else if let Some(biometric_flow) = self
-                            .ring_animations_stack
-                            .stack
-                            .get_mut(&LEVEL_NOTICE)
-                            .and_then(|RunningAnimation { animation, .. }| {
-                                animation
-                                    .as_any_mut()
-                                    .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
-                                        DIAMOND_RING_LED_COUNT,
-                                    >>()
-                            })
-                        {
-                            biometric_flow.halt_progress();
-                        }
-                        self.occlusion_active = true;
                         self.occlusion_sound_last_played = Some(std::time::Instant::now());
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::SoundError),
@@ -911,37 +914,47 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.occlusion_active = false;
                     self.occlusion_sound_last_played = None;
                     self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
-                    if let Some(fake_progress) = self
-                        .ring_animations_stack
-                        .stack
-                        .get_mut(&LEVEL_NOTICE)
-                        .and_then(|RunningAnimation { animation, .. }| {
-                            animation
-                                .as_any_mut()
-                                .downcast_mut::<animations::fake_progress_v2::FakeProgress<
-                                    DIAMOND_RING_LED_COUNT,
-                                >>()
-                        })
-                    {
-                        fake_progress.resume();
-                    } else if let Some(biometric_flow) = self
-                        .ring_animations_stack
-                        .stack
-                        .get_mut(&LEVEL_NOTICE)
-                        .and_then(|RunningAnimation { animation, .. }| {
-                            animation
-                                .as_any_mut()
-                                .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
-                                    DIAMOND_RING_LED_COUNT,
-                                >>()
-                        })
-                    {
-                        biometric_flow.resume_progress();
+                    if self.capture_distance_in_range {
+                        if let Some(fake_progress) = self
+                            .ring_animations_stack
+                            .stack
+                            .get_mut(&LEVEL_NOTICE)
+                            .and_then(|RunningAnimation { animation, .. }| {
+                                animation
+                                    .as_any_mut()
+                                    .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                                        DIAMOND_RING_LED_COUNT,
+                                    >>()
+                            })
+                        {
+                            fake_progress.resume();
+                        } else if let Some(biometric_flow) = self
+                            .ring_animations_stack
+                            .stack
+                            .get_mut(&LEVEL_NOTICE)
+                            .and_then(|RunningAnimation { animation, .. }| {
+                                animation
+                                    .as_any_mut()
+                                    .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
+                                        DIAMOND_RING_LED_COUNT,
+                                    >>()
+                            })
+                        {
+                            biometric_flow.resume_progress();
+                        }
                     }
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
+                    self.set_center(
+                        LEVEL_NOTICE,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                            None,
+                        ),
+                    );
+                } else {
                     self.set_center(
                         LEVEL_NOTICE,
                         animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
@@ -951,11 +964,28 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             0.0,
                         ),
                     );
-                } else {
-                    self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 }
-                // play the sound only once we start the progress bar.
-                if let Some(biometric_flow) = self
+                // halt or resume both FakeProgress and BiometricFlow.
+                // Only resume if both in range AND no occlusion active.
+                self.capture_distance_in_range = *in_range;
+                if let Some(fake_progress) = self
+                    .ring_animations_stack
+                    .stack
+                    .get_mut(&LEVEL_NOTICE)
+                    .and_then(|RunningAnimation { animation, .. }| {
+                        animation
+                            .as_any_mut()
+                            .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                                DIAMOND_RING_LED_COUNT,
+                            >>()
+                    })
+                {
+                    if *in_range && !self.occlusion_active {
+                        fake_progress.resume();
+                    } else if !in_range {
+                        fake_progress.halt();
+                    }
+                } else if let Some(biometric_flow) = self
                     .ring_animations_stack
                     .stack
                     .get_mut(&LEVEL_NOTICE)
@@ -965,23 +995,23 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
                                 DIAMOND_RING_LED_COUNT,
                             >>()
-                    }) {
-                        if *in_range {
-                            // resume the progress bar and play the capturing sound.
-                            biometric_flow.resume_progress();
-                            if let Some(melody) = self.capture_sound.peekable().peek()
-                                && self.sound.try_queue(sound::Type::Melody(*melody))? {
-                                    self.capture_sound.next();
-                                }
-                        } else {
-                            // halt the progress bar and play silence.
-                            biometric_flow.halt_progress();
-                            self.capture_sound = sound::capture::CaptureLoopSound::default();
-                            let _ = self
-                                .sound
-                                .try_queue(sound::Type::Voice(sound::Voice::Silence));
+                    })
+                {
+                    if *in_range {
+                        biometric_flow.resume_progress();
+                        if let Some(melody) = self.capture_sound.peekable().peek()
+                            && self.sound.try_queue(sound::Type::Melody(*melody))?
+                        {
+                            self.capture_sound.next();
                         }
+                    } else {
+                        biometric_flow.halt_progress();
+                        self.capture_sound = sound::capture::CaptureLoopSound::default();
+                        let _ = self
+                            .sound
+                            .try_queue(sound::Type::Voice(sound::Voice::Silence));
                     }
+                }
             }
             Event::BiometricFlowStart {
                 timeout,
