@@ -219,6 +219,11 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<(
         .await
         .wrap_err("restart ModemManager systemd service")?;
 
+    systemd
+        .wait_for_active("ModemManager.service", Duration::from_secs(30))
+        .await
+        .wrap_err("ModemManager did not become active after powercycle")?;
+
     info!("ModemManager restarted!");
 
     Ok(())
