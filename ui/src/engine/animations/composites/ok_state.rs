@@ -15,6 +15,9 @@ pub struct OkState<const N: usize> {
     phase: Phase<N>,
     in_range: bool,
     occluded: bool,
+    /// Once the fill completes it stays solid (success state), ignoring the OK
+    /// gating, so the ring holds white after signup rather than going off.
+    completed: bool,
     start_color: Argb,
     end_color: Argb,
     progress_color: Argb,
@@ -44,6 +47,7 @@ impl<const N: usize> OkState<N> {
             phase: Phase::Waiting,
             in_range: false,
             occluded: false,
+            completed: false,
             start_color,
             end_color,
             progress_color,
@@ -115,16 +119,28 @@ impl<const N: usize> Animation for OkState<N> {
             };
         }
 
+        let mut just_completed = false;
         match &mut self.phase {
+            Phase::Stacking { ring, .. } if self.completed => {
+                // Success state: hold the ring solid, ignoring the OK gating.
+                ring.set_progress(1.0);
+                ring.animate(frame, dt, idle);
+            }
             Phase::Stacking { ring, progress } if ok => {
                 // Advance the progress bar for timing only (idle => no render),
                 // then drive the tetris fill from its displayed progress.
-                progress.animate(frame, dt, true);
+                let state = progress.animate(frame, dt, true);
                 ring.set_progress(progress.progress());
                 ring.animate(frame, dt, idle);
+                if state == AnimationState::Finished {
+                    just_completed = true;
+                }
             }
             // Waiting, or not in the OK state: ring off, fill frozen.
             _ => frame.iter_mut().for_each(|led| *led = Argb::OFF),
+        }
+        if just_completed {
+            self.completed = true;
         }
 
         AnimationState::Running
