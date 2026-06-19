@@ -1,10 +1,10 @@
 use std::io::Result;
 
 fn main() -> Result<()> {
-    let proto_root = "../proto";
+    let proto_root = "./proto";
     let proto_files = [
-        "../proto/pcp/v1/di_iris_embeddings.proto",
-        "../proto/pcp/v1/di_iris_embedding_shares.proto",
+        "./proto/pcp/v1/di_iris_embeddings.proto",
+        "./proto/pcp/v1/di_iris_embedding_shares.proto",
     ];
 
     for f in &proto_files {
