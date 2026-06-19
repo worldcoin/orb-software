@@ -913,7 +913,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 } else {
                     self.occlusion_active = false;
                     self.occlusion_sound_last_played = None;
-                    self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                    // Restore center LED to the appropriate distance-based state.
+                    if self.capture_distance_in_range {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                                None,
+                            ),
+                        );
+                    } else {
+                        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                    }
                     if self.capture_distance_in_range {
                         if let Some(fake_progress) = self
                             .ring_animations_stack
@@ -946,24 +957,27 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
-                if *in_range {
-                    self.set_center(
-                        LEVEL_NOTICE,
-                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                            None,
-                        ),
-                    );
-                } else {
-                    self.set_center(
-                        LEVEL_NOTICE,
-                        animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                            Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                            Argb::OFF,
-                            2.0,
-                            0.0,
-                        ),
-                    );
+                // Don't override the occlusion breathing animation when occlusion is active.
+                if !self.occlusion_active {
+                    if *in_range {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                                None,
+                            ),
+                        );
+                    } else {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                                Argb::OFF,
+                                2.0,
+                                0.0,
+                            ),
+                        );
+                    }
                 }
                 // halt or resume both FakeProgress and BiometricFlow.
                 // Only resume if both in range AND no occlusion active.
