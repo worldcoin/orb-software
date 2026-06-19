@@ -722,7 +722,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb(Some(10), 0, 100, 0),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
