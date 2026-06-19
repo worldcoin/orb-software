@@ -162,8 +162,8 @@ impl Argb {
     /// Biometric Capture - diamond
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb =
         Self::DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE;
-    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb =
-        Self::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE;
+    /// Warm white ~4000K for biometric capture center LED
+    pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(10), 90, 74, 57);
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
         Argb(Some(15), 0, 100, 0);
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
