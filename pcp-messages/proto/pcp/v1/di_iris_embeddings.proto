@@ -11,13 +11,13 @@ message DiIrisEmbeddingV1 {
   string embedding_inference_backend = 2;
   string embedding_version = 3;
 
-  string left_embedding = 4;
-  string left_mirror_embedding = 5;
-  string right_embedding = 6;
-  string right_mirror_embedding = 7;
+  repeated sint32 left_embedding = 4;
+  repeated sint32 left_mirror_embedding = 5;
+  repeated sint32 right_embedding = 6;
+  repeated sint32 right_mirror_embedding = 7;
 
-  string left_embedding_f32 = 8;
-  string left_mirror_embedding_f32 = 9;
-  string right_embedding_f32 = 10;
-  string right_mirror_embedding_f32 = 11;
+  repeated float left_embedding_f32 = 8;
+  repeated float left_mirror_embedding_f32 = 9;
+  repeated float right_embedding_f32 = 10;
+  repeated float right_mirror_embedding_f32 = 11;
 }
