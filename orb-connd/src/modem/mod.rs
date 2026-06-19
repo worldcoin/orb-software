@@ -214,11 +214,13 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<(
 
     info!("modem detected at /dev/cdc-wdm0");
 
+    info!("Restarting ModemManager");
     systemd
         .restart_service("ModemManager.service")
         .await
         .wrap_err("restart ModemManager systemd service")?;
 
+    info!("Waiting for ModemManager to become active");
     systemd
         .wait_for_active("ModemManager.service", Duration::from_secs(30))
         .await
