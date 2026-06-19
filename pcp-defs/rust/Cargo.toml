@@ -1,5 +1,5 @@
 [package]
-name = "orb-pcp-messages"
+name = "orb-pcp-defs"
 version = "0.0.0"
 description = "Protobuf definitions for Personal Custody Package messages."
 

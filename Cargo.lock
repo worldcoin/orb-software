@@ -7782,7 +7782,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "orb-pcp-messages"
+name = "orb-pcp-defs"
 version = "0.0.0"
 dependencies = [
  "prost 0.14.1",
