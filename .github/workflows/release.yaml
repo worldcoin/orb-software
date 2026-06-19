@@ -1,4 +1,4 @@
-name: Single Release
+name: Release
 on:
   workflow_dispatch:
     inputs:
@@ -28,6 +28,7 @@ env:
   BUILD_X86_64: ${{ inputs.build_x86_64 }}
   PROFILE: ${{ inputs.profile }}
   GH_TOKEN: ${{ github.token }} # For gh cli
+  BRANCH: ${{ github.ref_name }}
 
 jobs:
   release-name:
@@ -41,11 +42,7 @@ jobs:
         id: release-name
         run: |
           set -Eeuxo pipefail
-          SHORT_SHA="${GITHUB_SHA::7}"
-          VERSION=$(cargo metadata --format-version=1 --no-deps --offline \
-            | jq -r ".packages[] | select(.name == \"${CRATE}\") | .version")
-          CI_RELEASE_NAME="${CRATE}/v${VERSION}-${SHORT_SHA}"
-          echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
+          echo "CI_RELEASE_NAME=${CRATE}/${BRANCH}/${GITHUB_SHA::7}" >>${GITHUB_OUTPUT}
 
 
   test:
@@ -225,5 +222,6 @@ jobs:
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           tag_name: ${{ needs.release-name.outputs.release-name }}
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: artifacts/*
