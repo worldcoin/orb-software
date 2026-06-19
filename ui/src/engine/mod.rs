@@ -605,6 +605,8 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
     capture_succeeded: bool,
+    occlusion_active: bool,
+    occlusion_sound_last_played: Option<std::time::Instant>,
     state: UiState,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,

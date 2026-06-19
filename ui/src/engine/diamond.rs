@@ -186,6 +186,8 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             capture_succeeded: false,
+            occlusion_active: false,
+            occlusion_sound_last_played: None,
             state: UiState::Booting,
             gimbal: None,
             operating_mode: OperatingMode::default(),
@@ -244,14 +246,15 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         )?;
         self.sound.set_master_volume(master_volume);
 
-        // ok-state outer ring: warm-white → green bloom then breathing
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
         self.set_ring(
             LEVEL_FOREGROUND,
-            animations::OkStateRing::<DIAMOND_RING_LED_COUNT>::new(
-                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+            animations::sine_blend::SineBlend::<DIAMOND_RING_LED_COUNT>::new(
                 Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                Argb::OFF,
+                4.0,
+                0.0,
             ),
         );
         self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
@@ -785,7 +788,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_ring(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_RING_LED_COUNT>::new(
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS,
+                        Argb(Some(10), 0, 100, 0),
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (0.0, fade_out_duration),
@@ -849,10 +852,93 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     }
                 }
             }
-            Event::BiometricCaptureOcclusion {
-                occlusion_detected: _,
-            } => {
-                // do nothing
+            Event::BiometricCaptureOcclusion { occlusion_detected } => {
+                if *occlusion_detected {
+                    if !self.occlusion_active {
+                        self.set_center(
+                            LEVEL_NOTICE,
+                            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                                Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
+                                Argb::OFF,
+                                2.0,
+                                0.0,
+                            ),
+                        );
+                        if let Some(fake_progress) = self
+                            .ring_animations_stack
+                            .stack
+                            .get_mut(&LEVEL_NOTICE)
+                            .and_then(|RunningAnimation { animation, .. }| {
+                                animation
+                                    .as_any_mut()
+                                    .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                                        DIAMOND_RING_LED_COUNT,
+                                    >>()
+                            })
+                        {
+                            fake_progress.halt();
+                        } else if let Some(biometric_flow) = self
+                            .ring_animations_stack
+                            .stack
+                            .get_mut(&LEVEL_NOTICE)
+                            .and_then(|RunningAnimation { animation, .. }| {
+                                animation
+                                    .as_any_mut()
+                                    .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
+                                        DIAMOND_RING_LED_COUNT,
+                                    >>()
+                            })
+                        {
+                            biometric_flow.halt_progress();
+                        }
+                        self.occlusion_active = true;
+                        self.occlusion_sound_last_played = Some(std::time::Instant::now());
+                        self.sound.queue(
+                            sound::Type::Melody(sound::Melody::SoundError),
+                            Duration::ZERO,
+                        )?;
+                    } else if self
+                        .occlusion_sound_last_played
+                        .map_or(false, |t| t.elapsed() >= std::time::Duration::from_secs(20))
+                    {
+                        self.occlusion_sound_last_played = Some(std::time::Instant::now());
+                        self.sound.queue(
+                            sound::Type::Melody(sound::Melody::SoundError),
+                            Duration::ZERO,
+                        )?;
+                    }
+                } else {
+                    self.occlusion_active = false;
+                    self.occlusion_sound_last_played = None;
+                    self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                    if let Some(fake_progress) = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::fake_progress_v2::FakeProgress<
+                                    DIAMOND_RING_LED_COUNT,
+                                >>()
+                        })
+                    {
+                        fake_progress.resume();
+                    } else if let Some(biometric_flow) = self
+                        .ring_animations_stack
+                        .stack
+                        .get_mut(&LEVEL_NOTICE)
+                        .and_then(|RunningAnimation { animation, .. }| {
+                            animation
+                                .as_any_mut()
+                                .downcast_mut::<animations::composites::biometric_flow::BiometricFlow<
+                                    DIAMOND_RING_LED_COUNT,
+                                >>()
+                        })
+                    {
+                        biometric_flow.resume_progress();
+                    }
+                }
             }
             Event::BiometricCaptureDistance { in_range } => {
                 if *in_range {
@@ -914,11 +1000,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::composites::biometric_flow::BiometricFlow::<
                         DIAMOND_RING_LED_COUNT,
                     >::new(
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb(Some(10), 0, 100, 0),
                         *timeout,
                         *min_fast_forward_duration,
                         *max_fast_forward_duration,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb(Some(10), 0, 100, 0),
                         Argb::DIAMOND_RING_ERROR_SALMON,
                     ),
                 );
@@ -1021,9 +1107,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_center(
                     LEVEL_FOREGROUND,
-                    animations::OkStateRing::<DIAMOND_CENTER_LED_COUNT>::new(
+                    animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
                         Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                        Argb::OFF,
+                        4.0,
+                        0.0,
                     ),
                 );
             }
