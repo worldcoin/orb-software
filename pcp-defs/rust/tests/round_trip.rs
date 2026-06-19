@@ -1,7 +1,7 @@
+use orb_pcp_defs::prost::Message;
 use orb_pcp_defs::v1::{
     DiIrisEmbeddingShareV1, DiIrisEmbeddingShares, DiIrisEmbeddingV1, DiIrisEmbeddings,
 };
-use prost::Message;
 
 const VECTOR_LEN: usize = 512;
 
