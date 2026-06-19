@@ -44,5 +44,5 @@ on `-beta` only can happen on the `main` branch.
 
 
 [delete job]: https://github.com/worldcoin/orb-software/blob/main/.github/workflows/delete-tmp-release.yaml
-[release workflow]: https://github.com/worldcoin/orb-software/actions/workflows/single-release.yaml
+[release workflow]: https://github.com/worldcoin/orb-software/actions/workflows/release.yaml
 [retagging]: https://git-scm.com/docs/git-tag#_on_re_tagging
