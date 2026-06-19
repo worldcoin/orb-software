@@ -915,7 +915,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         DIAMOND_RING_LED_COUNT,
                     >::new(
                         Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
-                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
+                        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
                         Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS,
                         *timeout,
                         *min_fast_forward_duration,

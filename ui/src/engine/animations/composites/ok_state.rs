@@ -3,7 +3,16 @@ use crate::engine::{
     Animation, AnimationState, RingFrame, Transition,
 };
 use orb_rgb::Argb;
-use std::time::Duration;
+use std::{f64::consts::PI, time::Duration};
+
+/// Highest fill the fake progress bar may reach on its own. It holds here
+/// (just short of full) until the fast-forward completes the ring.
+const WAIT_CAP: f64 = 0.85;
+
+/// Duration of the pre-stacking breathing pulse (one half-sine inhale → exhale).
+const BREATH_DUR: f64 = 0.7;
+/// Peak brightness of the pre-stacking breath, as a fraction of the start color.
+const BREATH_PEAK: f64 = 0.4;
 
 /// Composite OK-state ring animation. The "tetris" stacking fill only runs
 /// while the user is in the OK state (in range and not occluded); otherwise the
@@ -35,6 +44,8 @@ enum Phase<const N: usize> {
     Stacking {
         ring: OkStateRing<N>,
         progress: FakeProgress<N>,
+        /// Accumulated time inside the OK state, used to gate the pre-stacking breath.
+        breath_elapsed: f64,
     },
 }
 
@@ -123,6 +134,7 @@ impl<const N: usize> Animation for OkState<N> {
                     self.min_fast_forward_duration,
                     self.max_fast_forward_duration,
                 ),
+                breath_elapsed: 0.0,
             };
         }
 
@@ -133,13 +145,36 @@ impl<const N: usize> Animation for OkState<N> {
                 ring.set_progress(1.0);
                 ring.animate(frame, dt, idle);
             }
-            Phase::Stacking { ring, progress } if ok || fast_forwarding => {
+            Phase::Stacking { ring, progress, breath_elapsed } if ok || fast_forwarding => {
                 // Advance the progress bar for timing only (idle => no render),
                 // then drive the tetris fill from its displayed progress.
                 let state = progress.animate(frame, dt, true);
-                ring.set_progress(progress.progress());
-                ring.animate(frame, dt, idle);
-                if state == AnimationState::Finished {
+                // The fake progress bar must never complete the ring on its own:
+                // while waiting it holds just short of full, and only the
+                // fast-forward (real signup success) drives it home and locks in
+                // the solid success state.
+                let displayed = if fast_forwarding {
+                    progress.progress()
+                } else {
+                    progress.progress().min(WAIT_CAP)
+                };
+
+                if *breath_elapsed < BREATH_DUR && !fast_forwarding {
+                    // Pre-stacking breath: pulse the full ring once (half-sine) before
+                    // the tetris blocks start rising, smoothing the off→on transition.
+                    *breath_elapsed += dt;
+                    let t = (*breath_elapsed / BREATH_DUR).min(1.0);
+                    let breath = (PI * t).sin() * BREATH_PEAK;
+                    if !idle {
+                        let breath_color = Argb::OFF.lerp(self.start_color, breath);
+                        frame.iter_mut().for_each(|led| *led = breath_color);
+                    }
+                } else {
+                    ring.set_progress(displayed);
+                    ring.animate(frame, dt, idle);
+                }
+
+                if state == AnimationState::Finished && fast_forwarding {
                     just_completed = true;
                 }
             }
