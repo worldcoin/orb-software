@@ -18,6 +18,10 @@ pub struct OkState<const N: usize> {
     /// Once the fill completes it stays solid (success state), ignoring the OK
     /// gating, so the ring holds white after signup rather than going off.
     completed: bool,
+    /// Once signup completes and the fill is fast-forwarding, it must run to
+    /// completion regardless of the OK gating, so a momentary out-of-range or
+    /// occlusion at the finish line can't turn the ring off mid-animation.
+    fast_forwarding: bool,
     start_color: Argb,
     end_color: Argb,
     progress_color: Argb,
@@ -48,6 +52,7 @@ impl<const N: usize> OkState<N> {
             in_range: false,
             occluded: false,
             completed: false,
+            fast_forwarding: false,
             start_color,
             end_color,
             progress_color,
@@ -75,6 +80,7 @@ impl<const N: usize> OkState<N> {
     pub fn fast_forward(&mut self) {
         if let Phase::Stacking { progress, .. } = &mut self.phase {
             progress.set_completed();
+            self.fast_forwarding = true;
         }
     }
 
@@ -105,6 +111,7 @@ impl<const N: usize> Animation for OkState<N> {
         idle: bool,
     ) -> AnimationState {
         let ok = self.is_ok();
+        let fast_forwarding = self.fast_forwarding;
 
         // Start the tetris fill once the OK state is first reached.
         if ok && matches!(self.phase, Phase::Waiting) {
@@ -126,7 +133,7 @@ impl<const N: usize> Animation for OkState<N> {
                 ring.set_progress(1.0);
                 ring.animate(frame, dt, idle);
             }
-            Phase::Stacking { ring, progress } if ok => {
+            Phase::Stacking { ring, progress } if ok || fast_forwarding => {
                 // Advance the progress bar for timing only (idle => no render),
                 // then drive the tetris fill from its displayed progress.
                 let state = progress.animate(frame, dt, true);
