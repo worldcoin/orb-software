@@ -4,6 +4,9 @@ use std::{
 };
 
 #[doc(hidden)]
+pub use tracing;
+
+#[doc(hidden)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum LogLevel {
     Info,
@@ -35,14 +38,29 @@ impl LogSite {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __sampled_log {
-    ($logger:expr, $level:expr, $trace:ident, $($arg:tt)+) => {{
+    ($logger:expr, $level:expr, $trace:ident, $message:literal) => {{
         let site = $crate::logging::sampled::LogSite::new($level, file!(), line!(), column!());
 
         if let Some(repeated) = $logger.hit(site) {
             if repeated == 0 {
-                tracing::$trace!($($arg)+);
+                $crate::logging::sampled::tracing::$trace!($message);
             } else {
-                tracing::$trace!("{} (repeated {} times)", format_args!($($arg)+), repeated);
+                $crate::logging::sampled::tracing::$trace!("{} (repeated {} times)", $message, repeated);
+            }
+        }
+    }};
+    ($logger:expr, $level:expr, $trace:ident, $message:literal, $($arg:tt)+) => {{
+        let site = $crate::logging::sampled::LogSite::new($level, file!(), line!(), column!());
+
+        if let Some(repeated) = $logger.hit(site) {
+            if repeated == 0 {
+                $crate::logging::sampled::tracing::$trace!($message, $($arg)+);
+            } else {
+                $crate::logging::sampled::tracing::$trace!(
+                    "{} (repeated {} times)",
+                    format_args!($message, $($arg)+),
+                    repeated
+                );
             }
         }
     }};
@@ -80,6 +98,9 @@ pub use crate::{
 ///
 /// Logs are sampled per call site and level. The call site is identified by
 /// the macro invocation's file, line, and column.
+///
+/// The logging macros intentionally accept format-style log messages only. They
+/// do not support structured `tracing` fields such as `target:` or `field = %value`.
 ///
 /// # Example
 ///
