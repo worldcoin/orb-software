@@ -134,10 +134,12 @@ fn from_remote(
     );
 
     let client = crate::client::normal()?;
+    // attempt starts here
+    // ignore if we dont have internet
     let resp = client
         .get(api_url.clone())
         .send()
-        .map_err(Error::SendCheckUpdateRequest)?;
+        .map_err(Error::SendCheckUpdateRequest)?; // early exit here
 
     let status = resp.status();
     if status.is_client_error() || status.is_server_error() {
@@ -437,7 +439,7 @@ mod tests {
         let malformed_json3 = r#"{
             "releases": {
                 "slot_a": null,
-                "slot_b": "some-version"  
+                "slot_b": "some-version"
             },
             "slot_a": {},
             "slot_b": {},
