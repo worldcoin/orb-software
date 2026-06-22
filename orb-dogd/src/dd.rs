@@ -14,7 +14,7 @@ const QUEUE_SIZE: usize = 4096;
 const MAX_EMIT_PER_TICK: usize = 25;
 const TICK: Duration = Duration::from_millis(50);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DogstatsdClient {
     tx: Sender<Metric>,
 }
