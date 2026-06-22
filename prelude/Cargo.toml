@@ -22,3 +22,4 @@ zbus = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
+tracing-subscriber.workspace = true
