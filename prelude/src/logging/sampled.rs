@@ -45,7 +45,11 @@ macro_rules! __sampled_log {
             if repeated == 0 {
                 $crate::logging::sampled::tracing::$trace!($message);
             } else {
-                $crate::logging::sampled::tracing::$trace!("{} (repeated {} times)", $message, repeated);
+                $crate::logging::sampled::tracing::$trace!(
+                    "{} (repeated {} times)",
+                    format_args!($message),
+                    repeated
+                );
             }
         }
     }};
@@ -147,5 +151,85 @@ impl LogSampler {
         *suppressed = 0;
 
         Some(repeated)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::{self, Write},
+        sync::{Arc, Mutex},
+        thread,
+        time::Duration,
+    };
+
+    use super::LogSampler;
+    use crate::logging::sampled;
+
+    #[derive(Clone, Default)]
+    struct SharedWriter {
+        output: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl SharedWriter {
+        fn contents(&self) -> String {
+            String::from_utf8(self.output.lock().unwrap().clone()).unwrap()
+        }
+    }
+
+    impl Write for SharedWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.output.lock().unwrap().write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.output.lock().unwrap().flush()
+        }
+    }
+
+    fn log_implicit_capture(logger: &mut LogSampler, err: &str) {
+        sampled::warn!(logger, "failed {err}");
+    }
+
+    #[test]
+    fn repeated_log_formats_implicit_capture() {
+        // Arrange
+        let writer = SharedWriter::default();
+        let writer_for_subscriber = writer.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(move || writer_for_subscriber.clone())
+            .finish();
+
+        let mut logger = LogSampler::new(Duration::from_millis(1));
+
+        // Act
+        tracing::subscriber::with_default(subscriber, || {
+            log_implicit_capture(&mut logger, "first");
+            log_implicit_capture(&mut logger, "suppressed");
+            thread::sleep(Duration::from_millis(2));
+            log_implicit_capture(&mut logger, "summary");
+        });
+
+        // Assert
+        let output = writer.contents();
+
+        assert!(
+            output.contains("failed first"),
+            "expected first log message in output: {output}"
+        );
+        assert!(
+            !output.contains("failed suppressed"),
+            "suppressed message should not be logged: {output}"
+        );
+        assert!(
+            output.contains("failed summary (repeated 1 times)"),
+            "expected repeated summary to format implicit capture: {output}"
+        );
+        assert!(
+            !output.contains("failed {err}"),
+            "implicit capture should not be logged as a raw format string: {output}"
+        );
     }
 }

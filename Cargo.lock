@@ -10078,6 +10078,7 @@ dependencies = [
  "color-eyre",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "zbus",
 ]
 
