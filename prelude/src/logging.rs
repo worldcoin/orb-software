@@ -30,12 +30,13 @@ impl LogSite {
     }
 }
 
-pub struct ThrottledLogger {
+/// Samples logs within a timeframe to avoid excessive logging.
+pub struct LogSampler {
     throttle: Duration,
     seen: HashMap<LogSite, (Instant, u64)>,
 }
 
-impl ThrottledLogger {
+impl LogSampler {
     pub fn new(throttle: Duration) -> Self {
         Self {
             throttle,
