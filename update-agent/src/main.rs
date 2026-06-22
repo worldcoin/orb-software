@@ -49,6 +49,7 @@ use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
 use orb_zbus_proxies::login1;
+use std::default::Default;
 use tracing::{debug, error, info, warn};
 use zbus::blocking::{connection, InterfaceRef};
 
@@ -184,7 +185,7 @@ fn run(args: &Args) -> eyre::Result<()> {
     debug!("running with the following settings: {settings_ser}");
 
     //  metrics propagation to DD
-    let metrics = DogstatsdClient::new();
+    let metrics = DogstatsdClient::default();
 
     prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
 
