@@ -1,22 +1,27 @@
-use crate::network_manager::{Connection, NetworkManager};
+use crate::network_manager::NetworkManager;
 use color_eyre::{eyre::Context, Result};
 use flume::Receiver;
+use oes::NetworkInterface;
 use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
+use orb_dogd::MetricEmitter;
 use speare::mini;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::time;
 use tracing::{info, warn};
 
-pub struct Args {
+pub struct Args<M: MetricEmitter> {
     pub nm: NetworkManager,
     pub session_bus: zbus::Connection,
     pub report_interval: Duration,
+    pub metrics: Arc<M>,
 }
 
-pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+const IFACES: &[&str] = &["eth0", "wwan0", "wlan0"];
+
+pub async fn report<M: MetricEmitter>(ctx: mini::Ctx<Args<M>>) -> Result<()> {
     info!("starting connd report reporter");
 
     async {
@@ -26,9 +31,23 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         let mut interval = time::interval(ctx.report_interval);
         interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
+        let mut active_conns = loop {
+            match active_conns_rx.recv_async().await {
+                Ok(ac) => break ac,
+                Err(e) => {
+                    warn!("connd report could not get initial active connections. waiting {}s and trying again. err: {e}", ctx.report_interval.as_secs());
+                    time::sleep(ctx.report_interval).await;
+                    continue;
+                }
+            }
+        };
+
         loop {
             tokio::select! {
-                Ok(_) = active_conns_rx.recv_async() => {}
+                Ok(acs) = active_conns_rx.recv_async() => {
+                    active_conns = acs;
+                }
+
                 _ = interval.tick() => {}
             };
 
@@ -36,19 +55,24 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 .await
                 .wrap_err("Failed to create Backend Status dbus Proxy")?;
 
-            let primary_conn = ctx
-                .nm
-                .primary_connection()
-                .await
-                .inspect_err(|e| warn!("failed to get primary connection: {e}"))
-                .unwrap_or_default();
+            let egress_iface = active_conns.connections.iter().find(|c|c.primary).map(|c|{
+                match c.iface {
+                    NetworkInterface::Ethernet => "eth0",
+                    NetworkInterface::WiFi => "wlan0",
+                    NetworkInterface::Cellular => "wwan0"
+                }.into()
+            });
 
-            let (egress_iface, active_wifi_profile) = match primary_conn {
-                Some(Connection::Cellular { .. }) => (Some("wwan0".into()), None),
-                Some(Connection::Wifi { ssid }) => (Some("wlan0".into()), Some(ssid)),
-                Some(Connection::Ethernet) => (Some("eth0".into()), None),
-                None => (None, None),
-            };
+            for conn in IFACES {
+                let value = match &egress_iface {
+                    Some(iface) if iface == *conn => 1.0,
+                    _ => 0.0,
+                };
+
+                let _ = ctx.metrics.gauge("orb.platform.connd.primary_connection", value, [format!("iface:{conn}")]);
+            }
+
+            let active_wifi_profile = active_conns.connections.iter().find(|c|c.iface == NetworkInterface::WiFi).map(|c|c.name.clone());
 
             let saved_wifi_profiles = ctx
                 .nm
