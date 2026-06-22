@@ -220,7 +220,7 @@ impl Fixture {
 
         let task = task::spawn(async move {
             let program = orb_backend_status::program()
-                .metrics(DogstatsdClient::new())
+                .metrics(DogstatsdClient::default())
                 .dbus(dbus)
                 .zsession(&zsession)
                 .endpoint(endpoint)
