@@ -1,154 +1,227 @@
-name: Automated Release
+name: Release
 on:
   workflow_dispatch:
     inputs:
-      component:
-        description: "The component to release"
+      crate:
+        description: "rust crate to be built into a bin and packaged into a debian pkg"
         required: true
+        type: string
+      build_aarch64:
+        description: "Build for aarch64"
+        type: boolean
+        default: true
+      build_x86_64:
+        description: "Build for x86_64"
+        type: boolean
+        default: false
+      profile:
+        description: "Cargo build profile"
         type: choice
         options:
-          - orb-attest
-          - orb-backend-status
-          - orb-bidiff-cli
-          - orb-connd
-          - orb-hil
-          - orb-jobs-agent
-          - orb-mcu-util
-          - orb-slot-ctrl
-          - orb-speed-test
-          - orb-supervisor
-          - orb-thermal-cam-ctrl
-          - orb-ui
-          - orb-update-agent
-          - orb-update-verifier
-          - zorb
-      channel:
-        description: |
-          Which release channel?
-          `beta` can only be used on `main` and is permanent.
-          `tmp` can be any ref and gets deleted after 1 week. Only use it for testing,
-          dont ever merge it to `main` of orb-os.
-        required: true
-        type: choice
-        options:
-          - "beta"
-          - "tmp"
+          - release
+          - artifact
+        default: artifact
+
 env:
-  CI_CHANNEL: ${{ inputs.channel }}
-  CI_COMPONENT: ${{ inputs.component }}
+  CRATE: ${{ inputs.crate }}
+  BUILD_AARCH64: ${{ inputs.build_aarch64 }}
+  BUILD_X86_64: ${{ inputs.build_x86_64 }}
+  PROFILE: ${{ inputs.profile }}
   GH_TOKEN: ${{ github.token }} # For gh cli
+  BRANCH: ${{ github.ref_name }}
 
 jobs:
-  check-inputs:
-    name: Check Workflow Inputs
+  release-name:
+    name: Creates the Release Name
     runs-on: ubuntu-24.04
     outputs:
       release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
-        with:
-          token: ${{ github.token }}
-      - name: Ensure git ref is valid for the selected channel
-        env:
-          CI_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -Eeuxo pipefail
-          CI_CURRENT_BRANCH="$(git branch --show-current)"
-          echo "CI_CURRENT_BRANCH=${CI_CURRENT_BRANCH}"
-          echo "CI_DEFAULT_BRANCH=${CI_DEFAULT_BRANCH}"
-          if [[ "${CI_CHANNEL}" != "tmp" ]]; then
-            if [[ "${CI_CURRENT_BRANCH}" != "${CI_DEFAULT_BRANCH}" ]]; then
-              echo "We are on the ${CI_CURRENT_BRANCH} branch, but only commits on ${CI_DEFAULT_BRANCH} are allowed for the ${CI_CHANNEL} channel!"
-              exit 1
-            fi
-          fi
-      - name: Extract Package Version
-        run: |
-          set -Eeuxo pipefail
-          # Cargo metadata is a machine readable description of the workspace.
-          # We parse this with jq to extract the current version number of the
-          # software component
-          jq_query=".packages[] | select(.name == \"${CI_COMPONENT}\") | .version"
-          CI_SEMVER="$(cargo metadata --format-version=1 --no-deps --frozen --offline | jq -r "${jq_query}")"
-          echo "CI_SEMVER=${CI_SEMVER}" >>${GITHUB_ENV}
-
-          if ! [[ "${CI_SEMVER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Cargo crate version was not in expected X.Y.Z format."
-            exit 1
-          fi
-
       - name: Calculate Release Name
         id: release-name
         run: |
           set -Eeuxo pipefail
-          echo "CI_CHANNEL=${CI_CHANNEL}"
-          echo "CI_COMPONENT=${CI_COMPONENT}"
-          echo "CI_SEMVER=${CI_SEMVER}"
+          echo "CI_RELEASE_NAME=${CRATE}/${BRANCH}/${GITHUB_SHA::7}" >>${GITHUB_OUTPUT}
 
-          prefix="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}"
-          # This regex searches for the prerelease number `.0` in `foo/v1.2.3-beta.0`
-          # Optionally matches legacy +XX suffix for backwards compatibility
-          regex="${CI_COMPONENT}\/v${CI_SEMVER}-${CI_CHANNEL}\.([0-9]+)(\+[A-Z]{2})?"
 
-          # This finds the latest prerelease number.
-          # see https://github.com/cli/cli/blob/6b19a854710ff2c81070f109f35434cd20e40115/pkg/cmd/release/list/http.go#L83
-          channel_num=$(gh release list -L 999999 | awk '{print $1}' | (grep ${prefix} || true) | sed -E "s/${regex}/\1/" | sort -n | tail -1)
-          channel_num=$((${channel_num:--1} + 1)) # increment number
-          echo "Detected next channel num to be ${channel_num}"
-
-          CI_RELEASE_NAME="${CI_COMPONENT}/v${CI_SEMVER}-${CI_CHANNEL}.${channel_num}"
-          echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_ENV}
-          echo "CI_RELEASE_NAME=${CI_RELEASE_NAME}" >>${GITHUB_OUTPUT}
-
-  rust-ci:
-    name: Rust CI
-    uses: ./.github/workflows/rust-ci.yaml
-    needs: check-inputs
-    with:
-      skip_cargo_deny: true
-    secrets:
-      ORB_GIT_HUB_TOKEN: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-  release:
-    name: Create Release and Tag
-    runs-on: ubuntu-24.04
-    needs:
-      - check-inputs
-      - rust-ci
+  test:
+    name: Test
+    runs-on: public-ubuntu-24.04-32core
     steps:
-      - name: Download Rust Artifacts
-        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # pin@v4.1.7
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
-          # didn't specify artifact name, so all artifacts are downloaded and merged
-          # into the `artifacts` dir
-          path: artifacts
-          merge-multiple: true
-
-      - name: List Downloaded Artifacts
-        run: ls -aRsh artifacts
-
-      - name: Extract relevant component's tar
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+          lfs: true
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+      - name: Print environment
         run: |
-          set -Eeux -o pipefail
-          mkdir -p extracted
-          tar -xvf artifacts/${CI_COMPONENT}.tar.zst -C extracted
-          ls -aRsh extracted
+          uname -a
+          nix develop -c env
+      - name: Cargo Test
+        run: |
+          set -Eeuxo pipefail
+
+          # Get workspace metadata once
+          METADATA=$(cargo metadata --format-version=1 --no-deps --frozen --offline)
+
+          # Get workspace package names as JSON array
+          WORKSPACE_PKGS=$(echo "${METADATA}" | jq '[.packages[].name]')
+
+          # Get dependencies of target crate that are also workspace members
+          WORKSPACE_DEPS=$(echo "${METADATA}" | jq -r --arg crate "${CRATE}" --argjson ws_pkgs "${WORKSPACE_PKGS}" '
+            .packages[]
+            | select(.name == $crate)
+            | .dependencies[].name
+            | select(. as $d | $ws_pkgs | index($d))
+          ')
+
+          # Build -p flags: target crate + its workspace dependencies
+          P_FLAGS="-p ${CRATE}"
+          for dep in ${WORKSPACE_DEPS}; do
+            P_FLAGS="${P_FLAGS} -p ${dep}"
+          done
+
+          echo "Testing crates: ${P_FLAGS}"
+          nix develop -c cargo nextest run ${P_FLAGS} --all-features
+
+  build:
+    name: Build
+    runs-on: public-ubuntu-24.04-32core
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+        with:
+          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+          lfs: true
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
+        with:
+          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+        continue-on-error: true
+        with:
+          name: worldcoin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Authorize private git repos
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
+        with:
+          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+      - name: Print environment
+        run: |
+          uname -a
+          nix develop -c env
+      - name: Build default and create deb
+        run: |
+          set -Eeuxo pipefail
+          mkdir -p artifacts
+
+          if [ "${BUILD_AARCH64}" = "true" ]; then
+            echo "Building for aarch64..."
+            nix develop -c \
+              cargo zigbuild --target aarch64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE}
+            nix develop -c \
+              cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+                --profile ${PROFILE} -o artifacts/${CRATE}_aarch64.deb
+          fi
+
+          if [ "${BUILD_X86_64}" = "true" ]; then
+            echo "Building for x86_64..."
+            nix develop -c \
+              cargo zigbuild --target x86_64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE}
+            nix develop -c \
+              cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
+                --profile ${PROFILE} -o artifacts/${CRATE}_x86_64.deb
+          fi
+
+      - name: Build flavors and create debs
+        run: |
+          set -Eeuxo pipefail
+
+          # Extract flavors from cargo metadata
+          FLAVORS=$(cargo metadata --format-version=1 --no-deps --frozen --offline \
+            | jq -c ".packages[] | select(.name == \"${CRATE}\") | .metadata.orb.flavors // []")
+
+          if [ "${FLAVORS}" = "[]" ] || [ -z "${FLAVORS}" ]; then
+            echo "No flavors defined for ${CRATE}"
+            exit 0
+          fi
+
+          echo "Found flavors: ${FLAVORS}"
+
+          # Loop through each flavor
+          echo "${FLAVORS}" | jq -c '.[]' | while read -r flavor; do
+            NAME=$(echo "${flavor}" | jq -r '.name')
+            FEATURES=$(echo "${flavor}" | jq -r '.features | join(",")')
+
+            echo "Building flavor: ${NAME} with features: ${FEATURES}"
+
+            if [ "${BUILD_AARCH64}" = "true" ]; then
+              nix develop -c \
+                cargo zigbuild --target aarch64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE} \
+                  --no-default-features --features "${FEATURES}"
+              nix develop -c \
+                cargo deb --no-build --no-strip -p ${CRATE} --target aarch64-unknown-linux-gnu \
+                  --profile ${PROFILE} -o artifacts/${CRATE}_${NAME}_aarch64.deb
+            fi
+
+            if [ "${BUILD_X86_64}" = "true" ]; then
+              nix develop -c \
+                cargo zigbuild --target x86_64-unknown-linux-gnu --profile ${PROFILE} -p ${CRATE} \
+                  --no-default-features --features "${FEATURES}"
+              nix develop -c \
+                cargo deb --no-build --no-strip -p ${CRATE} --target x86_64-unknown-linux-gnu \
+                  --profile ${PROFILE} -o artifacts/${CRATE}_${NAME}_x86_64.deb
+            fi
+          done
 
       - name: Compute sha256 checksums
         run: |
           set -Eeuxo pipefail
-          pushd extracted
-          for f in *; do
+          cd artifacts
+          for f in *.deb; do
             sha256sum "${f}" > "${f}.sha256"
           done
-          ls -aRsh
-          popd
+          ls -la
 
-      - name: Upload Release and Create Tag
+      - name: Upload artifacts
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
+        with:
+          name: debs
+          path: artifacts/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    needs:
+      - release-name
+      - test
+      - build
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # pin@v4.1.7
+        with:
+          name: debs
+          path: artifacts
+
+      - name: Create Release
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
-          tag_name: ${{ needs.check-inputs.outputs.release-name }}
+          tag_name: ${{ needs.release-name.outputs.release-name }}
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
-          overwrite_files: false
-          files: extracted/*
+          files: artifacts/*

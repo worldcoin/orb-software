@@ -8,6 +8,9 @@ Requires=worldcoin-dbus.service
 After=worldcoin-dbus.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
+# Soft dependency to not limit in case zenohd fails
+After=zenohd.service
+Wants=zenohd.service
 
 [Service]
 Type=simple

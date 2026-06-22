@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors = [
-	"Philipp Poppov <pophilpo@users.noreply.github.com>",
+	"Philipp Popov <pophilpo@users.noreply.github.com>",
 	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 
@@ -40,7 +40,6 @@ orb-secure-storage-ca = { workspace = true, default-features = false, features =
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
-prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
@@ -74,6 +73,7 @@ mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
 proptest.workspace = true
 portpicker = "0.1.1"
+prelude = { workspace = true, features = ["future"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

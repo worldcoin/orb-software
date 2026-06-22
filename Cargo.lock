@@ -8044,6 +8044,7 @@ dependencies = [
  "url",
  "wiremock",
  "zbus",
+ "zbus_systemd",
  "zenorb",
 ]
 
@@ -10076,6 +10077,8 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "zbus",
 ]
 

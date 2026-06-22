@@ -4,6 +4,7 @@ use orb_dogd::DogstatsdClient;
 use orb_endpoints::{v2::Endpoints, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
+use std::default::Default;
 use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tokio_util::sync::CancellationToken;
@@ -53,7 +54,7 @@ async fn main() -> Result<()> {
         .await?;
 
     let result = orb_backend_status::program()
-        .metrics(DogstatsdClient::new())
+        .metrics(DogstatsdClient::default())
         .dbus(zbus::Connection::session().await?)
         .zsession(&zsession)
         .endpoint(endpoint)

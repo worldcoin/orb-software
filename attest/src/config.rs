@@ -1,11 +1,13 @@
 use eyre::{self, bail};
-use orb_endpoints::{v1, Backend};
+use orb_endpoints::{v1, v2, Backend};
 use orb_info::OrbId;
 use std::str::FromStr;
 
 pub struct Config {
     pub auth_url: url::Url,
     pub ping_url: url::Url,
+    pub keys_challenge_url: url::Url,
+    pub keys_proof_url: url::Url,
 }
 
 impl Config {
@@ -18,11 +20,14 @@ impl Config {
         // Parse the orb_id string into an OrbId
         let orb_id = OrbId::from_str(orb_id).expect("Invalid orb_id format");
 
-        let endpoints = v1::Endpoints::new(backend, &orb_id);
+        let v1 = v1::Endpoints::new(backend, &orb_id);
+        let v2 = v2::Endpoints::new(backend, &orb_id);
 
         Config {
-            auth_url: endpoints.auth,
-            ping_url: endpoints.ping,
+            auth_url: v1.auth,
+            ping_url: v1.ping,
+            keys_challenge_url: v2.keys_challenge,
+            keys_proof_url: v2.keys_proof,
         }
     }
 }

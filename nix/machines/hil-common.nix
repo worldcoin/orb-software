@@ -107,6 +107,7 @@ in
       abootimg
       gnupg
       arp-scan
+      lsof
       uv
       (python312.withPackages (
         ps: with ps; [

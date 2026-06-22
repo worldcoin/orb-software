@@ -195,9 +195,57 @@ enum OpticsOpts {
     /// Test camera trigger for 10 seconds with default options: 30fps, IR-LEDs 100us.
     #[clap(subcommand)]
     TriggerCamera(Camera),
+    /// Replicate the MCU command sequence orb-core sends during a signup capture
+    #[clap(action)]
+    Signup(SignupOpts),
     /// Polarizer command
     #[clap(subcommand)]
     Polarizer(PolarizerOpts),
+}
+
+/// IR wavelength selection, mirrors orb_messages InfraredLEDs.Wavelength.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq)]
+pub enum IrWavelength {
+    /// 850nm (orb-core default)
+    L850,
+    /// 940nm
+    L940,
+    /// 850nm, left side only
+    L850Left,
+    /// 850nm, right side only
+    L850Right,
+    /// 940nm, left side only
+    L940Left,
+    /// 940nm, right side only
+    L940Right,
+    /// 850nm, center only
+    L850Center,
+    /// 850nm, side only
+    L850Side,
+    /// 940nm, single emitter
+    L940Single,
+}
+
+/// Replicates orb-core's signup capture: enable IR LEDs, set FPS, start the IR
+/// eye + face camera triggers, hold for a few seconds, then stop the triggers
+/// and disable the IR LEDs.
+#[derive(Parser, Debug, Clone, Copy)]
+pub struct SignupOpts {
+    /// IR LED wavelength (orb-core uses l850)
+    #[clap(long, value_enum, default_value = "l850")]
+    wavelength: IrWavelength,
+    /// IR LED on-duration in microseconds (orb-core default is 350)
+    #[clap(long, default_value = "350")]
+    duration_us: u16,
+    /// Camera frame rate (orb-core uses 30)
+    #[clap(long, default_value = "30")]
+    fps: u32,
+    /// How long to hold the capture before tearing it down, in seconds
+    #[clap(long, default_value = "5")]
+    seconds: u64,
+    /// Also start the RGB face camera trigger (Diamond orbs)
+    #[clap(long)]
+    rgb: bool,
 }
 
 #[derive(Parser, Debug, Clone, Copy)]
@@ -432,6 +480,9 @@ async fn execute(args: Args) -> Result<()> {
                     Camera::Face { fps } => fps,
                 };
                 orb.main_board_mut().trigger_camera(camera, fps).await?
+            }
+            OpticsOpts::Signup(opts) => {
+                orb.main_board_mut().signup_capture(opts).await?
             }
             OpticsOpts::Polarizer(PolarizerOpts::Stress {
                 speed,
