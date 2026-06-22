@@ -11,6 +11,7 @@ use orb_build_info::{make_build_info, BuildInfo};
 use orb_dogd::{DogstatsdClient, MetricEmitter};
 use orb_info::OrbId;
 use secrecy::ExposeSecret;
+use std::default::Default;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -120,7 +121,7 @@ pub async fn main() -> eyre::Result<()> {
         config.auth_url,
         config.ping_url,
         is_online_rx,
-        DogstatsdClient::new(),
+        DogstatsdClient::default(),
     );
 
     let mut msg_stream = zbus::MessageStream::from(conn);
