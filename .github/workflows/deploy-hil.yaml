@@ -48,6 +48,13 @@ jobs:
       - name: Deploy
         run: sudo nixos-rebuild switch --flake .
 
+      - name: Write orb-software commit file
+        run: |
+          sudo install -d -m 755 /etc/worldcoin
+          printf '%s\n' "${{ github.sha }}" | sudo tee /etc/worldcoin/orb-software.commit > /dev/null
+          sudo chmod 644 /etc/worldcoin/orb-software.commit
+          echo "orb-software commit: ${{ github.sha }}"
+
       - name: Restart orb-hil-agent
         run: sudo systemctl restart orb-hil-agent.service
 
