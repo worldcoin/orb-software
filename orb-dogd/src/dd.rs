@@ -9,7 +9,7 @@ use std::{fs, path::Path, time::Duration};
 use tracing::{info, warn};
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
-const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(6);
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(10);
 const DEFAULT_QUEUE_SIZE: usize = 4096;
 const DEFAULT_MAX_EMIT_PER_TICK: usize = 25;
 const DEFAULT_TICK: Duration = Duration::from_millis(50);
