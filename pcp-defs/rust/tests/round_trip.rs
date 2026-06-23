@@ -48,6 +48,7 @@ fn shares_round_trip() {
             left_mirror_share: u32_payload.clone(),
             right_share: u32_payload.clone(),
             right_mirror_share: u32_payload.clone(),
+            embedding_version: "1.0.0".into(),
         }),
     };
 

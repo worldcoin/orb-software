@@ -9,9 +9,10 @@ message DiIrisEmbeddingShares {
 message DiIrisEmbeddingShareV1 {
   string model_version = 1;
   string shares_version = 2;
+  string embedding_version = 3;
 
-  repeated uint32 left_share = 3;
-  repeated uint32 left_mirror_share = 4;
-  repeated uint32 right_share = 5;
-  repeated uint32 right_mirror_share = 6;
+  repeated uint32 left_share = 4;
+  repeated uint32 left_mirror_share = 5;
+  repeated uint32 right_share = 6;
+  repeated uint32 right_mirror_share = 7;
 }
