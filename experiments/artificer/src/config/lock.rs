@@ -22,7 +22,7 @@ pub struct LockedSpec {
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LockedArtifact {
     pub source: Source,
-    pub hash: cacache::Integrity,
+    pub hash: ssri::Integrity,
 }
 
 #[cfg(test)]
