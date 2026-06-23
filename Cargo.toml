@@ -38,8 +38,10 @@ members = [
 	"orb-connd/dbus",
 	"orb-core/agent-iroh",
 	"orb-dogd",
+	"orb-health",
 	"orb-info",
 	"orb-jobs-agent",
+	"orbd",
 	"ota-backend",
 	"prelude",
 	"qr-link",
@@ -179,6 +181,7 @@ tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5.4"
 uuid = "1.19.0"
+walkdir = "2"
 wiremock = "0.6.4"
 x509-parser = "0.17.0"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
@@ -209,6 +212,7 @@ orb-const-concat.path = "const-concat"
 orb-dogd.path = "orb-dogd"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
+orb-health.path = "orb-health"
 orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"

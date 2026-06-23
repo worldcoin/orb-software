@@ -1,0 +1,25 @@
+[Unit]
+Description=Worldcoin Orb Daemon
+After=zenohd.service
+Wants=zenohd.service
+
+[Service]
+Type=exec
+User=worldcoin
+Environment=RUST_BACKTRACE=1
+SyslogIdentifier=worldcoin-orbd
+WorkingDirectory=/home/worldcoin
+ExecStart=/usr/local/bin/orbd
+Restart=always
+RestartSec=3
+
+# Allow traversal of root-owned directories under /usr/persistent to stat
+# file sizes. CAP_DAC_READ_SEARCH bypasses directory read/execute permission
+# checks. CapabilityBoundingSet restricts to only this capability.
+# This does not allow reading the root-owned files.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
