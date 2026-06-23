@@ -160,7 +160,10 @@ impl DogstatsdClient {
                 }
             };
 
-            info!("starting dogd internal loop. queued messages: {}/{queue_size}", rx.len());
+            info!(
+                "starting dogd internal loop. queued messages: {}/{queue_size}",
+                rx.len()
+            );
 
             loop {
                 let msg = match rx.recv() {
