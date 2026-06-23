@@ -105,8 +105,7 @@ impl<'de> Deserialize<'de> for Hash {
                 if v.is_empty() {
                     Ok(Hash::Dummy)
                 } else {
-                    let integrity =
-                        ssri::Integrity::from_str(v).map_err(E::custom)?;
+                    let integrity = ssri::Integrity::from_str(v).map_err(E::custom)?;
                     Ok(Hash::Hash(integrity))
                 }
             }
