@@ -11,7 +11,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-cacache = "13"
+ssri = "9"
 clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
