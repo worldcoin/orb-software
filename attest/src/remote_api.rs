@@ -12,7 +12,6 @@ use std::{
     io::Write,
     process::{Command, Stdio},
 };
-use tokio::sync::watch;
 use tokio::{
     fs::read_to_string,
     time::{self, sleep},
@@ -570,12 +569,12 @@ async fn get_token_inner(
 /// Panics
 ///
 /// if fails to construct API URL
-#[tracing::instrument(skip(metrics))]
+#[tracing::instrument(skip(metrics, conn_tracker))]
 pub async fn get_token(
     orb_id: &str,
     base_url: &Url,
     metrics: &impl MetricEmitter,
-    is_online_rx: &watch::Receiver<bool>,
+    conn_tracker: &ConnectivityTracker,
 ) -> Token {
     let tokenchallenge_url = base_url.join("tokenchallenge").unwrap();
     let token_url = base_url.join("token").unwrap();
@@ -584,12 +583,12 @@ pub async fn get_token(
     loop {
         // We do not count metrics for when we lose connectivity in between requests as it introduces
         // only noise in determining success and speed of challenge flow.
-        let conn_tracker = ConnectivityTracker::start(is_online_rx.clone());
+        let conn_stability = conn_tracker.track_stability();
         let start = Instant::now();
 
         match get_token_inner(orb_id, &tokenchallenge_url, &token_url).await {
             Ok(token) => {
-                if conn_tracker.stable_connection() {
+                if conn_stability.is_stable() {
                     let _ = metrics.dist(
                         "orb.platform.attest.token_refresh_duration",
                         start.elapsed().as_millis() as f64,
@@ -610,7 +609,7 @@ pub async fn get_token(
                 let retry_delay = e.retry_delay(delay);
                 error!("failed to get token: {e}, retrying in {retry_delay:?}");
 
-                if conn_tracker.stable_connection() {
+                if conn_stability.is_stable() {
                     let _ = metrics.count(
                         "orb.platform.attest.token_refresh",
                         1,

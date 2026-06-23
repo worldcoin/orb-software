@@ -20,7 +20,7 @@ pub struct ConnectivityTracker {
 
 impl Default for ConnectivityTracker {
     fn default() -> Self {
-        let (tx, rx) = watch::channel(false);
+        let (tx, rx) = watch::channel(true);
 
         Self { tx, rx }
     }
@@ -103,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn default_tracker_starts_offline() {
+    fn default_tracker_starts_online() {
         // Arrange
         let tracker = ConnectivityTracker::default();
 
@@ -111,7 +111,7 @@ mod tests {
         let is_online = tracker.is_online();
 
         // Assert
-        assert!(!is_online);
+        assert!(is_online);
     }
 
     #[test]
@@ -149,6 +149,7 @@ mod tests {
     async fn stability_starts_unstable_when_created_while_offline() {
         // Arrange
         let tracker = ConnectivityTracker::default();
+        tracker.update(false);
 
         // Act
         let stability = tracker.track_stability();

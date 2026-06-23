@@ -7274,6 +7274,7 @@ dependencies = [
  "orb-info",
  "orb-security-utils",
  "orb-telemetry",
+ "prelude",
  "reqwest 0.12.24",
  "ring",
  "secrecy 0.8.0",
