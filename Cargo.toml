@@ -222,7 +222,7 @@ zenorb.path = "zenorb"
 
 [workspace.dependencies.derive_more]
 default-features = false
-features = ["display", "from"]
+features = ["display", "from", "from_str"]
 version = "2.1.0"
 
 [workspace.dependencies.orb-messages]
