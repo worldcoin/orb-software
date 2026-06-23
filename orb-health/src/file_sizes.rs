@@ -1,22 +1,17 @@
-use color_eyre::Result;
-use std::path::{Path, PathBuf};
+use color_eyre::eyre::Result;
+use std::path::PathBuf;
+use tokio::task;
 use tracing::{error, info};
 use walkdir::WalkDir;
 
 const PERSISTENT: &str = "/usr/persistent";
 
-pub fn run() -> Result<()> {
-    let mut entries = collect(Path::new(PERSISTENT))?;
-    entries.sort_unstable_by(|a, b| b.1.cmp(&a.1));
-
-    for (path, size_bytes) in entries {
-        info!("{}: {size_bytes} bytes", path.display());
-    }
-
-    Ok(())
+pub async fn run() -> Result<()> {
+    task::spawn_blocking(|| collect(PERSISTENT)).await?
 }
 
-fn collect(root: &Path) -> Result<Vec<(PathBuf, u64)>> {
+fn collect(root: &str) -> Result<()> {
+    let root = PathBuf::from(root);
     let mut entries = Vec::new();
 
     for entry in WalkDir::new(root).follow_links(false) {
@@ -38,5 +33,11 @@ fn collect(root: &Path) -> Result<Vec<(PathBuf, u64)>> {
         }
     }
 
-    Ok(entries)
+    entries.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+
+    for (path, size_bytes) in entries {
+        info!("{}: {size_bytes} bytes", path.display());
+    }
+
+    Ok(())
 }

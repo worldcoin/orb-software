@@ -71,7 +71,6 @@ impl Shutdown {
     }
 }
 
-
 #[derive(Default)]
 pub struct Program {
     components: Vec<Component>,

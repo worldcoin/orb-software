@@ -9,5 +9,6 @@ rust-version.workspace = true
 
 [dependencies]
 color-eyre.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 walkdir.workspace = true

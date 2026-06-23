@@ -8411,6 +8411,7 @@ name = "orb-health"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "tokio",
  "tracing",
  "walkdir",
 ]
