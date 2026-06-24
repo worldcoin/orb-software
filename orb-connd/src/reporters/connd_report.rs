@@ -1,7 +1,6 @@
 use crate::network_manager::{Connection, NetworkManager};
 use color_eyre::{eyre::Context, Result};
 use flume::Receiver;
-use oes::NetworkInterface;
 use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
