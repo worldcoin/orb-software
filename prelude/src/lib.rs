@@ -6,3 +6,6 @@ pub mod future;
 
 #[cfg(feature = "logging")]
 pub mod logging;
+
+#[cfg(feature = "connectivity")]
+pub mod connectivity;

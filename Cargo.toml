@@ -15,11 +15,6 @@ members = [
 	"deps-tests",
 	"efivar",
 	"endpoints",
-	"experiments/artificer",
-	"experiments/orb-blob",
-	"experiments/orb-blob/blob-cli",
-	"experiments/orb-blob/p2p",
-	"experiments/zenoh",
 	"gst-jpeg",
 	"header-parsing",
 	"hil",
@@ -156,7 +151,6 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 serial_test = "3.2.0"
-serialport = "4.6.1"
 sha2 = "0.10.8"
 speare = "0.4.3"
 sqlx = { version = "0.8.5", default-features = false }
@@ -177,7 +171,6 @@ tracing = "0.1"
 tracing-journald = "0.3.0"
 tracing-opentelemetry = { version = "0.28", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-url = "2.5.4"
 uuid = "1.19.0"
 wiremock = "0.6.4"
 x509-parser = "0.17.0"
@@ -199,9 +192,6 @@ orb-backend-status-dbus.path = "orb-backend-status/dbus"
 orb-bidiff-cli.path = "bidiff-cli"
 orb-bidiff-squashfs.path = "bidiff-squashfs/lib"
 orb-bidiff-squashfs-shim.path = "bidiff-squashfs/shim"
-orb-blob.path = "experiments/orb-blob"
-orb-blob-cli.path = "experiments/orb-blob/blob-cli"
-orb-blob-p2p.path = "experiments/orb-blob/p2p"
 orb-build-info.path = "build-info"
 orb-connd.path = "orb-connd"
 orb-connd-dbus.path = "orb-connd/dbus"
@@ -225,14 +215,14 @@ orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
 orb-zbus-proxies.path = "zbus-proxies"
-prelude.path = "prelude"
+prelude = { path = "prelude", default-features = false }
 seek-camera.path = "seek-camera/wrapper"
 test-utils.path = "test-utils"
 zenorb.path = "zenorb"
 
 [workspace.dependencies.derive_more]
 default-features = false
-features = ["display", "from"]
+features = ["display", "from", "from_str"]
 version = "2.1.0"
 
 [workspace.dependencies.orb-messages]
