@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre::eyre::WrapErr as _;
 use futures::{future::TryFutureExt as _, FutureExt as _};
 use orb_info::orb_os_release::OrbOsRelease;
-use tracing::debug;
+use tracing::{debug, info};
 use zbus::{Connection, ConnectionBuilder};
 use zenorb::Zenorb;
 
@@ -108,7 +108,7 @@ impl Application {
             .await
             .map_err(Error::EstablishSystemConnection)?;
 
-        debug!(
+        info!(
             unique_bus_name = ?system_connection.unique_name(),
             "system dbus assigned unique bus name",
         );
@@ -137,7 +137,7 @@ impl Application {
         .await
         .map_err(Error::EstablishSessionConnection)?;
 
-        debug!(
+        info!(
             unique_bus_name = ?session_connection.unique_name(),
             "session dbus assigned unique bus name",
         );
