@@ -1,9 +1,8 @@
-use std::time::Duration;
-
 use color_eyre::eyre::WrapErr as _;
 use futures::{future::TryFutureExt as _, FutureExt as _};
 use orb_info::orb_os_release::OrbOsRelease;
-use tracing::{debug, info};
+use std::time::Duration;
+use tracing::info;
 use zbus::{Connection, ConnectionBuilder};
 use zenorb::Zenorb;
 
