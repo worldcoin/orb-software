@@ -5,18 +5,22 @@ use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
+use orb_dogd::MetricEmitter;
 use speare::mini;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio::time;
 use tracing::{info, warn};
 
-pub struct Args {
+pub struct Args<M: MetricEmitter> {
     pub nm: NetworkManager,
     pub session_bus: zbus::Connection,
     pub report_interval: Duration,
+    pub metrics: Arc<M>,
 }
 
-pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+const IFACES: &[&str] = &["eth0", "wwan0", "wlan0"];
+
+pub async fn report<M: MetricEmitter>(ctx: mini::Ctx<Args<M>>) -> Result<()> {
     info!("starting connd report reporter");
 
     async {
@@ -49,6 +53,19 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 Some(Connection::Ethernet) => (Some("eth0".into()), None),
                 None => (None, None),
             };
+
+            for conn in IFACES {
+                let value = match &egress_iface {
+                    Some(iface) if iface == *conn => 1.0,
+                    _ => 0.0,
+                };
+
+                let _ = ctx.metrics.gauge(
+                    "orb.platform.connd.primary_connection",
+                    value,
+                    [format!("iface:{conn}")],
+                );
+            }
 
             let saved_wifi_profiles = ctx
                 .nm

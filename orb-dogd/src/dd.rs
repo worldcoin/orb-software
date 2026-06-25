@@ -9,12 +9,12 @@ use std::{fs, path::Path, time::Duration};
 use tracing::{info, warn};
 
 const DOGSTATSD_SOCKET_PATH: &str = "/run/datadog/dsd.socket";
-const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(6);
-const QUEUE_SIZE: usize = 4096;
-const MAX_EMIT_PER_TICK: usize = 25;
-const TICK: Duration = Duration::from_millis(50);
+const DOGSTATSD_BACKOFF: Duration = Duration::from_secs(10);
+const DEFAULT_QUEUE_SIZE: usize = 4096;
+const DEFAULT_MAX_EMIT_PER_TICK: usize = 25;
+const DEFAULT_TICK: Duration = Duration::from_millis(50);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DogstatsdClient {
     tx: Sender<Metric>,
 }
@@ -62,7 +62,7 @@ pub(crate) enum Metric {
 
 impl Default for DogstatsdClient {
     fn default() -> Self {
-        Self::new()
+        Self::new(DEFAULT_QUEUE_SIZE, DEFAULT_MAX_EMIT_PER_TICK, DEFAULT_TICK)
     }
 }
 
@@ -70,9 +70,13 @@ impl DogstatsdClient {
     /// Connect to the local statsd collector.
     ///
     /// Fails if the underlying socket cannot be bound.
-    pub fn new() -> Self {
+    pub fn new(
+        queue_size: usize,
+        max_emit_per_tick: usize,
+        tick_duration: Duration,
+    ) -> Self {
         let start = Instant::now();
-        let (tx, rx) = flume::bounded(QUEUE_SIZE);
+        let (tx, rx) = flume::bounded(queue_size);
 
         thread::spawn(move || {
             let client = loop {
@@ -103,7 +107,7 @@ impl DogstatsdClient {
                 thread::sleep(DOGSTATSD_BACKOFF);
             };
 
-            let mut tick = Instant::now();
+            let mut current_tick = Instant::now();
             let mut count = 0;
 
             let mut send = |metric| {
@@ -144,16 +148,22 @@ impl DogstatsdClient {
 
                 count += 1;
 
-                if tick.elapsed() >= TICK || count >= MAX_EMIT_PER_TICK {
-                    let sleep = TICK.saturating_sub(tick.elapsed());
+                if current_tick.elapsed() >= tick_duration || count >= max_emit_per_tick
+                {
+                    let sleep = tick_duration.saturating_sub(current_tick.elapsed());
                     if sleep > Duration::ZERO {
                         thread::sleep(sleep);
                     }
 
                     count = 0;
-                    tick = Instant::now();
+                    current_tick = Instant::now();
                 }
             };
+
+            info!(
+                "starting dogd internal loop. queued messages: {}/{queue_size}",
+                rx.len()
+            );
 
             loop {
                 let msg = match rx.recv() {

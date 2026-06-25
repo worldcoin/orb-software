@@ -59,6 +59,7 @@ pub async fn spawn(
             nm: nm.clone(),
             session_bus,
             report_interval: Duration::from_secs(30),
+            metrics: statsd.clone(),
         })
         .on_err(static_backoff(15))
         .spawn(connd_report::report)?;

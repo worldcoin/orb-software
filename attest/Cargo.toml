@@ -25,6 +25,7 @@ orb-endpoints.workspace = true
 orb-info = { workspace = true, features = ["async", "orb-id"] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
+prelude = { workspace = true, features = ["connectivity"] }
 reqwest = { workspace = true, features = ["json", "multipart"] }
 ring.workspace = true
 secrecy = { workspace = true, features = ["serde"] }

@@ -18,6 +18,7 @@ use orb_info::{
     OrbId,
 };
 use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
+use std::default::Default;
 use std::time::Duration;
 use tokio::{
     io,
@@ -113,7 +114,7 @@ fn connectivity_daemon() -> Result<()> {
             .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
-            .statsd_client(DogstatsdClient::new())
+            .statsd_client(DogstatsdClient::default())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
