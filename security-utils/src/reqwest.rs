@@ -153,7 +153,7 @@ macro_rules! helper {
         $builder
             .min_tls_version(reqwest::tls::Version::TLS_1_3)
             .tls_built_in_root_certs(false)
-            .https_only(!cfg!(feature = "allow-http"))
+            .https_only(!cfg!(feature = "dangerously-allow-http"))
             .add_root_certificate(certs.aws_root_ca1.clone())
             .add_root_certificate(certs.aws_root_ca2.clone())
             .add_root_certificate(certs.aws_root_ca3.clone())
