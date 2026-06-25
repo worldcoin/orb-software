@@ -1,0 +1,16 @@
+[package]
+name = "orb-pcp-defs"
+version = "0.0.0"
+description = "Protobuf definitions for Personal Custody Package messages."
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+prost = { version = "0.14.1", default-features = false, features = ["std", "derive"] }
+
+[build-dependencies]
+prost-build = "0.14.1"
