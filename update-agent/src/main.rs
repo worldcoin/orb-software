@@ -97,7 +97,7 @@ async fn main() -> ExitCode {
                 .inspect_err(|e| error!("failed to reboot {e}"));
 
             if reboot_result.is_err() {
-                return ExitCode::Failure;
+                return ExitCode::FAILURE;
             }
 
             ExitCode::SUCCESS
