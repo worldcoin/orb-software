@@ -85,8 +85,12 @@ async fn main() -> ExitCode {
         task::spawn_blocking(move || run(&args, metrics_clone, conn_tracker)).await;
 
     let exit_code = match result {
-        Ok(Ok(())) => {
+        Ok(Ok(settings)) => {
             let _ = metrics.count("orb.platform.update-agent.update", 1, ["ok:true"]);
+
+            info!("waiting 10 and rebooting (to allow propagation to backend)");
+            std::thread::sleep(Duration::from_secs(10));
+            let _ = reboot(&settings).inspect_err(|e| error!("failed to reboot: {e}"));
 
             ExitCode::SUCCESS
         }
@@ -253,7 +257,7 @@ fn run(
     args: &Args,
     metrics: DogstatsdClient,
     conn_tracker: ConnectivityTracker,
-) -> Result<(), Error> {
+) -> Result<Settings, Error> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let os_release = OrbOsRelease::read_blocking()?;
 
@@ -611,7 +615,9 @@ fn run(
         update_iface.as_ref(),
     )
     .wrap_err("failed to finalize update")
-    .map_err(Error::Finalize)
+    .map_err(Error::Finalize)?;
+
+    Ok(settings)
 }
 
 fn read_versions_on_disk<T: AsRef<Path>>(versions_path: T) -> eyre::Result<Versions> {
@@ -940,13 +946,9 @@ fn finalize(
         ) {
             warn!("{e:?}");
         }
-
-        info!("waiting 10 seconds before reboot to allow propagation to backend");
-        std::thread::sleep(Duration::from_secs(10));
     }
 
-    info!("rebooting");
-    reboot(settings)
+    Ok(())
 }
 
 // Performs post-update logic on a full system update. It currently does not do anything but print
