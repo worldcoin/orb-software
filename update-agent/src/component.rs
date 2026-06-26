@@ -78,6 +78,8 @@ pub enum Error {
          types are supported"
     )]
     MimeUnknown { name: String, actual_type: String },
+    #[error("failed post processing downloaded components: {0}")]
+    Process(eyre::Report),
 }
 
 pub struct Component {

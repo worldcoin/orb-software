@@ -17,22 +17,15 @@
 //!    manifest;
 //! 8. actually perform the update by copying the component to its respective position on the
 //!    currently inactive slot.
-use std::{
-    borrow::Cow,
-    collections::HashSet,
-    fs::{self, File},
-    path::{Path, PathBuf},
-    time::Duration,
-};
-
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
 use efivar::EfiVarDb;
-use eyre::{bail, ensure, WrapErr};
+use eyre::{bail, ensure, eyre, ContextCompat, Result, WrapErr};
 use nix::sys::statvfs;
 use orb_dogd::{DogstatsdClient, MetricEmitter};
-use orb_info::orb_os_release::OrbOsRelease;
+use orb_info::{orb_os_release::OrbOsRelease, OrbId};
 use orb_slot_ctrl::OrbSlotCtrl;
+use orb_update_agent::{claim, Error};
 use orb_update_agent::{
     component,
     component::Component,
@@ -49,36 +42,157 @@ use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
 use orb_zbus_proxies::login1;
+use prelude::connectivity::tracker::ConnectivityTracker;
 use std::default::Default;
+use std::process::ExitCode;
+use std::time::Instant;
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+    fs::{self, File},
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Duration,
+};
+use tokio::task::{self, JoinHandle};
 use tracing::{debug, error, info, warn};
 use zbus::blocking::{connection, InterfaceRef};
-
-mod update_agent_result;
-use update_agent_result::UpdateAgentResult;
+use zenorb::Zenorb;
 
 const CFG_DEFAULT_PATH: &str = "/etc/orb_update_agent.conf";
 const ENV_VAR_PREFIX: &str = "ORB_UPDATE_AGENT_";
 const CFG_ENV_VAR: &str = const_format::concatcp!(ENV_VAR_PREFIX, "CONFIG");
 const SYSLOG_IDENTIFIER: &str = "worldcoin-update-agent";
 
-fn main() -> UpdateAgentResult {
+#[tokio::main]
+async fn main() -> ExitCode {
     let telemetry = orb_telemetry::TelemetryConfig::new()
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
     let args = Args::parse();
 
-    match run(&args) {
-        Ok(_) => {
-            telemetry.flush_blocking();
-            UpdateAgentResult::Success
+    let metrics = DogstatsdClient::default();
+    let conn_tracker = ConnectivityTracker::default();
+    let conn_stability = conn_tracker.track_stability();
+
+    let _zenorb = setup_zenoh(args.id.as_ref(), conn_tracker.clone())
+        .await
+        .inspect_err(|e| error!("failed to setup zenoh: {e}"));
+
+    let metrics_clone = metrics.clone();
+    let result =
+        task::spawn_blocking(move || run(&args, metrics_clone, conn_tracker)).await;
+
+    let exit_code = match result {
+        Ok(Ok(settings)) => {
+            let _ = metrics.count("orb.platform.update-agent.update", 1, ["ok:true"]);
+
+            info!("waiting 10 and rebooting (to allow propagation to backend)");
+            std::thread::sleep(Duration::from_secs(10));
+            let reboot_result = task::spawn_blocking(move || reboot(&settings))
+                .await
+                .wrap_err("failed to join thread")
+                .and_then(|r| r)
+                .inspect_err(|e| error!("failed to reboot {e}"));
+
+            if reboot_result.is_err() {
+                return ExitCode::FAILURE;
+            }
+
+            ExitCode::SUCCESS
         }
-        Err(err) => {
-            error!("{err:?}");
-            telemetry.flush_blocking();
-            err.into()
+
+        Ok(Err(e)) => {
+            error!("{e}");
+
+            let no_new_version = match &e {
+                Error::Claim(claim::Error::Remote { source, .. }) => {
+                    matches!(**source, claim::Error::NoNewVersion)
+                }
+
+                Error::Claim(claim::Error::Local { source, .. }) => {
+                    matches!(**source, claim::Error::NoNewVersion)
+                }
+
+                Error::Claim(claim::Error::NoNewVersion) => true,
+
+                _ => false,
+            };
+
+            if conn_stability.is_stable() && !no_new_version {
+                let _ = metrics.count(
+                    "orb.platform.update-agent.update",
+                    1,
+                    ["ok:false", &format!("cause:{}", e.to_dd_tag())],
+                );
+            }
+
+            e.into()
+        }
+
+        Err(e) => {
+            error!("{e:?}");
+            let _ = metrics.count(
+                "orb.platform.update-agent.update",
+                1,
+                ["ok:false", "cause:join-error"],
+            );
+
+            ExitCode::FAILURE
+        }
+    };
+
+    if let Ok((_zenorb, zenorb_tasks)) = _zenorb {
+        for task in zenorb_tasks {
+            task.abort();
         }
     }
+
+    telemetry.flush().await;
+
+    exit_code
+}
+
+async fn setup_zenoh(
+    orb_id: Option<&String>,
+    conn_tracker: ConnectivityTracker,
+) -> Result<(Zenorb, Vec<JoinHandle<()>>)> {
+    let orb_id = orb_id
+        .context("OrbId not provided as an arg, cannot start zenoh")
+        .and_then(|id| {
+            OrbId::from_str(id)
+                .wrap_err_with(|| format!("failed to parse orb id: {id}"))
+        })?;
+
+    let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
+        .orb_id(orb_id)
+        .with_name("update-agent")
+        .await?;
+
+    let tasks = zenorb
+        .receiver(conn_tracker)
+        .querying_subscriber(
+            "connd/oes/active_connections",
+            Duration::from_secs(1),
+            async |conn_tracker, sample| {
+                let active_conns: oes::ActiveConnections =
+                    serde_json::from_slice(&sample.payload().to_bytes())
+                        .context("failed to parse ActiveConnections json")?;
+
+                let has_internet =
+                    active_conns.connections.iter().any(|c| c.has_internet);
+
+                conn_tracker.update(has_internet);
+
+                Ok(())
+            },
+        )
+        .run()
+        .await
+        .wrap_err("failed to start zenoh receiver")?;
+
+    Ok((zenorb, tasks))
 }
 
 fn get_config_source(args: &Args) -> Cow<'_, Path> {
@@ -146,23 +260,26 @@ fn setup_dbus() -> (
     (supervisor_proxy, update_iface)
 }
 
-fn run(args: &Args) -> eyre::Result<()> {
+#[allow(clippy::result_large_err)] // absolutely does not matter here
+fn run(
+    args: &Args,
+    metrics: DogstatsdClient,
+    conn_tracker: ConnectivityTracker,
+) -> Result<Settings, Error> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
-    let os_release =
-        OrbOsRelease::read_blocking().wrap_err("failed reading /etc/os-release")?;
+    let os_release = OrbOsRelease::read_blocking()?;
+
     let orb_type = os_release.orb_os_platform_type;
     let platform_version = os_release.platform_version();
 
     let slot_ctrl = OrbSlotCtrl::new("/", orb_type)?;
-    let active_slot = slot_ctrl
-        .get_current_slot()
-        .wrap_err("failed getting current slot")?;
+    let active_slot = slot_ctrl.get_current_slot()?;
 
     let config_path = get_config_source(args);
 
     // TODO: Inject active_slot in a more ergonomic way
-    let settings = Settings::get(args, config_path, ENV_VAR_PREFIX, active_slot.into())
-        .wrap_err("failed reading settings")?;
+    let settings =
+        Settings::get(args, config_path, ENV_VAR_PREFIX, active_slot.into())?;
 
     let platform_version =
         if let Some(overwrite) = settings.version_overwrite.as_deref() {
@@ -184,10 +301,9 @@ fn run(args: &Args) -> eyre::Result<()> {
     };
     debug!("running with the following settings: {settings_ser}");
 
-    //  metrics propagation to DD
-    let metrics = DogstatsdClient::default();
-
-    prepare_environment(&settings).wrap_err("failed preparing environment to run")?;
+    prepare_environment(&settings)
+        .wrap_err("failed preparing environment to run")
+        .map_err(Error::Other)?;
 
     let (supervisor_proxy, update_iface) = if settings.nodbus || settings.recovery {
         debug!("nodbus flag set or in recovery; not connecting to dbus");
@@ -200,13 +316,14 @@ fn run(args: &Args) -> eyre::Result<()> {
         "reading versions from disk at `{}`",
         settings.versions.display()
     );
-    let versions_legacy =
-        read_versions_on_disk(&settings.versions).wrap_err_with(|| {
+    let versions_legacy = read_versions_on_disk(&settings.versions)
+        .wrap_err_with(|| {
             format!(
                 "failed reading versions on disk at {}",
                 settings.versions.display(),
             )
-        })?;
+        })
+        .map_err(Error::ReadingVersions)?;
 
     let mut version_map_dst = settings.versions.clone();
     version_map_dst.set_extension("map");
@@ -268,7 +385,12 @@ fn run(args: &Args) -> eyre::Result<()> {
         }
     }
 
-    let claim = match orb_update_agent::claim::get(&settings, &version_map) {
+    let claim = match orb_update_agent::claim::get(
+        &settings,
+        &version_map,
+        &conn_tracker,
+        &metrics,
+    ) {
         Ok(c) => c,
 
         Err(e) => {
@@ -284,7 +406,8 @@ fn run(args: &Args) -> eyre::Result<()> {
                     warn!("{e:?}");
                 }
             }
-            return Err(e).wrap_err("unable to get update claim");
+
+            return Err(e.into());
         }
     };
 
@@ -305,15 +428,18 @@ fn run(args: &Args) -> eyre::Result<()> {
     } else {
         info!("validating update claim against versions on disk");
         validate_claim(&claim, &version_map, settings.active_slot)
-            .wrap_err("failed validating update claim against on-disk versions")?;
+            .map_err(claim::Error::Validation)?;
     }
 
     info!("cleanup old updates");
     cleanup_old_updates(&settings.downloads, &claim)
-        .wrap_err("failed to cleaning up old updates")?;
+        .wrap_err("failed to cleaning up old updates")
+        .map_err(Error::Other)?;
+
     info!("check if free space is enough for new update");
     check_for_available_space(&settings.downloads, &claim)
-        .wrap_err("failed to check for free space")?;
+        .wrap_err("failed to check for free space")
+        .map_err(Error::Other)?;
 
     info!("fetching and validating components listed in manifest");
     let update_components = fetch_update_components(
@@ -324,10 +450,11 @@ fn run(args: &Args) -> eyre::Result<()> {
         update_iface.as_ref(),
         settings.download_delay,
         settings.active_slot,
-    )
-    .wrap_err("failed fetching update components")?;
+    )?;
 
-    ensure!(!settings.noupdate, "noupdate was requested; bailing");
+    if settings.noupdate {
+        return Err(Error::Other(eyre!("noupdate was requested; bailing")));
+    }
 
     let target_slot = settings.active_slot.opposite();
     debug!("!! proceeding with update!!");
@@ -340,11 +467,16 @@ fn run(args: &Args) -> eyre::Result<()> {
             performing update immediately"
     );
     } else if let Some(supervisor_proxy) = supervisor_proxy.as_ref() {
-        supervisor_proxy.request_update_permission().wrap_err(
-            "failed querying supervisor service for update permission; bailing",
-        )?;
+        supervisor_proxy
+            .request_update_permission()
+            .wrap_err(
+                "failed querying supervisor service for update permission; bailing",
+            )
+            .map_err(Error::Supervisor)?;
     } else {
-        bail!("no connection to dbus supervisor, bailing");
+        return Err(Error::Supervisor(eyre!(
+            "no connection to dbus supervisor, bailing"
+        )));
     }
 
     // check the status of the target slot to detect prior update attempts:
@@ -372,8 +504,8 @@ fn run(args: &Args) -> eyre::Result<()> {
             orb_slot_ctrl::RootFsStatus::UpdateInProcess,
             target_slot.into(),
         )
-        .wrap_err_with(|| {
-            format!("failed to set the rootfs status for the target slot {target_slot}")
+        .inspect_err(|_| {
+            error!("failed to set the rootfs status for the target slot {target_slot}")
         })?;
 
     // Set overall status to Installing before starting component installations
@@ -405,6 +537,8 @@ fn run(args: &Args) -> eyre::Result<()> {
             warn!("{e:?}");
         }
 
+        let start = Instant::now();
+
         component
             .run_update(target_slot, &claim, settings.recovery, &metrics)
             .inspect(|_| {
@@ -427,7 +561,17 @@ fn run(args: &Args) -> eyre::Result<()> {
                     "failed executing update for component `{}`",
                     component.name()
                 )
-            })?;
+            })
+            .map_err(Error::RunUpdate)?;
+
+        let _ = metrics.dist(
+            "orb.platform.update-agent.component-update",
+            start.elapsed().as_millis() as f64,
+            [
+                format!("component:{}", component.name()),
+                format!("manifest:{}", claim.version()),
+            ],
+        );
 
         update_component_version_on_disk(
             target_slot,
@@ -441,7 +585,8 @@ fn run(args: &Args) -> eyre::Result<()> {
                 component.name(),
                 version_map_dst.display(),
             )
-        })?;
+        })
+        .map_err(Error::UpdateComponentVersionOnDisk)?;
     }
 
     // Now that ALL components have finished installing, set overall status to Installed
@@ -464,7 +609,8 @@ fn run(args: &Args) -> eyre::Result<()> {
             &version_map_dst,
             &metrics,
         )
-        .wrap_err("failed to copy redundant GPT partitions not listed in manifest")?;
+        .wrap_err("failed to copy redundant GPT partitions not listed in manifest")
+        .map_err(Error::CopyRedundantComponents)?;
     }
 
     info!("Executing post update logic");
@@ -477,6 +623,9 @@ fn run(args: &Args) -> eyre::Result<()> {
         update_iface.as_ref(),
     )
     .wrap_err("failed to finalize update")
+    .map_err(Error::Finalize)?;
+
+    Ok(settings)
 }
 
 fn read_versions_on_disk<T: AsRef<Path>>(versions_path: T) -> eyre::Result<Versions> {
@@ -542,6 +691,7 @@ pub fn validate_claim(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn fetch_update_components(
     claim: &Claim,
     manifest_dst: &Path,
@@ -550,7 +700,7 @@ fn fetch_update_components(
     update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
     current_slot: Slot,
-) -> eyre::Result<Vec<Component>> {
+) -> Result<Vec<Component>, Error> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
     let mut components = Vec::with_capacity(claim.num_components());
     for (component, source) in claim.iter_components_with_location() {
@@ -563,8 +713,8 @@ fn fetch_update_components(
             update_iface,
             download_delay,
         )
-        .wrap_err_with(|| {
-            format!("failed fetching source for component `{}`", source.name)
+        .inspect_err(|_| {
+            error!("failed fetching source for component `{}`", source.name)
         })?;
 
         if let Some(iface) = update_iface
@@ -620,7 +770,7 @@ fn fetch_update_components(
                     )
                 })
         })
-        .wrap_err("failed post processing downloaded components")?;
+        .map_err(component::Error::Process)?;
 
     // Now that ALL components have been processed, set overall status to Processed
     if let Some(iface) = update_iface
@@ -804,13 +954,9 @@ fn finalize(
         ) {
             warn!("{e:?}");
         }
-
-        info!("waiting 10 seconds before reboot to allow propagation to backend");
-        std::thread::sleep(Duration::from_secs(10));
     }
 
-    info!("rebooting");
-    reboot(settings)
+    Ok(())
 }
 
 // Performs post-update logic on a full system update. It currently does not do anything but print
