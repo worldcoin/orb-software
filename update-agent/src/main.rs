@@ -664,6 +664,7 @@ pub fn validate_claim(
     Ok(())
 }
 
+#[allow(clippy::result_large_err)]
 fn fetch_update_components(
     claim: &Claim,
     manifest_dst: &Path,
