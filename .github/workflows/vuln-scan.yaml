@@ -1,0 +1,19 @@
+name: Vulnerability Scan
+
+# Release-triggered Cargo dependency vulnerability scan.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  cargo-vuln-scan:
+    uses: worldcoin/orb-internal/.github/workflows/cargo-vuln-scan.yaml@main
+    with:
+      platform-tag: orb-software
+    secrets: inherit
