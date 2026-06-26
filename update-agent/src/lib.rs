@@ -121,25 +121,25 @@ impl Error {
                         "component-claim-size-remote-len-mismatch"
                     }
                     MissingContentLengthHeader(_) => {
-                        "claim-missing-content-length-header"
+                        "component-missing-content-length-header"
                     }
                     NonStringContentLengthValue(..) => {
-                        "claim-non-string-content-length-value"
+                        "component-non-string-content-length-value"
                     }
                     InvalidContentLengthValue(..) => {
-                        "claim-invalid-content-length-value"
+                        "component-invalid-content-length-value"
                     }
-                    OpenWriteTarget(..) => "claim-open-write-target",
-                    InvalidHttpRange(..) => "claim-invalid-http-range",
-                    RangeRequest(..) => "claim-range-request",
-                    InitialLengthRequest(..) => "claim-initial-lenght-request",
-                    ResponseStatus(..) => "claim-response-status",
-                    GetBytes(..) => "claim-get-bytes",
-                    MergeChunk(..) => "claim-merge-chunk",
-                    HashMismatch { .. } => "claim-hash-mismatch",
-                    DiskSync(..) => "claim-disk-sync",
-                    MimeUnknown { .. } => "claim-mime-unknown",
-                    Process(..) => "claim-process",
+                    OpenWriteTarget(..) => "component-open-write-target",
+                    InvalidHttpRange(..) => "component-invalid-http-range",
+                    RangeRequest(..) => "component-range-request",
+                    InitialLengthRequest(..) => "component-initial-lenght-request",
+                    ResponseStatus(..) => "component-response-status",
+                    GetBytes(..) => "component-get-bytes",
+                    MergeChunk(..) => "component-merge-chunk",
+                    HashMismatch { .. } => "component-hash-mismatch",
+                    DiskSync(..) => "component-disk-sync",
+                    MimeUnknown { .. } => "component-mime-unknown",
+                    Process(..) => "component-process",
                 }
             }
         }
