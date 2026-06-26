@@ -94,7 +94,20 @@ async fn main() -> ExitCode {
         Ok(Err(e)) => {
             error!("{e}");
 
-            let no_new_version = matches!(e, Error::Claim(claim::Error::NoNewVersion));
+            let no_new_version = match &e {
+                Error::Claim(claim::Error::Remote { source, .. }) => {
+                    matches!(**source, claim::Error::NoNewVersion)
+                }
+
+                Error::Claim(claim::Error::Local { source, .. }) => {
+                    matches!(**source, claim::Error::NoNewVersion)
+                }
+
+                Error::Claim(claim::Error::NoNewVersion) => true,
+
+                _ => false,
+            };
+
             if conn_stability.is_stable() && !no_new_version {
                 let _ = metrics.count(
                     "orb.platform.update-agent.update",
