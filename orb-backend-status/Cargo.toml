@@ -58,7 +58,10 @@ zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zenorb.workspace = true
 
 [dev-dependencies]
-orb-security-utils = { workspace = true, features = ["reqwest", "dangerously-allow-http"] }
+orb-security-utils = { workspace = true, features = [
+	"reqwest",
+	"dangerously-allow-http",
+] }
 dbus-launch.workspace = true
 eyre.workspace = true
 portpicker = "0.1.1"
