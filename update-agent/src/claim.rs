@@ -175,29 +175,38 @@ fn from_remote(
             Err(Error::status_code(status, msg))
         }
     } else {
-        let _ =
-            metrics.count("orb.platform.update-agent.claim-request", 1, ["ok:true"]);
+        let result = (|| {
+            let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
+            debug!("server sent raw claim: {resp_txt}");
 
-        let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
-        debug!("server sent raw claim: {resp_txt}");
+            if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt)
+                && let Some(status) = response.get("status").and_then(|s| s.as_str())
+                && status == "up_to_date"
+            {
+                debug!("system is up to date - no update available");
+                return Ok(None);
+            }
 
-        if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt)
-            && let Some(status) = response.get("status").and_then(|s| s.as_str())
-            && status == "up_to_date"
-        {
-            debug!("system is up to date - no update available");
-            return Ok(None);
-        }
+            let claim_verification_context = ClaimVerificationContext(
+                pubkey_from_backend_type(verify_manifest_signature_against),
+            );
+            let claim = crate::json::deserialize_seed(
+                claim_verification_context,
+                resp_txt.as_bytes(),
+            )
+            .map_err(Error::ReadJson)?;
+            Ok(Some((resp_txt, claim)))
+        })();
 
-        let claim_verification_context = ClaimVerificationContext(
-            pubkey_from_backend_type(verify_manifest_signature_against),
-        );
-        let claim = crate::json::deserialize_seed(
-            claim_verification_context,
-            resp_txt.as_bytes(),
-        )
-        .map_err(Error::ReadJson)?;
-        Ok(Some((resp_txt, claim)))
+        let tag = if result.is_ok() {
+            "ok:true"
+        } else {
+            "ok:false"
+        };
+
+        let _ = metrics.count("orb.platform.update-agent.claim-request", 1, [tag]);
+
+        result
     }
 }
 
