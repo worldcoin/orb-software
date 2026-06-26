@@ -15,7 +15,7 @@ use orb_update_agent_core::{
 };
 use prelude::connectivity::tracker::ConnectivityTracker;
 use reqwest::{StatusCode, Url};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     settings::{Backend, Settings},
@@ -146,7 +146,18 @@ fn from_remote(
     let resp = client
         .get(api_url.clone())
         .send()
-        .map_err(Error::SendCheckUpdateRequest)?; // early exit here
+        .map_err(Error::SendCheckUpdateRequest)
+        .inspect_err(|e| {
+            if conn_stability.is_stable() {
+                error!("claim request err when having internet! err: {e}");
+
+                let _ = metrics.count(
+                    "orb.platform.update-agent.claim-request",
+                    1,
+                    ["ok:false"],
+                );
+            }
+        })?; // early exit here
 
     let status = resp.status();
     if status.is_client_error() || status.is_server_error() {
