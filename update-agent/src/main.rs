@@ -90,11 +90,15 @@ async fn main() -> ExitCode {
 
             info!("waiting 10 and rebooting (to allow propagation to backend)");
             std::thread::sleep(Duration::from_secs(10));
-            let _ = task::spawn_blocking(move || reboot(&settings))
+            let reboot_result = task::spawn_blocking(move || reboot(&settings))
                 .await
                 .wrap_err("failed to join thread")
                 .and_then(|r| r)
                 .inspect_err(|e| error!("failed to reboot {e}"));
+
+            if reboot_result.is_err() {
+                return ExitCode::Failure;
+            }
 
             ExitCode::SUCCESS
         }
