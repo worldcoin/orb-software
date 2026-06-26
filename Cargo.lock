@@ -8190,6 +8190,7 @@ dependencies = [
  "jod-thread",
  "libc",
  "nix 0.28.0",
+ "oes",
  "once_cell",
  "orb-build-info",
  "orb-dogd",
@@ -8202,6 +8203,7 @@ dependencies = [
  "orb-update-agent-dbus",
  "orb-zbus-proxies",
  "polling 2.8.0",
+ "prelude",
  "reqwest 0.11.27",
  "ruzstd",
  "serde",
@@ -8212,11 +8214,13 @@ dependencies = [
  "tap",
  "tempfile",
  "thiserror 2.0.17",
+ "tokio",
  "toml 0.8.23",
  "tracing",
  "url",
  "xz2",
  "zbus",
+ "zenorb",
 ]
 
 [[package]]

@@ -34,6 +34,7 @@ jod-thread = "0.1.2"
 libc.workspace = true
 nix = { workspace = true, default-features = false, features = ["fs"] }
 once_cell = "1.17.0"
+oes.workspace = true
 orb-build-info.workspace = true
 orb-dogd.workspace = true
 orb-io-utils.workspace = true
@@ -58,6 +59,9 @@ zbus.workspace = true
 efivar.workspace = true
 orb-slot-ctrl.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "rt"] }
+zenorb.workspace = true
+prelude = { workspace = true, features = ["connectivity"] }
 
 [dependencies.can-rs]
 workspace = true

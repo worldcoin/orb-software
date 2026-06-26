@@ -58,6 +58,8 @@ pub enum Error {
     MissingSlotVersion { slot: Slot },
     #[error("no new version available - system is up to date")]
     NoNewVersion,
+    #[error("failed validating update claim against on disk versions: {0}")]
+    Validation(eyre::Report)
 }
 
 impl Error {
