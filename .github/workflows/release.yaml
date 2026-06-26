@@ -225,3 +225,15 @@ jobs:
           target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: artifacts/*
+
+  vuln-scan:
+    name: Vulnerability Scan
+    needs: [release]
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    uses: worldcoin/orb-internal/.github/workflows/cargo-vuln-scan.yaml@main
+    with:
+      platform-tag: orb-software
+    secrets: inherit
