@@ -425,8 +425,7 @@ fn run(
         update_iface.as_ref(),
         settings.download_delay,
         settings.active_slot,
-    )
-    .map_err(Error::FetchUpdateComponents)?;
+    )?;
 
     if settings.noupdate {
         return Err(Error::Other(eyre!("noupdate was requested; bailing")));
@@ -673,7 +672,7 @@ fn fetch_update_components(
     update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
     current_slot: Slot,
-) -> eyre::Result<Vec<Component>> {
+) -> Result<Vec<Component>, Error> {
     orb_update_agent::manifest::compare_to_disk(claim.manifest(), manifest_dst)?;
     let mut components = Vec::with_capacity(claim.num_components());
     for (component, source) in claim.iter_components_with_location() {
@@ -686,8 +685,8 @@ fn fetch_update_components(
             update_iface,
             download_delay,
         )
-        .wrap_err_with(|| {
-            format!("failed fetching source for component `{}`", source.name)
+        .inspect_err(|_| {
+            error!("failed fetching source for component `{}`", source.name)
         })?;
 
         if let Some(iface) = update_iface
@@ -743,7 +742,7 @@ fn fetch_update_components(
                     )
                 })
         })
-        .wrap_err("failed post processing downloaded components")?;
+        .map_err(component::Error::Process)?;
 
     // Now that ALL components have been processed, set overall status to Processed
     if let Some(iface) = update_iface

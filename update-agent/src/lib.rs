@@ -41,8 +41,8 @@ pub enum Error {
     Claim(#[from] claim::Error),
     #[error("Component: {0}")]
     Component(#[from] component::Error),
-    #[error("FetchUpdateComponents: {0}")]
-    FetchUpdateComponents(eyre::Report),
+    #[error("Manifest: {0}")]
+    Manifest(#[from] manifest::Error),
     #[error("Supervisor: {0}")]
     Supervisor(eyre::Report),
     #[error("RunUpdate: {0}")]
@@ -82,7 +82,7 @@ impl Error {
             Error::Settings(_) => "settings",
             Error::ReadingVersions(_) => "reading-versions",
             Error::Other(_) => "other",
-            Error::FetchUpdateComponents(_) => "fetch-update-components",
+            Error::Manifest(_) => "manifest",
             Error::Supervisor(_) => "supervisor",
             Error::RunUpdate(_) => "run-update",
             Error::UpdateComponentVersionOnDisk(_) => {
@@ -139,6 +139,7 @@ impl Error {
                     HashMismatch { .. } => "claim-hash-mismatch",
                     DiskSync(..) => "claim-disk-sync",
                     MimeUnknown { .. } => "claim-mime-unknown",
+                    Process(..) => "claim-process",
                 }
             }
         }
