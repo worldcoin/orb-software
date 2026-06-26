@@ -7324,6 +7324,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
+ "orb-security-utils",
  "orb-telemetry",
  "orb-update-agent-dbus",
  "portpicker",
@@ -7485,6 +7486,7 @@ dependencies = [
  "orb-dogd",
  "orb-info",
  "orb-secure-storage-ca",
+ "orb-security-utils",
  "orb-telemetry",
  "p256 0.13.2",
  "portpicker",
@@ -7782,6 +7784,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-pcp-defs"
+version = "0.0.0"
+dependencies = [
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+]
+
+[[package]]
 name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
@@ -8036,6 +8046,7 @@ dependencies = [
  "orb-attest-dbus",
  "orb-build-info",
  "orb-info",
+ "orb-security-utils",
  "rand 0.8.5",
  "reqwest 0.12.24",
  "serde",

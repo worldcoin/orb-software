@@ -71,7 +71,7 @@ impl StatusClient {
                     .retry_bounds(min_req_retry_interval, max_req_retry_interval)
                     .build_with_max_retries(3);
 
-                let reqwest_client = reqwest::Client::builder()
+                let reqwest_client = orb_security_utils::reqwest::client_builder()
                     .timeout(req_timeout)
                     .user_agent("orb-backend-status")
                     .build()

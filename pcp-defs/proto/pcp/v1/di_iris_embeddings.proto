@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message DiIrisEmbeddings {
+  DiIrisEmbeddingV1 embedding_v1 = 1;
+}
+
+message DiIrisEmbeddingV1 {
+  string model_version = 1;
+  string embedding_inference_backend = 2;
+  string embedding_version = 3;
+
+  repeated sint32 left_embedding = 4;
+  repeated sint32 left_mirror_embedding = 5;
+  repeated sint32 right_embedding = 6;
+  repeated sint32 right_mirror_embedding = 7;
+
+  repeated float left_embedding_f32 = 8;
+  repeated float left_mirror_embedding_f32 = 9;
+  repeated float right_embedding_f32 = 10;
+  repeated float right_mirror_embedding_f32 = 11;
+}
