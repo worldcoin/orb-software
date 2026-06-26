@@ -1,3 +1,5 @@
+// Allow regular reqwest builder without HTTPS enforsement
+#![allow(clippy::disallowed_methods)]
 use std::collections::BTreeSet;
 use std::time::Duration;
 
