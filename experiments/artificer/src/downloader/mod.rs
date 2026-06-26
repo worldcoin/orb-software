@@ -1,4 +1,5 @@
 //! Download functionality for various sources of artifacts.
+#![allow(clippy::disallowed_methods)]
 
 use color_eyre::{eyre::WrapErr, Result};
 use octocrab::Octocrab;

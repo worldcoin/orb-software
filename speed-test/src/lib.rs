@@ -94,7 +94,9 @@ struct PackageRequest<'a> {
 
 pub async fn run_speed_test(test_size_bytes: usize) -> Result<SpeedTestResults> {
     let timeout = Duration::from_secs(CLOUDFLARE_TIMEOUT_SECS);
-    let client = reqwest::Client::builder().timeout(timeout).build()?;
+    let client = orb_security_utils::reqwest::client_builder()
+        .timeout(timeout)
+        .build()?;
 
     let upload_result = probe_upload(&client, test_size_bytes, timeout).await?;
     let download_result = probe_download(&client, test_size_bytes, timeout).await?;
@@ -333,7 +335,7 @@ async fn request_presigned_url(
         id_commitment: "mock_id_commitment",
     };
 
-    let client = reqwest::Client::builder()
+    let client = orb_security_utils::reqwest::client_builder()
         .timeout(Duration::from_secs(PCP_TIMEOUT_SECS))
         .build()?;
 
@@ -380,7 +382,7 @@ async fn upload_to_presigned_url(
 
     form = form.part("file", file_part);
 
-    let client = reqwest::Client::builder()
+    let client = orb_security_utils::reqwest::client_builder()
         .timeout(Duration::from_secs(PCP_TIMEOUT_SECS))
         .build()?;
 

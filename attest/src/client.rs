@@ -25,7 +25,7 @@ pub enum Error {
 pub fn client() -> &'static Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
-        let builder = orb_security_utils::reqwest::http_client_builder()
+        let builder = orb_security_utils::reqwest::client_builder()
             .timeout(std::time::Duration::from_secs(60))
             .user_agent(USER_AGENT);
         #[cfg(test)]

@@ -41,7 +41,7 @@ where
     }
 
     pub fn default_reqwest_client(self) -> Result<ClientBuilder<SetClient<S>>> {
-        let client = orb_security_utils::reqwest::http_client_builder()
+        let client = orb_security_utils::reqwest::client_builder()
             .user_agent(USER_AGENT)
             .build()
             .wrap_err("failed to create http client")?;
