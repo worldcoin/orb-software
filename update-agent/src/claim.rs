@@ -8,10 +8,12 @@ use std::{
 };
 
 use eyre::{ensure, WrapErr as _};
+use orb_dogd::{DogstatsdClient, MetricEmitter};
 use orb_update_agent_core::{
     reexports::ed25519_dalek::VerifyingKey, Claim, ClaimVerificationContext,
     LocalOrRemote, Slot, Source, VersionMap,
 };
+use prelude::connectivity::tracker::ConnectivityTracker;
 use reqwest::{StatusCode, Url};
 use tracing::{debug, info, warn};
 
@@ -59,7 +61,7 @@ pub enum Error {
     #[error("no new version available - system is up to date")]
     NoNewVersion,
     #[error("failed validating update claim against on disk versions: {0}")]
-    Validation(eyre::Report)
+    Validation(eyre::Report),
 }
 
 impl Error {
@@ -118,6 +120,8 @@ fn from_remote(
     url: &Url,
     version_map: &VersionMap,
     verify_manifest_signature_against: Backend,
+    conn_tracker: &ConnectivityTracker,
+    metrics: &DogstatsdClient,
 ) -> Result<Option<(String, Claim)>, Error> {
     let current_version = version_map
         .get_slot_version(slot)
@@ -135,6 +139,7 @@ fn from_remote(
         api_url, current_version
     );
 
+    let conn_stability = conn_tracker.track_stability();
     let client = crate::client::normal()?;
     // attempt starts here
     // ignore if we dont have internet
@@ -159,9 +164,20 @@ fn from_remote(
         if status == StatusCode::NOT_FOUND && !msg.is_empty() {
             Err(Error::NoNewVersion)
         } else {
+            if conn_stability.is_stable() {
+                let _ = metrics.count(
+                    "orb.platform.update-agent.claim-request",
+                    1,
+                    ["ok:false"],
+                );
+            }
+
             Err(Error::status_code(status, msg))
         }
     } else {
+        let _ =
+            metrics.count("orb.platform.update-agent.claim-request", 1, ["ok:true"]);
+
         let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
         debug!("server sent raw claim: {resp_txt}");
 
@@ -257,7 +273,12 @@ fn ensure_sources_match_claim(
     Ok(claim)
 }
 
-pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error> {
+pub fn get(
+    settings: &Settings,
+    version_map: &VersionMap,
+    conn_tracker: &ConnectivityTracker,
+    metrics: &DogstatsdClient,
+) -> Result<Claim, Error> {
     match &settings.update_location {
         LocalOrRemote::Remote(url) => {
             let path = make_claim_destination(settings);
@@ -274,6 +295,8 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
                 url,
                 version_map,
                 settings.verify_manifest_signature_against,
+                conn_tracker,
+                metrics,
             )
             .map_err(|e| Error::remote(url, e))?;
 

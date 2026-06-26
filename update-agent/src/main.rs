@@ -42,7 +42,7 @@ use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
 use orb_zbus_proxies::login1;
-use prelude::connectivity::tracker::ConnectivityTracker;
+use prelude::connectivity::tracker::{ConnectivityStability, ConnectivityTracker};
 use std::default::Default;
 use std::process::ExitCode;
 use std::{
@@ -75,11 +75,12 @@ async fn main() -> ExitCode {
     let conn_tracker = ConnectivityTracker::default();
     let conn_stability = conn_tracker.track_stability();
 
-    let _zenorb = setup_zenoh(args.id.as_ref(), &conn_tracker)
+    let _zenorb = setup_zenoh(args.id.as_ref(), conn_tracker)
         .await
         .inspect_err(|e| error!("failed to setup zenoh: {e}"));
 
     let metrics_clone = metrics.clone();
+    let conn_stability_clone = conn_stability.clone();
     let result = task::spawn_blocking(move || run(&args, metrics_clone)).await;
     let exit_code = match result {
         Ok(Ok(())) => {
@@ -128,7 +129,7 @@ async fn main() -> ExitCode {
 
 async fn setup_zenoh(
     orb_id: Option<&String>,
-    conn_tracker: &ConnectivityTracker,
+    conn_tracker: ConnectivityTracker,
 ) -> Result<(Zenorb, Vec<JoinHandle<()>>)> {
     let orb_id = orb_id
         .context("OrbId not provided as an arg, cannot start zenoh")
@@ -143,7 +144,7 @@ async fn setup_zenoh(
         .await?;
 
     let tasks = zenorb
-        .receiver(conn_tracker.clone())
+        .receiver(conn_tracker)
         .querying_subscriber(
             "connd/oes/active_connections",
             Duration::from_secs(1),
@@ -232,7 +233,12 @@ fn setup_dbus() -> (
     (supervisor_proxy, update_iface)
 }
 
-fn run(args: &Args, metrics: DogstatsdClient) -> Result<(), Error> {
+#[allow(clippy::result_large_err)] // absolutely does not matter here
+fn run(
+    args: &Args,
+    metrics: DogstatsdClient,
+    conn_tracker: ConnectivityTracker,
+) -> Result<(), Error> {
     // TODO: In the event of a corrupt EFIVAR slot, we would be put into an unrecoverable state
     let os_release = OrbOsRelease::read_blocking()?;
 
@@ -352,7 +358,12 @@ fn run(args: &Args, metrics: DogstatsdClient) -> Result<(), Error> {
         }
     }
 
-    let claim = match orb_update_agent::claim::get(&settings, &version_map) {
+    let claim = match orb_update_agent::claim::get(
+        &settings,
+        &version_map,
+        &conn_tracker,
+        &metrics,
+    ) {
         Ok(c) => c,
 
         Err(e) => {
