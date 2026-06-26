@@ -42,9 +42,10 @@ use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
 use orb_zbus_proxies::login1;
-use prelude::connectivity::tracker::{ConnectivityStability, ConnectivityTracker};
+use prelude::connectivity::tracker::ConnectivityTracker;
 use std::default::Default;
 use std::process::ExitCode;
+use std::time::Instant;
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -75,13 +76,14 @@ async fn main() -> ExitCode {
     let conn_tracker = ConnectivityTracker::default();
     let conn_stability = conn_tracker.track_stability();
 
-    let _zenorb = setup_zenoh(args.id.as_ref(), conn_tracker)
+    let _zenorb = setup_zenoh(args.id.as_ref(), conn_tracker.clone())
         .await
         .inspect_err(|e| error!("failed to setup zenoh: {e}"));
 
     let metrics_clone = metrics.clone();
-    let conn_stability_clone = conn_stability.clone();
-    let result = task::spawn_blocking(move || run(&args, metrics_clone)).await;
+    let result =
+        task::spawn_blocking(move || run(&args, metrics_clone, conn_tracker)).await;
+
     let exit_code = match result {
         Ok(Ok(())) => {
             let _ = metrics.count("orb.platform.update-agent.update", 1, ["ok:true"]);
@@ -511,6 +513,8 @@ fn run(
             warn!("{e:?}");
         }
 
+        let start = Instant::now();
+
         component
             .run_update(target_slot, &claim, settings.recovery, &metrics)
             .inspect(|_| {
@@ -535,6 +539,15 @@ fn run(
                 )
             })
             .map_err(Error::RunUpdate)?;
+
+        let _ = metrics.dist(
+            "orb.platform.update-agent.component-update",
+            start.elapsed().as_millis() as f64,
+            [
+                format!("component:{}", component.name()),
+                format!("manifest:{}", claim.version()),
+            ],
+        );
 
         update_component_version_on_disk(
             target_slot,
