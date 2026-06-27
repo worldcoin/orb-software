@@ -46,6 +46,30 @@ const fn fake_progress_ring_color() -> Argb {
     }
 }
 
+#[cfg(any(
+    all(feature = "white", feature = "apple-white"),
+    all(feature = "white", feature = "pure-white"),
+    all(feature = "white", feature = "neutral-cool-white"),
+    all(feature = "apple-white", feature = "pure-white"),
+    all(feature = "apple-white", feature = "neutral-cool-white"),
+    all(feature = "pure-white", feature = "neutral-cool-white"),
+))]
+compile_error!(
+    "features `white`, `apple-white`, `pure-white`, and `neutral-cool-white` are mutually exclusive"
+);
+
+const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
+    Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
+} else if cfg!(feature = "apple-white") {
+    Argb(Some(10), 235, 238, 233)
+} else if cfg!(feature = "pure-white") {
+    Argb(Some(15), 255, 255, 255)
+} else if cfg!(feature = "neutral-cool-white") {
+    Argb(Some(15), 240, 242, 240)
+} else {
+    Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
+};
+
 struct WrappedCenterMessage(Message);
 
 struct WrappedRingMessage(Message);
@@ -256,16 +280,30 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.center_animations_stack.stop(level, transition);
     }
 
-    fn set_occlusion_center_animation(&mut self) {
+    fn set_signup_center_wave(&mut self, level: u8) {
         self.set_center(
-            LEVEL_NOTICE,
+            level,
             animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
+                DIAMOND_CENTER_SIGNUP,
                 Argb::OFF,
                 2.0,
                 0.0,
             ),
         );
+    }
+
+    fn set_signup_center_static(&mut self, level: u8) {
+        self.set_center(
+            level,
+            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                DIAMOND_CENTER_SIGNUP,
+                None,
+            ),
+        );
+    }
+
+    fn set_occlusion_center_animation(&mut self) {
+        self.set_signup_center_wave(LEVEL_NOTICE);
     }
 
     fn biometric_capture_success(&mut self) -> Result<()> {
@@ -553,15 +591,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                         self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
-                        self.set_center(
-                            LEVEL_FOREGROUND,
-                            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
-                                Argb::OFF,
-                                2.0,
-                                0.0,
-                            ),
-                        );
+                        self.set_signup_center_wave(LEVEL_FOREGROUND);
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::QrLoadSuccess),
                             Duration::ZERO,
@@ -747,13 +777,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
-                self.set_center(
-                    LEVEL_FOREGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                        None,
-                    ),
-                );
+                self.set_signup_center_static(LEVEL_FOREGROUND);
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(
@@ -813,7 +837,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_center(
                     LEVEL_FOREGROUND,
                     animations::alert_v2::Alert::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
+                        DIAMOND_CENTER_SIGNUP,
                         SquarePulseTrain::from(vec![
                             (0.0, 0.0),
                             (fade_out_duration + success_delay + 1.1, 3.4),
@@ -943,13 +967,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     self.occlusion_sound_last_played = None;
                     // Restore center LED to the appropriate distance-based state.
                     if self.capture_distance_in_range {
-                        self.set_center(
-                            LEVEL_NOTICE,
-                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                                None,
-                            ),
-                        );
+                        self.set_signup_center_static(LEVEL_NOTICE);
                     } else {
                         self.set_occlusion_center_animation();
                     }
@@ -988,13 +1006,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 // Don't override the occlusion breathing animation when occlusion is active.
                 if !self.occlusion_active {
                     if *in_range {
-                        self.set_center(
-                            LEVEL_NOTICE,
-                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                                None,
-                            ),
-                        );
+                        self.set_signup_center_static(LEVEL_NOTICE);
                     } else {
                         self.set_occlusion_center_animation();
                     }
@@ -1052,13 +1064,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
-                self.set_center(
-                    LEVEL_FOREGROUND,
-                    animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
-                        Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                        None,
-                    ),
-                );
+                self.set_signup_center_static(LEVEL_FOREGROUND);
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::composites::biometric_flow::BiometricFlow::<

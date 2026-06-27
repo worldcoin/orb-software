@@ -70,6 +70,13 @@ systemd-units = [{ unit-name = "worldcoin-ui" }]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [features]
+# Experiment flags for the Diamond center LED color during signup.
+# At most one should be enabled at a time.
+white = []              # Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
+apple-white = []        # Argb(Some(255), 235, 238, 233) - slightly warmer Apple-like white
+pure-white = []         # Argb(Some(255), 255, 255, 255)
+neutral-cool-white = [] # Argb(Some(255), 240, 242, 240)
+
 # Experiment flags for the fake loading screen progress arc color.
 # At most one should be enabled at a time; if multiple are set, priority is:
 #   ring-white > green-v1 > green-v2 > green-v3 > green-v4 > default (original green)
