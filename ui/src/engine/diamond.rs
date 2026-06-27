@@ -256,6 +256,18 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.center_animations_stack.stop(level, transition);
     }
 
+    fn set_occlusion_center_animation(&mut self) {
+        self.set_center(
+            LEVEL_NOTICE,
+            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
+                Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
+                Argb::OFF,
+                2.0,
+                0.0,
+            ),
+        );
+    }
+
     fn biometric_capture_success(&mut self) -> Result<()> {
         self.capture_succeeded = true;
         let master_volume = self.sound.volume();
@@ -909,25 +921,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     // animation + sound only on the first transition into occlusion
                     if !self.occlusion_active {
                         self.occlusion_active = true;
-                        self.set_center(
-                            LEVEL_NOTICE,
-                            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE,
-                                Argb::OFF,
-                                2.0,
-                                0.0,
-                            ),
-                        );
-                        self.occlusion_sound_last_played = Some(std::time::Instant::now());
+                        self.set_occlusion_center_animation();
+                        self.occlusion_sound_last_played =
+                            Some(std::time::Instant::now());
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::SoundError),
                             Duration::ZERO,
                         )?;
-                    } else if self
-                        .occlusion_sound_last_played
-                        .map_or(false, |t| t.elapsed() >= std::time::Duration::from_secs(20))
-                    {
-                        self.occlusion_sound_last_played = Some(std::time::Instant::now());
+                    } else if self.occlusion_sound_last_played.map_or(false, |t| {
+                        t.elapsed() >= std::time::Duration::from_secs(20)
+                    }) {
+                        self.occlusion_sound_last_played =
+                            Some(std::time::Instant::now());
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::SoundError),
                             Duration::ZERO,
@@ -946,7 +951,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             ),
                         );
                     } else {
-                        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+                        self.set_occlusion_center_animation();
                     }
                     if self.capture_distance_in_range {
                         if let Some(fake_progress) = self
@@ -991,15 +996,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             ),
                         );
                     } else {
-                        self.set_center(
-                            LEVEL_NOTICE,
-                            animations::sine_blend::SineBlend::<DIAMOND_CENTER_LED_COUNT>::new(
-                                Argb::DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS,
-                                Argb::OFF,
-                                2.0,
-                                0.0,
-                            ),
-                        );
+                        self.set_occlusion_center_animation();
                     }
                 }
                 // halt or resume both FakeProgress and BiometricFlow.

@@ -3,9 +3,18 @@ use crate::engine::{Animation, AnimationState, RingFrame};
 use orb_rgb::Argb;
 use std::{any::Any, time::Duration};
 
-/// White background for the fake-progress ring: the unfilled portion stays white
-/// while the filled arc shows the progress color, creating a white→color sweep.
-const RING_BACKGROUND: Argb = Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS;
+#[cfg(all(feature = "ring-on", feature = "ring-off"))]
+compile_error!("features `ring-on` and `ring-off` are mutually exclusive");
+
+/// Background for the fake-progress ring. By default, and with `ring-on`,
+/// the unfilled portion stays white; with `ring-off`, it is off.
+const fn ring_background() -> Argb {
+    if cfg!(feature = "ring-off") {
+        Argb::OFF
+    } else {
+        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS
+    }
+}
 
 /// Exponentially decaying progress bar.
 /// The bar keeps progressing until a given timeout.
@@ -72,7 +81,7 @@ impl<const N: usize> FakeProgress<N> {
                 max_fast_forward_duration,
             ),
             progress_animation: Progress::<N>::new(0.0, None, color)
-                .with_background(RING_BACKGROUND),
+                .with_background(ring_background()),
             halted: false,
         }
     }
