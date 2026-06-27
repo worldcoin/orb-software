@@ -7,6 +7,8 @@ use std::{any::Any, f64::consts::PI};
 
 use super::Wave;
 
+const FULL_CYCLE: f64 = 2.0 * PI;
+
 /// Pulsing wave animation between two colors.
 pub struct SineBlend<const N: usize> {
     color1: Argb,
@@ -141,6 +143,13 @@ impl<const N: usize> Animation for SineBlend<N> {
 
         self.phase += dt * (2.0 * PI / self.wave_period);
 
+        if self
+            .repeat
+            .is_some_and(|repeat| self.phase >= FULL_CYCLE * repeat as f64)
+        {
+            return AnimationState::Finished;
+        }
+
         AnimationState::Running
     }
 
@@ -168,7 +177,7 @@ impl<const N: usize> Animation for SineBlend<N> {
     // stop at the end of the animation
     fn stop(&mut self, transition: Transition) -> eyre::Result<()> {
         if let Transition::PlayOnce = transition {
-            self.repeat = Some(1);
+            self.repeat = Some((self.phase / FULL_CYCLE).floor() as usize + 1);
             self.transition = None;
         } else if transition == Transition::Shrink {
             return Err(eyre!(

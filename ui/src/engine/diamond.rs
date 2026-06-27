@@ -306,6 +306,11 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.set_signup_center_wave(LEVEL_NOTICE);
     }
 
+    fn finish_signup_center_wave(&mut self) {
+        self.set_signup_center_static(LEVEL_FOREGROUND);
+        self.stop_center(LEVEL_NOTICE, Transition::PlayOnce);
+    }
+
     fn biometric_capture_success(&mut self) -> Result<()> {
         self.capture_succeeded = true;
         let master_volume = self.sound.volume();
@@ -945,7 +950,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     // animation + sound only on the first transition into occlusion
                     if !self.occlusion_active {
                         self.occlusion_active = true;
-                        self.set_occlusion_center_animation();
+                        if self.capture_distance_in_range {
+                            self.set_occlusion_center_animation();
+                        }
                         self.occlusion_sound_last_played =
                             Some(std::time::Instant::now());
                         self.sound.queue(
@@ -963,13 +970,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         )?;
                     }
                 } else {
+                    let was_occlusion_active = self.occlusion_active;
                     self.occlusion_active = false;
                     self.occlusion_sound_last_played = None;
-                    // Restore center LED to the appropriate distance-based state.
-                    if self.capture_distance_in_range {
-                        self.set_signup_center_static(LEVEL_NOTICE);
-                    } else {
-                        self.set_occlusion_center_animation();
+                    if was_occlusion_active && self.capture_distance_in_range {
+                        self.finish_signup_center_wave();
                     }
                     if self.capture_distance_in_range {
                         if let Some(fake_progress) = self
@@ -1003,17 +1008,19 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
+                let was_in_range = self.capture_distance_in_range;
+                self.capture_distance_in_range = *in_range;
+
                 // Don't override the occlusion breathing animation when occlusion is active.
                 if !self.occlusion_active {
-                    if *in_range {
-                        self.set_signup_center_static(LEVEL_NOTICE);
-                    } else {
+                    if *in_range && !was_in_range {
+                        self.finish_signup_center_wave();
+                    } else if !in_range && was_in_range {
                         self.set_occlusion_center_animation();
                     }
                 }
                 // halt or resume both FakeProgress and BiometricFlow.
                 // Only resume if both in range AND no occlusion active.
-                self.capture_distance_in_range = *in_range;
                 if let Some(fake_progress) = self
                     .ring_animations_stack
                     .stack
