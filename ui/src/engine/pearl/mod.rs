@@ -157,6 +157,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             capture_distance_in_range: true,
             state: UiState::Booting,
             gimbal: None,
+            gimbal_send_after: None,
             operating_mode: OperatingMode::default(),
         }
     }

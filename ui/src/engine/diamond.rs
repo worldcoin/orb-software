@@ -70,6 +70,8 @@ const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
     Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
 };
 
+const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_secs(2);
+
 struct WrappedCenterMessage(Message);
 
 struct WrappedRingMessage(Message);
@@ -234,6 +236,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             capture_distance_in_range: true,
             state: UiState::Booting,
             gimbal: None,
+            gimbal_send_after: None,
             operating_mode: OperatingMode::default(),
         }
     }
@@ -596,6 +599,10 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                         self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
+                        self.gimbal_send_after = Some(
+                            std::time::Instant::now()
+                                + USER_QR_CONFIRMATION_GIMBAL_DELAY,
+                        );
                         self.set_signup_center_wave(LEVEL_FOREGROUND);
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::QrLoadSuccess),
@@ -1304,7 +1311,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
         }
 
-        if let Some((x, y)) = self.gimbal {
+        if self
+            .gimbal_send_after
+            .is_some_and(|send_after| std::time::Instant::now() >= send_after)
+        {
+            self.gimbal_send_after = None;
+        }
+
+        if self.gimbal_send_after.is_none()
+            && let Some((x, y)) = self.gimbal
+        {
             interface_tx.try_send(Message::JMessage(JetsonToMcu {
                 ack_number: 0,
                 payload: Some(jetson_to_mcu::Payload::MirrorAngle(

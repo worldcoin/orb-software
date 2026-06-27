@@ -610,6 +610,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     capture_distance_in_range: bool,
     state: UiState,
     gimbal: Option<(u32, u32)>,
+    gimbal_send_after: Option<std::time::Instant>,
     operating_mode: OperatingMode,
 }
 
