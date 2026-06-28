@@ -355,6 +355,9 @@ event_enum! {
         /// Biometric pipeline succeed.
         #[event_enum(method = biometric_pipeline_success)]
         BiometricPipelineSuccess,
+        /// PCP upload started.
+        #[event_enum(method = pcp_upload_started)]
+        PcpUploadStarted,
         /// Signup success.
         #[event_enum(method = signup_success)]
         SignupSuccess,

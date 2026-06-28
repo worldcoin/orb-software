@@ -26,6 +26,9 @@ use crate::sound;
 use crate::sound::Player;
 use orb_rgb::Argb;
 
+const PEARL_PCP_UPLOAD: Argb = Argb(None, 31, 29, 25);
+const PCP_UPLOAD_RING_INTENSITY: f64 = 0.82;
+
 struct WrappedMessage(Message);
 
 impl From<CenterFrame<PEARL_CENTER_LED_COUNT>> for WrappedMessage {
@@ -184,6 +187,30 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
     fn stop_center(&mut self, level: u8, transition: Transition) {
         self.center_animations_stack.stop(level, transition);
+    }
+
+    pub(super) fn pcp_upload_started(&mut self) {
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+
+        self.set_ring(
+            LEVEL_FOREGROUND,
+            animations::Static::<PEARL_RING_LED_COUNT>::new(
+                PEARL_PCP_UPLOAD * PCP_UPLOAD_RING_INTENSITY,
+                None,
+            )
+            .fade_in(0.2),
+        );
+        self.set_center(
+            LEVEL_FOREGROUND,
+            animations::PcpUploadSpinner::<PEARL_CENTER_LED_COUNT>::new(
+                PEARL_PCP_UPLOAD,
+            )
+            .fade_in(0.2),
+        );
+        self.operator_signup_phase.uploading();
     }
 }
 

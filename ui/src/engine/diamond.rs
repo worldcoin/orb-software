@@ -71,6 +71,14 @@ const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
 };
 
 const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_secs(2);
+const VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS: f64 = 0.12;
+const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
+const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
+const VERIFICATION_SUCCESS_HOLD_SECONDS: f64 = 2.0;
+const VERIFICATION_SUCCESS_FADE_OUT_SECONDS: f64 = 1.5;
+const DIAMOND_PCP_UPLOAD_RING: Argb = Argb(Some(15), 90, 84, 74);
+const DIAMOND_PCP_UPLOAD_CENTER: Argb = Argb(Some(10), 90, 84, 74);
+const PCP_UPLOAD_RING_INTENSITY: f64 = 0.82;
 
 struct WrappedCenterMessage(Message);
 
@@ -314,6 +322,80 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.stop_center(LEVEL_NOTICE, Transition::PlayOnce);
     }
 
+    fn set_verification_success_ring_animation(&mut self) -> Result<()> {
+        let blink_period = VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS
+            + VERIFICATION_SUCCESS_BLINK_ON_SECONDS
+            + VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS
+            + VERIFICATION_SUCCESS_BLINK_OFF_SECONDS;
+        let final_blink_start = blink_period * 2.0;
+        let fade_out_start = final_blink_start
+            + VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS
+            + VERIFICATION_SUCCESS_HOLD_SECONDS;
+
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.set_ring(
+            LEVEL_FOREGROUND,
+            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_BOOT_COMPLETE_IDLE,
+                None,
+            ),
+        );
+        self.set_ring(
+            LEVEL_NOTICE,
+            animations::alert_v2::Alert::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                SquarePulseTrain::from(vec![
+                    (0.0, VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS),
+                    (
+                        VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS
+                            + VERIFICATION_SUCCESS_BLINK_ON_SECONDS,
+                        VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS,
+                    ),
+                    (blink_period, VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS),
+                    (
+                        blink_period
+                            + VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS
+                            + VERIFICATION_SUCCESS_BLINK_ON_SECONDS,
+                        VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS,
+                    ),
+                    (final_blink_start, VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS),
+                    (fade_out_start, VERIFICATION_SUCCESS_FADE_OUT_SECONDS),
+                ]),
+            )?,
+        );
+
+        self.gimbal = Some((0, 0));
+        self.gimbal_send_after =
+            Some(std::time::Instant::now() + Duration::from_secs_f64(fade_out_start));
+
+        Ok(())
+    }
+
+    fn pcp_upload_started(&mut self) {
+        self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
+        self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
+        self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
+
+        self.set_ring(
+            LEVEL_FOREGROUND,
+            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                DIAMOND_PCP_UPLOAD_RING * PCP_UPLOAD_RING_INTENSITY,
+                None,
+            )
+            .fade_in(0.2),
+        );
+        self.set_center(
+            LEVEL_FOREGROUND,
+            animations::PcpUploadSpinner::<DIAMOND_CENTER_LED_COUNT>::new(
+                DIAMOND_PCP_UPLOAD_CENTER,
+            )
+            .fade_in(0.2),
+        );
+        self.operator_signup_phase.uploading();
+    }
+
     fn biometric_capture_success(&mut self) -> Result<()> {
         self.capture_succeeded = true;
         let master_volume = self.sound.volume();
@@ -352,9 +434,6 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 true,
             )?,
         );
-
-        // move mirror to flat (phi=0, theta=0)
-        self.gimbal = Some((0, 0));
 
         Ok(())
     }
@@ -1133,6 +1212,9 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BiometricPipelineSuccess => {
                 // do nothing, for now
             }
+            Event::PcpUploadStarted => {
+                self.pcp_upload_started();
+            }
             Event::SoundVolume { level } => {
                 self.sound.set_master_volume(*level);
             }
@@ -1187,6 +1269,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 if !self.capture_succeeded {
                     self.biometric_capture_success()?;
                 }
+                self.set_verification_success_ring_animation()?;
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
                 self.set_center(
