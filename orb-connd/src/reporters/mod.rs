@@ -72,6 +72,7 @@ pub async fn spawn(
             zsender,
             sysfs,
             procfs,
+            metrics: statsd.clone(),
         })
         .on_err(static_backoff(15))
         .spawn(active_connections::report)?;

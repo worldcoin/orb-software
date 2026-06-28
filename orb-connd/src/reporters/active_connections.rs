@@ -5,23 +5,29 @@ use color_eyre::eyre::{bail, eyre, Context, ContextCompat};
 use color_eyre::Result;
 use futures::StreamExt;
 use oes::NetworkInterface;
+use orb_dogd::MetricEmitter;
 use speare::mini;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::{fs, time};
 use tracing::{error, info, warn};
 
-pub struct Args {
+pub struct Args<M: MetricEmitter> {
     pub nm: NetworkManager,
     pub resolved: Resolved,
     pub zsender: zenorb::Sender,
     pub procfs: PathBuf,
     pub sysfs: PathBuf,
+    pub metrics: Arc<M>,
 }
 
-pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+pub async fn report<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
+where
+    M: MetricEmitter,
+{
     info!("starting active connections reporter");
 
     async {
@@ -55,6 +61,8 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
         let report = build_report(&primary_conn, state, &active_conns, &ctx)
             .await
             .wrap_err("building active connections report")?;
+
+        emit_metrics(&report, ctx.metrics.as_ref());
 
         publish_report(&ctx, report)
             .await
@@ -99,6 +107,8 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                     .await
                     .wrap_err("building active connections report")?;
 
+                emit_metrics(&report, ctx.metrics.as_ref());
+
                 publish_report(&ctx, report)
                     .await
                     .wrap_err("publishing active connections report")?;
@@ -113,12 +123,15 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
 }
 
 /// build report based on NM inputs and system inspection
-async fn build_report(
+async fn build_report<M>(
     primary: &Option<network_manager::Connection>,
     connection_state: ConnectionState,
     active_conns: &Vec<ActiveConn>,
-    ctx: &mini::Ctx<Args>,
-) -> Result<ActiveConnections> {
+    ctx: &mini::Ctx<Args<M>>,
+) -> Result<ActiveConnections>
+where
+    M: MetricEmitter,
+{
     let connectivity_uri = ctx.nm.connectivity_check_uri().await?;
     let hostname = hostname_from_uri(&connectivity_uri).map(str::to_string);
     let mut connections = Vec::new();
@@ -197,10 +210,27 @@ struct Connection {
     http_check: Result<ConnHttpCheck, String>,
 }
 
-async fn publish_report(
-    ctx: &mini::Ctx<Args>,
+fn emit_metrics(report: &ActiveConnections, metrics: &impl MetricEmitter) {
+    for c in &report.connections {
+        if c.primary {
+            let _ = metrics.gauge(
+                "orb.platform.connd.primary_conn",
+                1.0,
+                [format!("kind:{}", c.iface)],
+            );
+
+            return;
+        }
+    }
+}
+
+async fn publish_report<M>(
+    ctx: &mini::Ctx<Args<M>>,
     report: ActiveConnections,
-) -> Result<()> {
+) -> Result<()>
+where
+    M: MetricEmitter,
+{
     info!("{report:#?}");
 
     let report: oes::ActiveConnections = report.try_into()?;
