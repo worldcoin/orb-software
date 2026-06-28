@@ -92,6 +92,9 @@ green-v4 = []   # Argb(Some(10), 160, 240, 100) - light spring green
 ring-on = []  # Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS
 ring-off = [] # Argb::OFF
 
+# Diagnostic build flag: show only the PCP upload animation at startup.
+test-pcp-upload-animation = []
+
 [lints.rust.unexpected_cfgs]
 check-cfg = ['cfg(tokio_unstable)']
 level = "warn"

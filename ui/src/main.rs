@@ -1,4 +1,8 @@
 #![forbid(unsafe_code)]
+#![cfg_attr(
+    feature = "test-pcp-upload-animation",
+    allow(dead_code, unfulfilled_lint_expectations, unused_imports)
+)]
 
 use humantime::parse_duration;
 use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
@@ -141,81 +145,108 @@ async fn main_inner(args: Args) -> Result<()> {
     let (mut serial_input_tx, serial_input_rx) = mpsc::channel(INPUT_CAPACITY);
 
     Serial::spawn(serial_device, serial_input_rx)?;
-    match args.subcmd {
-        SubCommand::Daemon => {
-            if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
-                let send_ui: &dyn EventChannel = &ui;
-                listen(send_ui).await?;
-            } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
-                let send_ui: &dyn EventChannel = &ui;
-                listen(send_ui).await?;
-            };
-        }
-        SubCommand::Simulation(args) => {
-            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
-                ui.clone_tx()
-                    .send(Event::Flow {
-                        mode: if args == SimulationArgs::Operator {
-                            OperatingMode::Operator
-                        } else {
-                            OperatingMode::SelfServe
-                        },
-                    })
-                    .unwrap();
-                Box::new(ui)
-            } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
-                ui.clone_tx()
-                    .send(Event::Flow {
-                        mode: if args == SimulationArgs::Operator {
-                            OperatingMode::Operator
-                        } else {
-                            OperatingMode::SelfServe
-                        },
-                    })
-                    .unwrap();
-                Box::new(ui)
-            };
-            match args {
-                SimulationArgs::SelfServe => {
-                    signup_simulation(ui.as_ref(), hw, true, false).await?
-                }
-                SimulationArgs::Operator => {
-                    signup_simulation(ui.as_ref(), hw, false, false).await?
-                }
-                SimulationArgs::ShowCar => {
-                    signup_simulation(ui.as_ref(), hw, true, true).await?
-                }
-            }
-        }
-        SubCommand::Beacon(beacon_args) => {
-            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
-                Box::new(ui)
-            } else {
-                let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
-                Box::new(ui)
-            };
-            beacon(ui.as_ref(), beacon_args.duration).await?
-        }
-        SubCommand::Recovery => {
-            let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
-                Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
-            } else {
-                Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
-            };
 
-            loop {
-                ui.recovery();
-                time::sleep(Duration::from_secs(45)).await;
-            }
-        }
+    #[cfg(feature = "test-pcp-upload-animation")]
+    {
+        let _ = &args;
+        return pcp_upload_animation_test(hw, &mut serial_input_tx).await;
     }
 
-    Ok(())
+    #[cfg(not(feature = "test-pcp-upload-animation"))]
+    {
+        match args.subcmd {
+            SubCommand::Daemon => {
+                if hw == Hardware::Diamond {
+                    let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                    let send_ui: &dyn EventChannel = &ui;
+                    listen(send_ui).await?;
+                } else {
+                    let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                    let send_ui: &dyn EventChannel = &ui;
+                    listen(send_ui).await?;
+                };
+            }
+            SubCommand::Simulation(args) => {
+                let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+                    let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                    ui.clone_tx()
+                        .send(Event::Flow {
+                            mode: if args == SimulationArgs::Operator {
+                                OperatingMode::Operator
+                            } else {
+                                OperatingMode::SelfServe
+                            },
+                        })
+                        .unwrap();
+                    Box::new(ui)
+                } else {
+                    let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                    ui.clone_tx()
+                        .send(Event::Flow {
+                            mode: if args == SimulationArgs::Operator {
+                                OperatingMode::Operator
+                            } else {
+                                OperatingMode::SelfServe
+                            },
+                        })
+                        .unwrap();
+                    Box::new(ui)
+                };
+                match args {
+                    SimulationArgs::SelfServe => {
+                        signup_simulation(ui.as_ref(), hw, true, false).await?
+                    }
+                    SimulationArgs::Operator => {
+                        signup_simulation(ui.as_ref(), hw, false, false).await?
+                    }
+                    SimulationArgs::ShowCar => {
+                        signup_simulation(ui.as_ref(), hw, true, true).await?
+                    }
+                }
+            }
+            SubCommand::Beacon(beacon_args) => {
+                let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+                    let ui = engine::DiamondJetson::spawn(&mut serial_input_tx);
+                    Box::new(ui)
+                } else {
+                    let ui = engine::PearlJetson::spawn(&mut serial_input_tx);
+                    Box::new(ui)
+                };
+                beacon(ui.as_ref(), beacon_args.duration).await?
+            }
+            SubCommand::Recovery => {
+                let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+                    Box::new(engine::DiamondJetson::spawn(&mut serial_input_tx))
+                } else {
+                    Box::new(engine::PearlJetson::spawn(&mut serial_input_tx))
+                };
+
+                loop {
+                    ui.recovery();
+                    time::sleep(Duration::from_secs(45)).await;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "test-pcp-upload-animation")]
+async fn pcp_upload_animation_test(
+    hw: Hardware,
+    serial_input_tx: &mut mpsc::Sender<orb_messages::mcu_message::Message>,
+) -> Result<()> {
+    let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+        Box::new(engine::DiamondJetson::spawn(serial_input_tx))
+    } else {
+        Box::new(engine::PearlJetson::spawn(serial_input_tx))
+    };
+
+    ui.pcp_upload_started();
+    loop {
+        time::sleep(Duration::from_secs(3600)).await;
+    }
 }
 
 fn main() -> Result<()> {
