@@ -862,7 +862,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 min_fast_forward_duration,
                 max_fast_forward_duration,
             } => {
-                self.set_signup_center_static(LEVEL_FOREGROUND);
+                if cfg!(feature = "test-fake-bar-animation") {
+                    self.set_center(
+                        LEVEL_FOREGROUND,
+                        animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                            Argb::OFF,
+                            None,
+                        ),
+                    );
+                } else {
+                    self.set_signup_center_static(LEVEL_FOREGROUND);
+                }
                 self.set_ring(
                     LEVEL_NOTICE,
                     animations::fake_progress_v2::FakeProgress::<DIAMOND_RING_LED_COUNT>::new(

@@ -1,8 +1,10 @@
 use crate::engine::animations::{render_lines, LIGHT_BLEEDING_OFFSET_RAD};
-use crate::engine::{Animation, AnimationState, RingFrame, Transition};
+use crate::engine::{
+    Animation, AnimationState, RingFrame, Transition, DIAMOND_RING_LED_COUNT,
+};
 use eyre::eyre;
 use orb_rgb::Argb;
-use std::{any::Any, f64::consts::PI};
+use std::{any::Any, f64::consts::PI, ops::Range};
 
 const RC: f64 = 0.5;
 const PROGRESS_REACHED_THRESHOLD: f64 = 0.01;
@@ -25,6 +27,7 @@ pub struct Progress<const N: usize> {
     transition_time: f64,
     pub(crate) shape: Shape<N>,
     paused: bool,
+    blink_progress_preview: bool,
 }
 
 #[derive(Clone)]
@@ -58,6 +61,7 @@ impl<const N: usize> Progress<N> {
                 pulse_angle: PULSE_ANGLE_RAD,
             },
             paused: false,
+            blink_progress_preview: false,
         }
     }
 
@@ -92,6 +96,11 @@ impl<const N: usize> Progress<N> {
 
     pub fn with_background(mut self, color: Argb) -> Self {
         self.background_color = color;
+        self
+    }
+
+    pub fn with_blink_progress_preview(mut self) -> Self {
+        self.blink_progress_preview = true;
         self
     }
 }
@@ -141,11 +150,20 @@ impl<const N: usize> Animation for Progress<N> {
 
         tracing::trace!("scaling: {scaling_factor}");
         if !idle {
-            self.shape.render(
-                frame,
-                self.color * scaling_factor,
-                self.background_color * scaling_factor,
-            );
+            if self.blink_progress_preview {
+                self.shape.render_with_blink_progress_preview(
+                    frame,
+                    self.color * scaling_factor,
+                    self.background_color * scaling_factor,
+                    self.progress,
+                );
+            } else {
+                self.shape.render(
+                    frame,
+                    self.color * scaling_factor,
+                    self.background_color * scaling_factor,
+                );
+            }
         }
 
         if self.paused {
@@ -220,5 +238,107 @@ impl<const N: usize> Shape<N> {
                 ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
         ];
         render_lines(frame, background, foreground, &ranges);
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn render_with_blink_progress_preview(
+        &self,
+        frame: &mut RingFrame<N>,
+        foreground: Argb,
+        background: Argb,
+        target_progress: f64,
+    ) {
+        let current_angle = (2.0 * PI * self.progress).clamp(0.0, 2.0 * PI);
+        let target_angle = (2.0 * PI * target_progress).clamp(0.0, 2.0 * PI);
+        let current_ranges = progress_ranges(current_angle);
+        paint_solid_ranges(frame, Some(background), foreground, &current_ranges);
+
+        if target_angle > current_angle {
+            let preview_ranges = progress_delta_ranges(current_angle, target_angle);
+            paint_solid_ranges(
+                frame,
+                None,
+                white_green_preview(foreground),
+                &preview_ranges,
+            );
+        }
+    }
+}
+
+fn white_green_preview(foreground: Argb) -> Argb {
+    foreground.lerp(Argb(foreground.0, 255, 255, 255), 0.35)
+}
+
+fn progress_ranges(angle_rad: f64) -> [Range<f64>; 2] {
+    let split_angle = PI - LIGHT_BLEEDING_OFFSET_RAD;
+    [
+        0.0..(angle_rad - split_angle).max(0.0),
+        PI + LIGHT_BLEEDING_OFFSET_RAD
+            ..(PI + LIGHT_BLEEDING_OFFSET_RAD + angle_rad).min(2.0 * PI),
+    ]
+}
+
+fn progress_delta_ranges(current_angle: f64, target_angle: f64) -> Vec<Range<f64>> {
+    let split_angle = PI - LIGHT_BLEEDING_OFFSET_RAD;
+    let base_angle = PI + LIGHT_BLEEDING_OFFSET_RAD;
+
+    if target_angle <= split_angle {
+        vec![base_angle + current_angle..base_angle + target_angle]
+    } else if current_angle < split_angle {
+        vec![
+            base_angle + current_angle..2.0 * PI,
+            0.0..target_angle - split_angle,
+        ]
+    } else {
+        vec![current_angle - split_angle..target_angle - split_angle]
+    }
+}
+
+fn paint_solid_ranges<const FRAME_SIZE: usize>(
+    frame: &mut RingFrame<FRAME_SIZE>,
+    background: Option<Argb>,
+    foreground: Argb,
+    ranges_angle_rad: &[Range<f64>],
+) {
+    if FRAME_SIZE == DIAMOND_RING_LED_COUNT {
+        for (i, led) in frame.iter_mut().rev().enumerate() {
+            paint_solid_led::<FRAME_SIZE>(
+                i,
+                led,
+                background,
+                foreground,
+                ranges_angle_rad,
+            );
+        }
+    } else {
+        for (i, led) in frame.iter_mut().enumerate() {
+            paint_solid_led::<FRAME_SIZE>(
+                i,
+                led,
+                background,
+                foreground,
+                ranges_angle_rad,
+            );
+        }
+    }
+}
+
+fn paint_solid_led<const FRAME_SIZE: usize>(
+    i: usize,
+    led: &mut Argb,
+    background: Option<Argb>,
+    foreground: Argb,
+    ranges_angle_rad: &[Range<f64>],
+) {
+    let one_led_rad = PI * 2.0 / FRAME_SIZE as f64;
+    let pos = i as f64 * one_led_rad;
+    if ranges_angle_rad.iter().any(|range| {
+        let start_fill = pos - range.start + one_led_rad;
+        let end_fill = range.end - pos;
+        start_fill > 0.0 && end_fill > 0.0
+    }) {
+        *led = foreground;
+    } else if let Some(background) = background {
+        *led = background;
     }
 }

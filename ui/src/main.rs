@@ -1,8 +1,19 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(
-    feature = "test-pcp-upload-animation",
+    any(
+        feature = "test-pcp-upload-animation",
+        feature = "test-fake-bar-animation",
+    ),
     allow(dead_code, unfulfilled_lint_expectations, unused_imports)
 )]
+
+#[cfg(all(
+    feature = "test-pcp-upload-animation",
+    feature = "test-fake-bar-animation",
+))]
+compile_error!(
+    "features `test-pcp-upload-animation` and `test-fake-bar-animation` are mutually exclusive"
+);
 
 use humantime::parse_duration;
 use orb_info::orb_os_release::{OrbOsRelease, OrbRelease};
@@ -152,7 +163,16 @@ async fn main_inner(args: Args) -> Result<()> {
         return pcp_upload_animation_test(hw, &mut serial_input_tx).await;
     }
 
-    #[cfg(not(feature = "test-pcp-upload-animation"))]
+    #[cfg(feature = "test-fake-bar-animation")]
+    {
+        let _ = &args;
+        return fake_bar_animation_test(hw, &mut serial_input_tx).await;
+    }
+
+    #[cfg(not(any(
+        feature = "test-pcp-upload-animation",
+        feature = "test-fake-bar-animation",
+    )))]
     {
         match args.subcmd {
             SubCommand::Daemon => {
@@ -246,6 +266,29 @@ async fn pcp_upload_animation_test(
     ui.pcp_upload_started();
     loop {
         time::sleep(Duration::from_secs(3600)).await;
+    }
+}
+
+#[cfg(feature = "test-fake-bar-animation")]
+async fn fake_bar_animation_test(
+    hw: Hardware,
+    serial_input_tx: &mut mpsc::Sender<orb_messages::mcu_message::Message>,
+) -> Result<()> {
+    let ui: Box<dyn Engine> = if hw == Hardware::Diamond {
+        Box::new(engine::DiamondJetson::spawn(serial_input_tx))
+    } else {
+        let ui = engine::PearlJetson::spawn(serial_input_tx);
+        ui.flow(OperatingMode::SelfServe);
+        Box::new(ui)
+    };
+
+    loop {
+        ui.biometric_capture_fake_progress_start(
+            Duration::from_secs(12),
+            Duration::from_secs(1),
+            Duration::from_secs(2),
+        );
+        time::sleep(Duration::from_secs(14)).await;
     }
 }
 

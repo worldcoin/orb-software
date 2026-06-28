@@ -94,6 +94,8 @@ ring-off = [] # Argb::OFF
 
 # Diagnostic build flag: show only the PCP upload animation at startup.
 test-pcp-upload-animation = []
+# Diagnostic build flag: show only the fake progress bar animation at startup.
+test-fake-bar-animation = []
 
 [lints.rust.unexpected_cfgs]
 check-cfg = ['cfg(tokio_unstable)']
