@@ -76,9 +76,7 @@ const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_HOLD_SECONDS: f64 = 2.0;
 const VERIFICATION_SUCCESS_FADE_OUT_SECONDS: f64 = 1.5;
-const DIAMOND_PCP_UPLOAD_RING: Argb = Argb(Some(15), 90, 84, 74);
 const DIAMOND_PCP_UPLOAD_CENTER: Argb = Argb(Some(10), 90, 84, 74);
-const PCP_UPLOAD_RING_INTENSITY: f64 = 0.82;
 
 struct WrappedCenterMessage(Message);
 
@@ -380,11 +378,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
 
         self.set_ring(
             LEVEL_FOREGROUND,
-            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
-                DIAMOND_PCP_UPLOAD_RING * PCP_UPLOAD_RING_INTENSITY,
-                None,
-            )
-            .fade_in(0.2),
+            animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
         );
         self.set_center(
             LEVEL_FOREGROUND,
