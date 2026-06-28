@@ -11,6 +11,7 @@ let
   inherit (inputs)
     fenix
     seekSdk
+    crane
     ;
   p = instantiatedPkgs // {
     native = p.${system};
@@ -24,6 +25,34 @@ let
     sha256 = "sha256-SDu4snEWjuZU475PERvu+iO50Mi39KVjqCeJeNvpguU=";
   };
   rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
+
+  craneLib = crane.mkLib p.native;
+  # Common arguments can be set here to avoid repeating them later
+  # Note: changes here will rebuild all dependency crates
+  commonArgs = {
+    src = craneLib.cleanCargoSource ../..;
+    strictDeps = true;
+
+    cargoExtraArgs = "--locked -p orb-hil";
+    buildInputs = [
+      # Add additional build inputs here
+    ]
+    ++ p.native.lib.optionals p.native.stdenv.isDarwin [
+      # Additional darwin specific inputs can be set here
+      p.native.libiconv
+    ];
+  };
+
+  orb-hil = craneLib.buildPackage (
+    commonArgs
+    // {
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+      # Additional environment variables or build phases/hooks can be set
+      # here *without* rebuilding all dependency crates
+      # MY_CUSTOM_VAR = "some value";
+    }
+  );
 
   macFrameworks = p.native.apple-sdk_15;
 
@@ -116,6 +145,7 @@ let
     }).devkit; # TODO: Switch to 25.11
 in
 {
+  packages.orb-hil = orb-hil;
   # Everything in here becomes your shell (nix develop)
   devShells.default = p.native.mkShell {
     # Nix makes the following list of dependencies available to the development
