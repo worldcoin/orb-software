@@ -1,0 +1,107 @@
+name: Cargo Vulnerability Scan
+
+# Scans this repo's Cargo.lock: syft SBOM -> grype -> triage. Uploads grype SARIF
+# to code scanning and a ranked bump queue as an artifact. Self-contained: the
+# triage engine lives in this repo (ci/vuln_triage.py).
+
+on:
+  workflow_call:
+    inputs:
+      platform-tag:
+        description: "Origin label for findings"
+        type: string
+        required: true
+      cargo-lock-path:
+        type: string
+        default: Cargo.lock
+      deny-toml-path:
+        type: string
+        default: deny.toml
+      runs-on:
+        description: 'JSON runs-on: a label string or {"group":"..."}'
+        type: string
+        default: '"ubuntu-24.04"'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  scan:
+    name: Cargo vuln scan
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # pin@v4.3.0
+
+      # 3.11+ required for tomllib (deny.toml parsing); pin to be runner-agnostic.
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # pin@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate Cargo SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # pin@v0.24.0
+        with:
+          file: ${{ inputs.cargo-lock-path }}
+          format: spdx-json
+          output-file: cargo-sbom.spdx.json
+          upload-artifact: false
+
+      # Empty SBOM means the scan saw nothing; fail rather than report a false "all clear".
+      - name: Verify SBOM has cargo packages
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          pkgs = json.load(open("cargo-sbom.spdx.json")).get("packages", [])
+          n = sum(1 for p in pkgs for r in (p.get("externalRefs") or [])
+                  if r.get("referenceLocator", "").startswith("pkg:cargo/"))
+          print(f"cargo packages: {n}")
+          if not n:
+              print("::error::Cargo SBOM has zero cargo packages")
+              sys.exit(1)
+          PY
+
+      - name: Install grype
+        id: grype
+        uses: anchore/scan-action/download-grype@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # pin@v7
+
+      # One scan produces both JSON (for triage) and SARIF (for code scanning).
+      - name: Scan SBOM with grype
+        env:
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+        run: |
+          "$GRYPE" "sbom:cargo-sbom.spdx.json" -o json=grype.json -o sarif=grype.sarif
+
+      # Upload even when clean so code scanning auto-resolves fixed alerts.
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@411bbbe57033eedfc1a82d68c01345aa96c737d7 # pin@v4
+        with:
+          sarif_file: grype.sarif
+          category: cargo-vuln-${{ inputs.platform-tag }}
+
+      # KEV boosts known-exploited findings; bounded and non-fatal.
+      - name: Fetch CISA KEV catalog
+        continue-on-error: true
+        run: |
+          curl -fsS --retry 3 --retry-delay 2 --max-time 30 \
+            https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json \
+            -o kev.json || echo "KEV fetch failed; continuing without it"
+
+      - name: Triage
+        env:
+          PLATFORM_TAG: ${{ inputs.platform-tag }}
+          DENY_TOML: ${{ inputs.deny-toml-path }}
+        run: |
+          set -o pipefail
+          args=(--grype grype.json --platform "$PLATFORM_TAG")
+          [ -f "$DENY_TOML" ] && args+=(--deny-toml "$DENY_TOML")
+          [ -f kev.json ] && args+=(--kev-catalog kev.json)
+          python3 ci/vuln_triage.py triage "${args[@]}" --out queue.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload queue
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
+        with:
+          name: vuln-scan-${{ inputs.platform-tag }}
+          path: queue.json
