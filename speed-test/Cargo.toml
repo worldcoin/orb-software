@@ -25,6 +25,7 @@ color-eyre.workspace = true
 flate2.workspace = true
 orb-attest-dbus.path = "../attest/dbus"
 orb-build-info.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-info.path = "../orb-info"
 rand.workspace = true
 reqwest = { workspace = true, features = ["multipart", "stream", "json"] }
