@@ -12,7 +12,7 @@ use speare::mini::{self, OnErr};
 use speare::Backoff;
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
-use tracing::info;
+use tracing::{error, info};
 use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
@@ -36,6 +36,11 @@ pub async fn program(
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
     let mcu_util: Arc<dyn McuUtil> = Arc::new(mcu_util);
     let statsd_client: Arc<dyn StatsdClient> = Arc::new(statsd_client);
+
+    let _ = statsd_client
+        .count("orb.platform.connd.startup", 1, Vec::new())
+        .await
+        .inspect_err(|_| error!("failed to send startup metric"));
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 
