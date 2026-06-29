@@ -32,8 +32,19 @@ jobs:
     name: Cargo vuln scan
     runs-on: ${{ fromJSON(inputs.runs-on) }}
     steps:
-      - name: Checkout
+      - name: Checkout repo being scanned
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # pin@v4.3.0
+
+      # Engine comes from orb-software (public, no token) so any caller — including
+      # private repos — runs the same source. ref pinned to main; pin to a tag for releases.
+      - name: Fetch triage engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # pin@v4.3.0
+        with:
+          repository: worldcoin/orb-software
+          ref: main
+          path: .vuln-tooling
+          sparse-checkout: ci
+          sparse-checkout-cone-mode: false
 
       # 3.11+ required for tomllib (deny.toml parsing); pin to be runner-agnostic.
       - name: Set up Python
@@ -98,7 +109,7 @@ jobs:
           args=(--grype grype.json --platform "$PLATFORM_TAG")
           [ -f "$DENY_TOML" ] && args+=(--deny-toml "$DENY_TOML")
           [ -f kev.json ] && args+=(--kev-catalog kev.json)
-          python3 ci/vuln_triage.py triage "${args[@]}" --out queue.json | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 .vuln-tooling/ci/vuln_triage.py triage "${args[@]}" --out queue.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload queue
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
