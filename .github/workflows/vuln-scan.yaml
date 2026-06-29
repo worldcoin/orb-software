@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   cargo-vuln-scan:
-    uses: worldcoin/orb-internal/.github/workflows/cargo-vuln-scan.yaml@main
+    uses: ./.github/workflows/cargo-vuln-scan.yaml
     with:
       platform-tag: orb-software
-    secrets: inherit
