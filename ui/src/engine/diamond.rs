@@ -71,6 +71,7 @@ const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
 };
 
 const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_secs(2);
+const USER_QR_CONFIRMATION_DELAY: Duration = Duration::from_millis(500);
 const VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS: f64 = 0.12;
 const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
@@ -676,10 +677,20 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             std::time::Instant::now()
                                 + USER_QR_CONFIRMATION_GIMBAL_DELAY,
                         );
-                        self.set_signup_center_wave(LEVEL_FOREGROUND);
+                        self.set_center(
+                            LEVEL_FOREGROUND,
+                            animations::sine_blend::SineBlend::<
+                                DIAMOND_CENTER_LED_COUNT,
+                            >::new(
+                                DIAMOND_CENTER_SIGNUP, Argb::OFF, 2.0, 0.0
+                            )
+                            .with_delay(
+                                USER_QR_CONFIRMATION_DELAY.as_secs_f64(),
+                            ),
+                        );
                         self.sound.queue(
                             sound::Type::Melody(sound::Melody::QrLoadSuccess),
-                            Duration::ZERO,
+                            USER_QR_CONFIRMATION_DELAY,
                         )?;
                     }
                     QrScanSchema::Wifi => {}
