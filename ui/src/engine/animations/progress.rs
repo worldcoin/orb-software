@@ -10,6 +10,9 @@ const RC: f64 = 0.5;
 const PROGRESS_REACHED_THRESHOLD: f64 = 0.01;
 const PULSE_SPEED: f64 = PI * 2.0 / 4.0; // 4 seconds per wave
 const PULSE_ANGLE_RAD: f64 = PI / 180.0 * 7.0; // 7º angle width
+const PROGRESS_PREVIEW_PULSE_SPEED: f64 = PI * 2.0 / 8.0; // 8 seconds per wave
+const PROGRESS_PREVIEW_MIN_BRIGHTNESS: f64 = 0.7;
+const PROGRESS_PREVIEW_LED_COUNT: f64 = 3.0;
 
 /// Single `color` progress ring growing clockwise from the top
 /// with a `progress` value from 0.0 to 1.0
@@ -27,13 +30,14 @@ pub struct Progress<const N: usize> {
     transition_time: f64,
     pub(crate) shape: Shape<N>,
     paused: bool,
-    blink_progress_preview: bool,
+    progress_preview: bool,
 }
 
 #[derive(Clone)]
 pub struct Shape<const N: usize> {
     progress: f64,
     phase: f64,
+    preview_phase: f64,
     pulse_angle: f64,
 }
 
@@ -58,10 +62,11 @@ impl<const N: usize> Progress<N> {
             shape: Shape {
                 progress: 0.0,
                 phase: 0.0,
+                preview_phase: 0.0,
                 pulse_angle: PULSE_ANGLE_RAD,
             },
             paused: false,
-            blink_progress_preview: false,
+            progress_preview: false,
         }
     }
 
@@ -99,8 +104,8 @@ impl<const N: usize> Progress<N> {
         self
     }
 
-    pub fn with_blink_progress_preview(mut self) -> Self {
-        self.blink_progress_preview = true;
+    pub fn with_progress_preview(mut self) -> Self {
+        self.progress_preview = true;
         self
     }
 }
@@ -150,8 +155,8 @@ impl<const N: usize> Animation for Progress<N> {
 
         tracing::trace!("scaling: {scaling_factor}");
         if !idle {
-            if self.blink_progress_preview {
-                self.shape.render_with_blink_progress_preview(
+            if self.progress_preview {
+                self.shape.render_with_progress_preview(
                     frame,
                     self.color * scaling_factor,
                     self.background_color * scaling_factor,
@@ -174,6 +179,12 @@ impl<const N: usize> Animation for Progress<N> {
             + (dt / (RC + dt)) * (self.progress - self.shape.progress);
         self.shape.pulse_angle = self.shape.pulse_angle
             + (dt / (RC + dt)) * (self.pulse_angle - self.shape.pulse_angle);
+
+        if self.progress_preview {
+            self.shape.preview_phase = (self.shape.preview_phase
+                + dt * PROGRESS_PREVIEW_PULSE_SPEED)
+                % (PI * 2.0);
+        }
 
         if let Some(progress_duration) = &mut self.progress_duration {
             // if progress is reached by the shape, we animate the progress with a pulse
@@ -241,7 +252,7 @@ impl<const N: usize> Shape<N> {
     }
 
     #[allow(clippy::cast_precision_loss)]
-    pub fn render_with_blink_progress_preview(
+    pub fn render_with_progress_preview(
         &self,
         frame: &mut RingFrame<N>,
         foreground: Argb,
@@ -254,19 +265,29 @@ impl<const N: usize> Shape<N> {
         paint_solid_ranges(frame, Some(background), foreground, &current_ranges);
 
         if target_angle > current_angle {
-            let preview_ranges = progress_delta_ranges(current_angle, target_angle);
+            let preview_angle =
+                target_angle.min(current_angle + progress_preview_angle::<N>());
+            let preview_ranges = progress_delta_ranges(current_angle, preview_angle);
             paint_solid_ranges(
                 frame,
                 None,
-                white_green_preview(foreground),
+                white_green_preview(foreground, self.preview_phase),
                 &preview_ranges,
             );
         }
     }
 }
 
-fn white_green_preview(foreground: Argb) -> Argb {
-    foreground.lerp(Argb(foreground.0, 255, 255, 255), 0.35)
+fn white_green_preview(foreground: Argb, phase: f64) -> Argb {
+    let brightness = PROGRESS_PREVIEW_MIN_BRIGHTNESS
+        + (1.0 - PROGRESS_PREVIEW_MIN_BRIGHTNESS) * (1.0 - phase.cos()) / 2.0;
+
+    foreground.lerp(Argb(foreground.0, 255, 255, 255), 0.35) * brightness
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn progress_preview_angle<const FRAME_SIZE: usize>() -> f64 {
+    2.0 * PI * PROGRESS_PREVIEW_LED_COUNT / FRAME_SIZE as f64
 }
 
 fn progress_ranges(angle_rad: f64) -> [Range<f64>; 2] {

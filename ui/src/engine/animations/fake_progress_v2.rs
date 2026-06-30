@@ -82,7 +82,7 @@ impl<const N: usize> FakeProgress<N> {
             ),
             progress_animation: Progress::<N>::new(0.0, None, color)
                 .with_background(ring_background())
-                .with_blink_progress_preview(),
+                .with_progress_preview(),
             halted: false,
         }
     }
