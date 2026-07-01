@@ -614,6 +614,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     state: UiState,
     gimbal: Option<(u32, u32)>,
     gimbal_send_after: Option<std::time::Instant>,
+    show_user_qr_center_after: Option<std::time::Instant>,
     operating_mode: OperatingMode,
 }
 

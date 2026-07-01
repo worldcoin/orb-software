@@ -161,6 +161,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             state: UiState::Booting,
             gimbal: None,
             gimbal_send_after: None,
+            show_user_qr_center_after: None,
             operating_mode: OperatingMode::default(),
         }
     }
