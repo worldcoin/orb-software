@@ -524,10 +524,11 @@ fn resolve_remote_target(target: &str) -> Result<RemoteTarget> {
 }
 
 fn looks_like_ssh_target(target: &str) -> bool {
-    if let Some((prefix, suffix)) = target.split_once(':') {
-        if is_uuid(prefix) && suffix.chars().all(|ch| ch.is_ascii_digit()) {
-            return false;
-        }
+    if let Some((prefix, suffix)) = target.split_once(':')
+        && is_uuid(prefix)
+        && suffix.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return false;
     }
 
     target.contains('.') || target.contains(':')
@@ -639,10 +640,11 @@ fn strip_user_prefix(target: &str) -> &str {
 
 fn normalize_teleport_query(target: &str) -> &str {
     let target = strip_user_prefix(target);
-    if let Some((prefix, suffix)) = target.split_once(':') {
-        if is_uuid(prefix) && suffix.chars().all(|ch| ch.is_ascii_digit()) {
-            return prefix;
-        }
+    if let Some((prefix, suffix)) = target.split_once(':')
+        && is_uuid(prefix)
+        && suffix.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return prefix;
     }
 
     target
