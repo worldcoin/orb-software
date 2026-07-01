@@ -156,7 +156,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             capture_succeeded: false,
             occlusion_active: false,
-            occlusion_sound_last_played: None,
+            capture_feedback_sound_last_played: None,
             capture_distance_in_range: true,
             state: UiState::Booting,
             gimbal: None,

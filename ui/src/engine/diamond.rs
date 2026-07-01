@@ -76,6 +76,7 @@ const USER_QR_CONFIRMATION_DELAY: Duration = Duration::from_millis(500);
 const MIRROR_HOME_RETURN_DELAY: Duration = Duration::from_millis(500);
 /// Delay after the mirror-home command before showing the next user QR prompt.
 const MIRROR_HOME_CLOSED_USER_QR_DELAY: Duration = Duration::from_secs(2);
+const CAPTURE_FEEDBACK_SOUND_INTERVAL: Duration = Duration::from_secs(20);
 const VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS: f64 = 0.12;
 const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
@@ -243,7 +244,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             capture_sound: sound::capture::CaptureLoopSound::default(),
             capture_succeeded: false,
             occlusion_active: false,
-            occlusion_sound_last_played: None,
+            capture_feedback_sound_last_played: None,
             capture_distance_in_range: true,
             state: UiState::Booting,
             gimbal: None,
@@ -324,6 +325,30 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
     fn finish_signup_center_wave(&mut self) {
         self.set_signup_center_static(LEVEL_FOREGROUND);
         self.stop_center(LEVEL_NOTICE, Transition::PlayOnce);
+    }
+
+    fn play_capture_feedback_sound_if_due(&mut self) -> Result<()> {
+        let now = std::time::Instant::now();
+        let should_play = self
+            .capture_feedback_sound_last_played
+            .map_or(true, |last| {
+                now.duration_since(last) >= CAPTURE_FEEDBACK_SOUND_INTERVAL
+            });
+        if should_play {
+            self.capture_feedback_sound_last_played = Some(now);
+            self.sound.queue(
+                sound::Type::Melody(sound::Melody::SoundError),
+                Duration::ZERO,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn clear_capture_feedback_sound_if_recovered(&mut self) {
+        if !self.occlusion_active && self.capture_distance_in_range {
+            self.capture_feedback_sound_last_played = None;
+        }
     }
 
     fn set_verification_success_animations(&mut self) -> Result<()> {
@@ -715,6 +740,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             >::new(
                                 DIAMOND_CENTER_SIGNUP, Argb::OFF, 2.0, 0.0
                             )
+                            .repeat(1)
                             .with_delay(
                                 USER_QR_CONFIRMATION_DELAY.as_secs_f64(),
                             ),
@@ -1079,32 +1105,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     {
                         biometric_flow.halt_progress();
                     }
-                    // animation + sound only on the first transition into occlusion
+                    // animation only on the first transition into occlusion
                     if !self.occlusion_active {
                         self.occlusion_active = true;
                         if self.capture_distance_in_range {
                             self.set_occlusion_center_animation();
                         }
-                        self.occlusion_sound_last_played =
-                            Some(std::time::Instant::now());
-                        self.sound.queue(
-                            sound::Type::Melody(sound::Melody::SoundError),
-                            Duration::ZERO,
-                        )?;
-                    } else if self.occlusion_sound_last_played.map_or(false, |t| {
-                        t.elapsed() >= std::time::Duration::from_secs(20)
-                    }) {
-                        self.occlusion_sound_last_played =
-                            Some(std::time::Instant::now());
-                        self.sound.queue(
-                            sound::Type::Melody(sound::Melody::SoundError),
-                            Duration::ZERO,
-                        )?;
                     }
+                    self.play_capture_feedback_sound_if_due()?;
                 } else {
                     let was_occlusion_active = self.occlusion_active;
                     self.occlusion_active = false;
-                    self.occlusion_sound_last_played = None;
                     if was_occlusion_active && self.capture_distance_in_range {
                         self.finish_signup_center_wave();
                     }
@@ -1137,6 +1148,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             biometric_flow.resume_progress();
                         }
                     }
+                    self.clear_capture_feedback_sound_if_recovered();
                 }
             }
             Event::BiometricCaptureDistance { in_range } => {
@@ -1150,6 +1162,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     } else if !in_range && was_in_range {
                         self.set_occlusion_center_animation();
                     }
+                }
+                if *in_range {
+                    self.clear_capture_feedback_sound_if_recovered();
+                } else {
+                    self.play_capture_feedback_sound_if_due()?;
                 }
                 // halt or resume both FakeProgress and BiometricFlow.
                 // Only resume if both in range AND no occlusion active.

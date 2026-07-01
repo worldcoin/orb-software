@@ -609,7 +609,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     capture_sound: sound::capture::CaptureLoopSound,
     capture_succeeded: bool,
     occlusion_active: bool,
-    occlusion_sound_last_played: Option<std::time::Instant>,
+    capture_feedback_sound_last_played: Option<std::time::Instant>,
     capture_distance_in_range: bool,
     state: UiState,
     gimbal: Option<(u32, u32)>,

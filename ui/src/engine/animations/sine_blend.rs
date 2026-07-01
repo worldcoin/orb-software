@@ -95,7 +95,6 @@ impl<const N: usize> SineBlend<N> {
         self
     }
 
-    #[expect(dead_code)]
     pub fn repeat(mut self, n_times: usize) -> Self {
         self.repeat = Some(n_times);
         self
