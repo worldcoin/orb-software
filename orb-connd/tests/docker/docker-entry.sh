@@ -21,7 +21,9 @@ chown "$TARGET_UID:$TARGET_GID" /run/integration-tests/socket
 chmod 660 /run/integration-tests/socket
 
 echo "starting zenoh"
-zenohd --config=/etc/zenohd.json5 &
+# The test process connects through the host-side bind mount, so create the
+# socket with the host UID/GID instead of container root ownership.
+runuser -u host -- zenohd --config=/etc/zenohd.json5 &
 
 mkdir -p /etc/NetworkManager/system-connections
 chown root:root /etc/NetworkManager/system-connections

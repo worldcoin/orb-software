@@ -49,6 +49,12 @@ pub enum CopyDirection {
     Download,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CopyEntity {
+    File,
+    Directory,
+}
+
 impl RemoteArgs {
     pub fn resolve_auth(
         &self,
@@ -217,13 +223,14 @@ impl RemoteSession {
         local: &Path,
         remote: &Path,
         direction: CopyDirection,
+        entity: CopyEntity,
     ) -> Result<()> {
         match &self.inner {
             RemoteSessionInner::Ssh(session) => {
-                session.copy_file(local, remote, direction).await
+                session.copy_file(local, remote, direction, entity).await
             }
             RemoteSessionInner::Teleport(session) => {
-                session.copy_file(local, remote, direction).await
+                session.copy_file(local, remote, direction, entity).await
             }
         }
     }
@@ -256,12 +263,17 @@ impl TeleportSession {
         local: &Path,
         remote: &Path,
         direction: CopyDirection,
+        entity: CopyEntity,
     ) -> Result<()> {
         let remote_spec =
             format!("{}@{}:{}", self.username, self.target, remote.display());
 
         let mut tsh = Command::new("tsh");
         tsh.arg("scp");
+
+        if entity == CopyEntity::Directory {
+            tsh.arg("-r");
+        }
 
         match direction {
             CopyDirection::Upload => {

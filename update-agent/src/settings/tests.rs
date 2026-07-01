@@ -3,6 +3,8 @@
 // other tests (and potentially cause non-deterministic error successes/failures depending on
 // concurrent execution order).
 
+#![allow(clippy::result_large_err)] // `figment::Error` shape is dictated by `Jail::expect_with`
+
 use std::{path::Path, time::Duration};
 
 use clap::Parser as _;
@@ -98,6 +100,7 @@ fn test_cli_args_override_config_file_and_env_vars() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
@@ -161,6 +164,7 @@ fn test_cli_args_override_config_file() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace.as_os_str(), args.workspace.unwrap().as_str());
@@ -207,6 +211,7 @@ fn test_only_setting_config_file_works() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
         assert_eq!(workspace, Path::new("/config/workspace"));
@@ -249,6 +254,7 @@ fn test_env_override_config_file() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", current_slot)?;
         assert_eq!(active_slot, current_slot);
         assert_eq!(workspace, Path::new("/env/workspace"));
@@ -274,7 +280,6 @@ const PROD_CFG_FILE_CONTENTS: &str = r#"
     versions = "/config/versions"
     components = "/config/components"
     verify_manifest_signature_against = "prod"
-    cacert = "/config/downloads"
     update_location = "/config/update_location"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
@@ -310,6 +315,7 @@ fn production_config() {
             recovery,
             download_delay,
             token,
+            version_overwrite: _,
         } = Settings::get(&args, "config.toml", "update_agent_", Slot::A)?;
         assert_eq!(active_slot, Slot::A);
         assert_eq!(workspace, Path::new("/config/workspace"));

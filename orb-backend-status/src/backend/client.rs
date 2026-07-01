@@ -6,12 +6,13 @@ use chrono::Utc;
 use color_eyre::Result;
 use derive_more::From;
 use eyre::Context;
+use orb_dogd::MetricEmitter;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::{Response, Url};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use reqwest_tracing::{OtelName, TracingMiddleware};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::{
     sync::{oneshot, watch},
     task::{AbortHandle, JoinHandle},
@@ -44,6 +45,7 @@ impl Drop for StatusClient {
 impl StatusClient {
     #[builder]
     pub fn new(
+        metrics: impl MetricEmitter,
         orb_id: OrbId,
         orb_name: OrbName,
         jabil_id: OrbJabilId,
@@ -61,13 +63,15 @@ impl StatusClient {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let orb_id = orb_id.as_str().to_string();
+            let orb_name = orb_name.to_string();
+            let jabil_id = jabil_id.to_string();
 
             let make_client = || -> Result<ClientWithMiddleware> {
                 let retry_policy = ExponentialBackoff::builder()
                     .retry_bounds(min_req_retry_interval, max_req_retry_interval)
                     .build_with_max_retries(3);
 
-                let reqwest_client = reqwest::Client::builder()
+                let reqwest_client = orb_security_utils::reqwest::client_builder()
                     .timeout(req_timeout)
                     .user_agent("orb-backend-status")
                     .build()
@@ -128,14 +132,36 @@ impl StatusClient {
                                 ..req
                             };
 
-                            client
+                            let start = Instant::now();
+                            let response = client
                                 .post(endpoint.clone())
                                 .json(&req)
                                 .basic_auth(&orb_id, Some(attest_token.clone()))
                                 .send()
                                 .await
                                 .wrap_err("failed to send request")
-                                .map_err(Err::Other)
+                                .map_err(Err::Other);
+                            let elapsed = start.elapsed().as_millis();
+
+                            let ok_tag = if response.is_ok() {
+                                "ok:true"
+                            } else {
+                                "ok:false"
+                            };
+
+                            let _ = metrics.count(
+                                "orb.platform.backend_status.client_req",
+                                1,
+                                [ok_tag]
+                            );
+
+                            let _ = metrics.dist(
+                                "orb.platform.backend_status.client_req_duration",
+                                elapsed as f64,
+                                [ok_tag]
+                            );
+
+                            response
                         };
 
                         let _ = res_tx.send(res);

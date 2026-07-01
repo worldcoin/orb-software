@@ -14,7 +14,7 @@ RUN ZENOH_VERSION="1.7.2" && \
     else \
         ARCH="x86_64"; \
     fi && \
-    wget -O /tmp/zenoh.zip "https://www.eclipse.org/downloads/download.php?file=/zenoh/zenoh/${ZENOH_VERSION}/zenoh-${ZENOH_VERSION}-${ARCH}-unknown-linux-gnu-debian.zip&r=1" && \
+    wget -O /tmp/zenoh.zip "https://github.com/eclipse-zenoh/zenoh/releases/download/${ZENOH_VERSION}/zenoh-${ZENOH_VERSION}-${ARCH}-unknown-linux-gnu-debian.zip" && \
     unzip /tmp/zenoh.zip -d /tmp/zenoh && \
     apt-get update && \
     dpkg -i /tmp/zenoh/zenohd_${ZENOH_VERSION}_${DEB_ARCH}.deb /tmp/zenoh/zenoh-plugin-storage-manager_${ZENOH_VERSION}_${DEB_ARCH}.deb || \

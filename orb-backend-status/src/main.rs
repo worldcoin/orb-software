@@ -1,8 +1,10 @@
 use color_eyre::eyre::Result;
 use orb_backend_status::backend::os_version::orb_os_version;
+use orb_dogd::DogstatsdClient;
 use orb_endpoints::{v2::Endpoints, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
+use std::default::Default;
 use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tokio_util::sync::CancellationToken;
@@ -46,14 +48,13 @@ async fn main() -> Result<()> {
         OrbJabilId("unknown".to_string())
     });
 
-    // Zenoh
-    let cfg = zenorb::client_cfg(7447);
-    let zsession = zenorb::Zenorb::from_cfg(cfg)
+    let zsession = zenorb::Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(orb_id.clone())
         .with_name("orb-backend-status")
         .await?;
 
     let result = orb_backend_status::program()
+        .metrics(DogstatsdClient::default())
         .dbus(zbus::Connection::session().await?)
         .zsession(&zsession)
         .endpoint(endpoint)

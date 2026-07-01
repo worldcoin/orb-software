@@ -9,11 +9,11 @@ use sha2::{Digest, Sha256};
 
 const PROD_MANIFEST_PUBKEY: &str = include_str!("../../pubkeys/manifest.prod.json");
 const PROD_MANIFEST_PUBKEY_SHA256: &[u8; 32] =
-    &hex!("7f171578b473b356050418c0660cb9aaa2b67fe79d0a4c9fd3cf74e1195eb065");
+    &hex!("0896cbc4912986733d0873ad3c5b7a32a13eac6a849b41f3c8b8c1c02a09395d");
 
 const STAGE_MANIFEST_PUBKEY: &str = include_str!("../../pubkeys/manifest.stage.json");
 const STAGE_MANIFEST_PUBKEY_SHA256: &[u8; 32] =
-    &hex!("8410be3b790a432daadaa3bc8a243034815df96fc23e42785ccad5cd8d7512cc");
+    &hex!("91ec70d8dd11b056b1c20155028d1cc480f737e295f731d07e379cd6f97643c7");
 
 static PUBKEYS: OnceLock<ManifestPubkeys> = OnceLock::new();
 

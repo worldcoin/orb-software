@@ -9,6 +9,7 @@ use color_eyre::{
     eyre::{eyre, Context, ContextCompat},
     Result,
 };
+use orb_dogd::{MetricEmitter, NO_TAGS};
 use speare::mini;
 use std::{sync::Arc, time::Duration};
 use tokio::{
@@ -30,14 +31,18 @@ pub struct Snapshot {
     pub location: Location,
 }
 
-pub struct Args {
+pub struct Args<M: MetricEmitter> {
     pub poll_interval: Duration,
     pub modem_manager: Arc<dyn ModemManager>,
     pub mcu_util: Arc<dyn McuUtil>,
     pub systemd: Systemd,
+    pub metrics: Arc<M>,
 }
 
-pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
+pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
+where
+    M: MetricEmitter,
+{
     info!("starting modem supervisor");
 
     let mut snapshot: Option<Snapshot> = None;
@@ -81,6 +86,10 @@ pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
         if let Err(e) = refresh_snapshot().await {
             error!("failed to refresh modem snapshot with err: {e}");
             error!("powercycling modem");
+
+            let _ =
+                ctx.metrics
+                    .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
             let _ = powercycle_modem(ctx.mcu_util.as_ref(), &ctx.systemd)
                 .await
@@ -205,10 +214,17 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<(
 
     info!("modem detected at /dev/cdc-wdm0");
 
+    info!("Restarting ModemManager");
     systemd
         .restart_service("ModemManager.service")
         .await
         .wrap_err("restart ModemManager systemd service")?;
+
+    info!("Waiting for ModemManager to become active");
+    systemd
+        .wait_for_active("ModemManager.service", Duration::from_secs(30))
+        .await
+        .wrap_err("ModemManager did not become active after powercycle")?;
 
     info!("ModemManager restarted!");
 

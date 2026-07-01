@@ -45,6 +45,7 @@ pub struct Settings {
     #[serde_as(as = "DurationMilliSeconds")]
     pub download_delay: Duration,
     pub token: Option<String>,
+    pub version_overwrite: Option<String>,
 }
 
 impl Settings {

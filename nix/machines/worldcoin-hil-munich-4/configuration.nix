@@ -16,16 +16,17 @@
     ../hil-common.nix
   ];
 
+  worldcoin.orbId = "a5af7640";
   worldcoin.orbPlatform = "pearl";
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
-      orb_id: cf2dbea5
+      orb_id: ${config.worldcoin.orbId}
       platform: ${config.worldcoin.orbPlatform}
       # Pin controller configuration for orb-hil
       # Type of pin controller to use (ftdi, relay)
       pin_ctrl_type: usb_relay
-      serial_path: "usb-FTDI_FT232R_USB_UART_BG02N1MA-if00-port0"
+      serial_path: "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02N1MA-if00-port0"
       relay_bank: "/dev/hidraw0"
       relay_power_channel: 2
       relay_recovery_channel: 1

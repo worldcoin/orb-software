@@ -17,6 +17,8 @@ use std::{
 
 #[derive(ClapArgs, Debug)]
 pub struct Args {
+    #[arg(long)]
+    pub bin: bool,
     pub pkg: String,
 }
 
@@ -88,7 +90,16 @@ impl TeleportTarget {
 }
 
 pub fn run(args: Args) -> Result<()> {
-    let Args { pkg } = args;
+    let Args { bin, pkg } = args;
+
+    if bin {
+        deploy_bin(pkg)
+    } else {
+        deploy_deb(pkg)
+    }
+}
+
+fn deploy_deb(pkg: String) -> Result<()> {
     let build_target = "aarch64-unknown-linux-gnu".to_string();
     let package_info = get_package_deploy_info(&pkg, &build_target)?;
     let orb_target = orb_target_or_input();
@@ -145,6 +156,73 @@ pub fn run(args: Args) -> Result<()> {
             deploy_deb_over_teleport(&pkg, &target, &package_info.services)?;
         }
     }
+
+    Ok(())
+}
+
+fn deploy_bin(pkg: String) -> Result<()> {
+    let target = "aarch64-unknown-linux-gnu";
+
+    let orb_ip = env_or_input("orb ip", "ORB_IP");
+    let worldcoin_pw = env_or_input("\nworldcoin user password", "WORLDCOIN_PW");
+
+    println!("\ndeploying to orb with ip address: {orb_ip}\nuser: worldcoin\npassword: '{worldcoin_pw}'\n");
+
+    let package_info = get_package_deploy_info(&pkg, target)?;
+    println!("associated systemd services: {:?}\n", package_info.services);
+
+    let bin = get_crate_binary_name(&pkg)?;
+
+    cmd(&[
+        "cargo",
+        "zigbuild",
+        "--target",
+        target,
+        "--release",
+        "-p",
+        pkg.as_str(),
+    ])?;
+
+    let bin_path = format!("./target/{target}/release/{bin}");
+    let ssh_host = format!("worldcoin@{orb_ip}");
+    let remote_bin = format!("/home/worldcoin/{bin}");
+    let scp_target = format!("{ssh_host}:{remote_bin}");
+    let install_target = format!("/usr/local/bin/{bin}");
+
+    println!("\ncopying binary to orb");
+    cmd(&[
+        "sshpass",
+        "-p",
+        worldcoin_pw.as_str(),
+        "scp",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        bin_path.as_str(),
+        scp_target.as_str(),
+    ])?;
+
+    println!("installing binary to /usr/local/bin on orb\n");
+    cmd(&[
+        "sshpass",
+        "-p",
+        worldcoin_pw.as_str(),
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        ssh_host.as_str(),
+        "sudo",
+        "install",
+        "-m",
+        "0755",
+        remote_bin.as_str(),
+        install_target.as_str(),
+    ])?;
+
+    restart_services_over_ssh(&ssh_host, &worldcoin_pw, &package_info.services)?;
 
     Ok(())
 }
@@ -345,6 +423,35 @@ fn get_package_deploy_info(pkg: &str, target: &str) -> Result<PackageDeployInfo>
         services: get_crate_systemd_services(&package),
         bind_mounts: get_bind_mounts(&package, target),
     })
+}
+
+fn get_crate_binary_name(pkg: &str) -> Result<String> {
+    let md = MetadataCommand::new().no_deps().exec()?;
+    let pkg_name = pkg;
+    let pkg = md
+        .packages
+        .into_iter()
+        .find(|p| p.name.as_str() == pkg)
+        .ok_or_else(|| eyre!("could not find crate {pkg} in the workspace"))?;
+
+    let bins = pkg
+        .targets
+        .into_iter()
+        .filter(|target| target.is_bin())
+        .map(|target| target.name)
+        .collect::<Vec<_>>();
+
+    match bins.as_slice() {
+        [] => Err(eyre!("crate {pkg_name} does not define a binary target")),
+        [bin] => Ok(bin.clone()),
+        _ => bins
+            .iter()
+            .find(|bin| bin.as_str() == pkg.name.as_str())
+            .cloned()
+            .ok_or_else(|| {
+                eyre!("crate {pkg_name} defines multiple binary targets: {bins:?}")
+            }),
+    }
 }
 
 fn get_crate_systemd_services(pkg: &Package) -> Vec<String> {

@@ -1,0 +1,18 @@
+name: Vulnerability Scan
+
+# On-demand Cargo dependency vulnerability scan (the release path runs it
+# automatically as a job in release.yaml).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  cargo-vuln-scan:
+    uses: ./.github/workflows/cargo-vuln-scan.yaml
+    with:
+      platform-tag: orb-software

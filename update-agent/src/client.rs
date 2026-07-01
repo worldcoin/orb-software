@@ -20,6 +20,8 @@ pub fn normal() -> Result<&'static Client, Error> {
     INSTANCE.get_or_try_init(initialize)
 }
 
+// update-agent intentionally uses system certs rather than pinned CAs — see comment below.
+#[allow(clippy::disallowed_methods)]
 fn initialize() -> Result<Client, Error> {
     // We explicitly do not pin certificates and default to using the system's
     // root CAs in the update-agent.

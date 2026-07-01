@@ -17,7 +17,7 @@ RUN ZENOH_VERSION="1.7.2" && \
     else \
         ARCH="x86_64"; \
     fi && \
-    wget -O /tmp/zenoh.zip "https://www.eclipse.org/downloads/download.php?file=/zenoh/zenoh/${ZENOH_VERSION}/zenoh-${ZENOH_VERSION}-${ARCH}-unknown-linux-gnu-debian.zip&r=1" && \
+    wget -O /tmp/zenoh.zip "https://github.com/eclipse-zenoh/zenoh/releases/download/${ZENOH_VERSION}/zenoh-${ZENOH_VERSION}-${ARCH}-unknown-linux-gnu-debian.zip" && \
     unzip /tmp/zenoh.zip -d /tmp/zenoh && \
     apt-get update && \
     printf '%s\n' '#!/bin/sh' 'exit 0' > /usr/local/bin/systemctl && chmod +x /usr/local/bin/systemctl && \
@@ -27,7 +27,7 @@ RUN ZENOH_VERSION="1.7.2" && \
     rm -rf /var/lib/apt/lists/* /tmp/zenoh.zip /tmp/zenoh && \
     zenohd --version
 
-RUN mkdir -p /run/integration-tests
+RUN mkdir -p /run/integration-tests /run/zenohd
 
 COPY zenohd.json5 /etc/zenohd.json5
 

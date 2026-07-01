@@ -8,8 +8,9 @@ use orb_info::OrbId;
 use tracing::warn;
 
 use self::client_builder::{IsUnset, SetBaseUrl, SetClient, State};
-use crate::cli::KeyInfo;
 use crate::BUILD_INFO;
+
+use crate::validate::KeyInfo;
 
 const USER_AGENT: &str = const_concat!(
     "orb-se050-reprovision/",
@@ -40,7 +41,7 @@ where
     }
 
     pub fn default_reqwest_client(self) -> Result<ClientBuilder<SetClient<S>>> {
-        let client = orb_security_utils::reqwest::http_client_builder()
+        let client = orb_security_utils::reqwest::client_builder()
             .user_agent(USER_AGENT)
             .build()
             .wrap_err("failed to create http client")?;
@@ -58,7 +59,7 @@ where
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
             Backend::Analysis => "analysis.ml",
-            Backend::Local => unreachable!(),
+            Backend::Local => panic!("use `local_backend()` instead"),
         };
         let base_url = format!("https://auth.{subdomain}.worldcoin.org");
         self.base_url_internal(base_url)
@@ -81,7 +82,6 @@ pub struct PubkeyPem(String);
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Proof {
-    #[serde(skip)]
     orb_id: OrbId,
     server_nonce: u128,
     /// Combined with server_nonce for freshness

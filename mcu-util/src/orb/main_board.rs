@@ -10,7 +10,10 @@ use crate::orb::dfu::BlockIterator;
 use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
-use crate::{Camera, GimbalHomeOpts, Leds, PolarizerOpts, RebootBehavior};
+use crate::{
+    Camera, GimbalHomeOpts, IrWavelength, Leds, PolarizerOpts, RebootBehavior,
+    SignupOpts,
+};
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
 use orb_mcu_interface::orb_messages;
@@ -318,6 +321,130 @@ impl MainBoard {
         Ok(())
     }
 
+    /// Replicates the MCU command sequence orb-core sends during a signup
+    /// capture: enable the IR LEDs, set the on-duration and FPS, start the IR
+    /// eye + face camera triggers, hold, then stop the triggers and disable the
+    /// IR LEDs.
+    pub async fn signup_capture(&mut self, opts: SignupOpts) -> Result<()> {
+        use main_messaging::jetson_to_mcu::Payload;
+        use orb_messages::main::infrared_le_ds::Wavelength as W;
+
+        let wavelength = match opts.wavelength {
+            IrWavelength::L850 => W::Wavelength850nm,
+            IrWavelength::L940 => W::Wavelength940nm,
+            IrWavelength::L850Left => W::Wavelength850nmLeft,
+            IrWavelength::L850Right => W::Wavelength850nmRight,
+            IrWavelength::L940Left => W::Wavelength940nmLeft,
+            IrWavelength::L940Right => W::Wavelength940nmRight,
+            IrWavelength::L850Center => W::Wavelength850nmCenter,
+            IrWavelength::L850Side => W::Wavelength850nmSide,
+            IrWavelength::L940Single => W::Wavelength940nmSingle,
+        };
+
+        // --- enable (orb-core: set_ir_wavelength, set_ir_duration, set_fps, start triggers) ---
+        self.send_checked(
+            Payload::InfraredLeds(main_messaging::InfraredLeDs {
+                wavelength: wavelength as i32,
+            }),
+            &format!("⚡️ IR LEDs enabled ({:?})", opts.wavelength),
+        )
+        .await?;
+        self.send_checked(
+            Payload::LedOnTime(main_messaging::LedOnTimeUs {
+                on_duration_us: u32::from(opts.duration_us),
+            }),
+            &format!("💡 IR LED on-duration set to {}us", opts.duration_us),
+        )
+        .await?;
+        self.send_checked(
+            Payload::Fps(main_messaging::Fps { fps: opts.fps }),
+            &format!("🎥 FPS set to {}", opts.fps),
+        )
+        .await?;
+        self.send_checked(
+            Payload::StartTriggeringIrEyeCamera(
+                main_messaging::StartTriggeringIrEyeCamera {},
+            ),
+            "📸 IR eye camera trigger started",
+        )
+        .await?;
+        self.send_checked(
+            Payload::StartTriggeringIrFaceCamera(
+                main_messaging::StartTriggeringIrFaceCamera {},
+            ),
+            "📸 IR face camera trigger started",
+        )
+        .await?;
+        if opts.rgb {
+            self.send_checked(
+                Payload::StartTriggeringRgbFaceCamera(
+                    main_messaging::StartTriggeringRgbFaceCamera {},
+                ),
+                "📸 RGB face camera trigger started",
+            )
+            .await?;
+        }
+
+        info!("⏳ holding capture for {}s ...", opts.seconds);
+        time::sleep(Duration::from_secs(opts.seconds)).await;
+
+        // --- teardown (orb-core: stop triggers, disable_ir_led) ---
+        self.send_checked(
+            Payload::StopTriggeringIrEyeCamera(
+                main_messaging::StopTriggeringIrEyeCamera {},
+            ),
+            "🛑 IR eye camera trigger stopped",
+        )
+        .await?;
+        self.send_checked(
+            Payload::StopTriggeringIrFaceCamera(
+                main_messaging::StopTriggeringIrFaceCamera {},
+            ),
+            "🛑 IR face camera trigger stopped",
+        )
+        .await?;
+        if opts.rgb {
+            self.send_checked(
+                Payload::StopTriggeringRgbFaceCamera(
+                    main_messaging::StopTriggeringRgbFaceCamera {},
+                ),
+                "🛑 RGB face camera trigger stopped",
+            )
+            .await?;
+        }
+        self.send_checked(
+            Payload::InfraredLeds(main_messaging::InfraredLeDs {
+                wavelength: W::None as i32,
+            }),
+            "🌑 IR LEDs disabled",
+        )
+        .await?;
+        self.send_checked(
+            Payload::LedOnTime(main_messaging::LedOnTimeUs { on_duration_us: 0 }),
+            "💡 IR LED on-duration reset to 0",
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    /// Sends a main-MCU payload and turns a non-success ack into an error,
+    /// logging `what` on success.
+    async fn send_checked(
+        &mut self,
+        payload: main_messaging::jetson_to_mcu::Payload,
+        what: &str,
+    ) -> Result<()> {
+        match self.send(McuPayload::ToMain(payload)).await {
+            Ok(CommonAckError::Success) => {
+                info!("{}", what);
+                Ok(())
+            }
+            Ok(ack) => Err(eyre!("{what}: ack {ack:?}")),
+            Err(e) => Err(eyre!("{what}: {e:?}")),
+        }
+    }
+
     pub(crate) async fn polarizer(&mut self, opts: PolarizerOpts) -> Result<()> {
         let (command, angle) = match opts {
             PolarizerOpts::Home => (
@@ -599,19 +726,17 @@ impl MainBoard {
     }
 
     pub async fn front_leds(&mut self, leds: Leds) -> Result<()> {
-        if let Leds::Booster = leds {
+        if let Leds::Booster { brightness } = leds {
             match self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(
-                        main_messaging::WhiteLeDsBrightness {
-                            brightness: 50, /* thousandth, so 0.5% */
-                        },
+                        main_messaging::WhiteLeDsBrightness { brightness },
                     ),
                 ))
                 .await
             {
                 Ok(CommonAckError::Success) => {
-                    info!("🚀 Booster LEDs enabled");
+                    info!("🚀 Booster LEDs enabled at {} / 1000", brightness);
                 }
                 Ok(e) => {
                     return Err(eyre!("Error enabling booster LEDs: ack {:?}", e));
@@ -670,7 +795,7 @@ impl MainBoard {
         // turn off all LEDs after 3 seconds
         tokio::time::sleep(Duration::from_millis(3000)).await;
 
-        if let Leds::Booster = leds {
+        if let Leds::Booster { .. } = leds {
             match self
                 .send(McuPayload::ToMain(
                     main_messaging::jetson_to_mcu::Payload::WhiteLedsBrightness(

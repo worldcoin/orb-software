@@ -1,0 +1,21 @@
+[package]
+name = "orb-dogd"
+version = "0.1.0"
+description = "Standardized statsd setup for the orb"
+authors = ["Theodore Sfikas <sfikastheo@users.noreply.github.com>"]
+
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+testing = []
+
+[dependencies]
+dogstatsd.workspace = true
+eyre.workspace = true
+flume.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

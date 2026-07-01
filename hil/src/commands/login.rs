@@ -20,12 +20,14 @@ use tracing::{info, warn};
 use crate::serial::{spawn_serial_reader_task, wait_for_pattern};
 use crate::OrbConfig;
 
-const LOGIN_PROMPT_USER: &str = "worldcoin";
-
 #[derive(Debug, Parser)]
 pub struct Login {
+    /// Username to log in as
+    #[arg(long, default_value = "worldcoin")]
+    username: String,
+    /// Password for login; omit for passwordless accounts (e.g. root with no password)
     #[arg(long)]
-    password: SecretString,
+    password: Option<SecretString>,
     /// Timeout duration per-attempt (e.g., "10s", "500ms")
     #[arg(long, default_value = "60s", value_parser = parse_duration)]
     timeout: Duration,
@@ -65,7 +67,8 @@ impl Login {
                 let inner_result = Self::do_login(
                     &mut serial_writer,
                     &mut serial_output_rx,
-                    &self.password,
+                    &self.username,
+                    self.password.as_ref(),
                     self.timeout,
                 )
                 .await
@@ -91,13 +94,14 @@ impl Login {
     }
 
     /// Waits for login prompt, while typing enter key. Then when detected, enters
-    /// password.
+    /// username and optional password.
     ///
     /// Times out if prompt cannot be detected within timeout.
     async fn do_login(
         mut serial_writer: impl AsyncWrite + Unpin,
         serial_rx: &mut broadcast::Receiver<Bytes>,
-        password: &SecretString,
+        username: &str,
+        password: Option<&SecretString>,
         timeout: Duration,
     ) -> Result<()> {
         // exit prompt in case this is a retry
@@ -134,26 +138,36 @@ impl Login {
         info!("Detected login prompt!");
         tokio::time::sleep(Duration::from_millis(200)).await;
 
+        let shell_prompt = format!("{username}@");
+
         info!("Entering username");
         serial_writer
-            .write_all(format!("{LOGIN_PROMPT_USER}\n").as_bytes())
+            .write_all(format!("{username}\n").as_bytes())
             .await
             .wrap_err("error while typing username")?;
         tokio::time::sleep(Duration::from_millis(2000)).await;
 
-        info!("Entering password");
-        let serial_rx_copy = BroadcastStream::new(serial_rx.resubscribe());
-        serial_writer
-            .write_all(format!("{}\n", password.expose_secret()).as_bytes())
+        if let Some(password) = password {
+            info!("Entering password");
+            let serial_rx_copy = BroadcastStream::new(serial_rx.resubscribe());
+            serial_writer
+                .write_all(format!("{}\n", password.expose_secret()).as_bytes())
+                .await
+                .wrap_err("error while typing password")?;
+            tokio::time::timeout(
+                Duration::from_millis(95000),
+                wait_for_pattern(shell_prompt.as_bytes().to_owned(), serial_rx_copy),
+            )
             .await
-            .wrap_err("error while typing username")?;
-        tokio::time::timeout(
-            Duration::from_millis(95000),
-            wait_for_pattern("worldcoin@".as_bytes().to_owned(), serial_rx_copy),
-        )
-        .await
-        .wrap_err("timeout while waiting for bash prompt")?
-        .wrap_err("error while waiting for bash prompt")?;
+            .wrap_err("timeout while waiting for bash prompt")?
+            .wrap_err("error while waiting for bash prompt")?;
+        } else {
+            info!("No password configured, proceeding to login verification");
+            // For passwordless accounts the shell prompt appears during the sleep
+            // above, but matching it is unreliable (ANSI color codes can split the
+            // expected pattern). The whoami check below is the authoritative
+            // verification step.
+        }
 
         // Double check that the login was successful, by running `whoami`.
         info!("Running whoami");
@@ -164,7 +178,7 @@ impl Login {
             .wrap_err("failed to type after logging in")?;
         tokio::time::timeout(
             Duration::from_millis(5000),
-            wait_for_pattern(LOGIN_PROMPT_USER.to_owned().into_bytes(), serial_rx_copy),
+            wait_for_pattern(username.as_bytes().to_owned(), serial_rx_copy),
         )
         .await
         .wrap_err("whoami response timed out")?

@@ -3,6 +3,7 @@ AGENTS.override.md
 
 # Rust stuff
 /target
+/target-cross-diamond
 /artifacts_linux
 
 # Nix stuff
@@ -23,6 +24,7 @@ __pycache__
 .idea/
 .vscode/
 .claude/
+.codex
 
 # Allow developers to use python pre-commit locally
 /.pre-commit-config.yaml

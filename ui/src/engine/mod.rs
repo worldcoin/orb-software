@@ -2,9 +2,11 @@
 
 use crate::sound;
 use crate::tokio_spawn;
+use crate::RELEASE_TYPE;
 use async_trait::async_trait;
 use eyre::Result;
 use futures::channel::mpsc::Sender;
+use orb_info::orb_os_release::OrbRelease;
 use orb_messages::mcu_message::Message;
 use orb_rgb::Argb;
 use pid::InstantTimer;
@@ -33,6 +35,24 @@ pub enum OrbType {
 }
 
 pub const LED_ENGINE_FPS: u64 = 30;
+
+fn release_type() -> OrbRelease {
+    RELEASE_TYPE.get().copied().unwrap_or(OrbRelease::Prod)
+}
+
+pub(crate) fn pearl_operator_default() -> Argb {
+    match release_type() {
+        OrbRelease::Analysis => Argb::PEARL_OPERATOR_ANALYSIS,
+        _ => Argb::PEARL_OPERATOR_DEFAULT,
+    }
+}
+
+pub(crate) fn diamond_operator_default() -> Argb {
+    match release_type() {
+        OrbRelease::Analysis => Argb::DIAMOND_OPERATOR_ANALYSIS,
+        _ => Argb::DIAMOND_OPERATOR_DEFAULT,
+    }
+}
 
 const GAMMA: f64 = 2.5;
 
@@ -258,6 +278,10 @@ event_enum! {
         MagicQrActionCompleted {
             success: bool,
         },
+
+        /// There is an ongoing attempt to connect to a network with internet
+        #[event_enum(method = internet_connecting)]
+        InternetConnecting,
         /// Network connection successful
         #[event_enum(method = network_connection_success)]
         NetworkConnectionSuccess,

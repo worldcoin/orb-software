@@ -1,4 +1,4 @@
-use derive_more::Display;
+use derive_more::{Display, FromStr};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -20,7 +20,7 @@ pub enum ReadErr {
     UnknownPlatformType(String),
 }
 
-#[derive(Display, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Display, FromStr, Debug, Clone, PartialEq, Eq, Copy)]
 pub enum OrbOsPlatform {
     #[display("diamond")]
     Diamond,
@@ -29,29 +29,29 @@ pub enum OrbOsPlatform {
     Pearl,
 }
 
-#[derive(Display, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Display, FromStr, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum OrbRelease {
-    #[display("dev")]
-    Dev,
-    #[display("service")]
-    Service,
-    #[display("prod")]
-    Prod,
-    #[display("stage")]
-    Stage,
     #[display("analysis")]
     Analysis,
+    #[display("dev")]
+    Dev,
+    #[display("prod")]
+    Prod,
+    #[display("service")]
+    Service,
+    #[display("stage")]
+    Stage,
 }
 
 impl OrbRelease {
     pub fn as_str(&self) -> &str {
         use OrbRelease::*;
         match self {
-            Dev => "dev",
-            Service => "service",
-            Stage => "staging",
-            Prod => "prod",
             Analysis => "analysis",
+            Dev => "dev",
+            Prod => "prod",
+            Service => "service",
+            Stage => "stage",
         }
     }
 }

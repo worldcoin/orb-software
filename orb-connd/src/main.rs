@@ -9,15 +9,16 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    statsd::dd::DogstatsdClient,
     systemd::Systemd,
     wpa_ctrl::cli::WpaCli,
 };
+use orb_dogd::DogstatsdClient;
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease},
     OrbId,
 };
 use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
+use std::default::Default;
 use std::time::Duration;
 use tokio::{
     io,
@@ -100,7 +101,7 @@ fn connectivity_daemon() -> Result<()> {
             }
         };
 
-        let zenoh = Zenorb::from_cfg(zenorb::client_cfg(7447))
+        let zenoh = Zenorb::from_cfg(zenorb::default_cfg())
             .orb_id(OrbId::read().await?)
             .with_name("connd")
             .await?;
@@ -113,7 +114,7 @@ fn connectivity_daemon() -> Result<()> {
             .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
-            .statsd_client(DogstatsdClient::new())
+            .statsd_client(DogstatsdClient::default())
             .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)

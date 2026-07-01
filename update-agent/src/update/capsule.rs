@@ -7,6 +7,7 @@ use std::io;
 use std::path::PathBuf;
 
 use efivar::{EfiVarData, EfiVarDb};
+use orb_dogd::MetricEmitter;
 use orb_update_agent_core::{components, Slot};
 use thiserror::Error;
 
@@ -92,9 +93,10 @@ impl Update for components::Capsule {
     // TODO EFI can't update any arbitrary slot, only the *other* slot. So we
     // don't check which slot we're updating. Maybe check that the slot is the
     // right one?
-    fn update<R>(&self, _: Slot, src: R) -> eyre::Result<()>
+    fn update<R, M>(&self, _: Slot, src: R, _metrics: &M) -> eyre::Result<()>
     where
         R: io::Read + io::Seek,
+        M: MetricEmitter,
     {
         save_capsule(src)?;
 

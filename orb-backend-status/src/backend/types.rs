@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
-use crate::collectors::oes::Event;
+use crate::orb_event_stream::Event;
 use chrono::{DateTime, Utc};
 use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OrbStatusApiV2 {
@@ -38,6 +37,7 @@ pub struct OrbStatusApiV2 {
     pub oes: Option<Vec<Event>>,
     pub oes_cached: bool,
     pub orb_stand_qr_id: Option<String>,
+    pub orb_stand_qr_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

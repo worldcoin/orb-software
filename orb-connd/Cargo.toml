@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors = [
-	"Philipp Poppov <pophilpo@users.noreply.github.com>",
+	"Philipp Popov <pophilpo@users.noreply.github.com>",
 	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 
@@ -22,7 +22,6 @@ clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
-dogstatsd = "0.11"
 flume.workspace = true
 futures.workspace = true
 hex.workspace = true
@@ -32,7 +31,9 @@ num-traits.workspace = true
 oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-connd-dbus.workspace = true
+orb-dogd.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
 orb-secure-storage-ca = { workspace = true, default-features = false, features = [
 	"backend-in-memory",
@@ -40,7 +41,6 @@ orb-secure-storage-ca = { workspace = true, default-features = false, features =
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
-prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
@@ -74,6 +74,7 @@ mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
 proptest.workspace = true
 portpicker = "0.1.1"
+prelude = { workspace = true, features = ["future"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

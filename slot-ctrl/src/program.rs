@@ -2,7 +2,6 @@ use crate::{BootChainFwStatus, Error, OrbSlotCtrl, RootFsStatus, Slot};
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::bail, Result};
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_info::orb_os_release::OrbOsPlatform;
 use std::{env, str::FromStr};
 
 const BUILD_INFO: BuildInfo = make_build_info!();
@@ -71,15 +70,18 @@ enum StatusCommands {
     /// Set the rootfs status.
     #[command(name = "set", short_flag = 's')]
     SetRootfsStatus { status: String },
-    /// Get the EFI and scratch regsiter retry counters.
+    /// Get the EFI and scratch register retry counters.
     #[command(name = "retries", short_flag = 'c')]
     GetRetryCounters,
-    /// Set the retry counter to maximum.
+    /// Reset retry counters to maximum.
     #[command(name = "reset", short_flag = 'r')]
-    ResetEfiRetryCounter,
+    ResetRetryCounters,
     /// Get the maximum retry counter.
     #[command(name = "max", short_flag = 'm')]
-    GetEfiMaxRetryCounter,
+    GetMaxRetryCounter,
+    /// Mark the current slot as ok
+    #[command(name = "mark-ok")]
+    MarkSlotOk,
     /// Get a full list of rootfs status variants.
     #[command(name = "list", short_flag = 'l')]
     ListStatusVariants,
@@ -160,12 +162,20 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                     slot_ctrl.get_retry_counts(slot)?.to_string()
                 }
 
-                StatusCommands::GetEfiMaxRetryCounter => {
+                StatusCommands::GetMaxRetryCounter => {
                     slot_ctrl.get_efi_max_retry_count()?.to_string()
                 }
 
-                StatusCommands::ResetEfiRetryCounter => {
-                    if let Err(e) = slot_ctrl.reset_efi_retry_count_to_max(slot) {
+                StatusCommands::ResetRetryCounters => {
+                    if let Err(e) = slot_ctrl.reset_retry_counts_to_max(slot) {
+                        check_running_as_root(e)?;
+                    }
+
+                    empty
+                }
+
+                StatusCommands::MarkSlotOk => {
+                    if let Err(e) = slot_ctrl.mark_slot_ok(slot) {
                         check_running_as_root(e)?;
                     }
 
@@ -175,16 +185,12 @@ pub fn run(slot_ctrl: &OrbSlotCtrl, cli: Cli) -> Result<String> {
                 StatusCommands::ListStatusVariants => {
                     let mut output = String::new();
                     output.push_str(
-                        "Available Rootfs status variants with their aliases):\n",
+                        "Available Rootfs status variants (with their aliases):\n",
                     );
-                    output.push_str("  Normal (normal, 0)\n");
-                    if OrbOsPlatform::Pearl == slot_ctrl.orb_type {
-                        output.push_str(
-                            "  UpdateInProcess (updateinprocess, updinprocess, 1)\n",
-                        );
-                        output.push_str("  UpdateDone (updatedone, upddone, 2)\n");
-                    }
-                    output.push_str("  Unbootable (unbootable, 3)\n");
+                    output.push_str("\tNormal (normal, 0)\n");
+                    output.push_str("\tUpdateInProcess (updateinprocess, 1)\n");
+                    output.push_str("\tUpdateDone (updatedone, 2)\n");
+                    output.push_str("\tUnbootable (unbootable, 3)\n");
 
                     output
                 }

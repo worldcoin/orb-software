@@ -1,23 +1,24 @@
-use crate::{modem, reporters::net_stats::NetStats, statsd::StatsdClient};
+use crate::modem;
 use color_eyre::Result;
 use flume::Receiver;
+use orb_dogd::{MetricEmitter, NO_TAGS};
 use speare::mini;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{info, warn};
 
-pub struct Args {
-    pub statsd: Arc<dyn StatsdClient>,
+pub struct Args<M: MetricEmitter> {
+    pub statsd: Arc<M>,
 }
 
-pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
     info!("starting datadog reporter");
 
     async {
         let modem_snapshot_rx: Receiver<modem::Snapshot> =
             ctx.subscribe("modem-snapshot")?;
 
-        let netstats_rx: Receiver<Vec<NetStats>> = ctx.subscribe("netstats")?;
-        let mut netstats_map: HashMap<String, NetStats> = HashMap::new();
+        let netstats_rx: Receiver<Vec<oes::NetStats>> = ctx.subscribe("netstats")?;
+        let mut netstats_map: HashMap<String, oes::NetStats> = HashMap::new();
 
         loop {
             tokio::select! {
@@ -46,7 +47,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     .inspect_err(|e| warn!("failure reporting to datadog {e:?}"))
 }
 
-async fn report_modem(statsd: &dyn StatsdClient, m: modem::Snapshot) -> Result<()> {
+async fn report_modem(statsd: &impl MetricEmitter, m: modem::Snapshot) -> Result<()> {
     let sig = m.signal;
 
     let gauges = vec![
@@ -65,23 +66,23 @@ async fn report_modem(statsd: &dyn StatsdClient, m: modem::Snapshot) -> Result<(
         .flatten()
         .collect();
 
-        statsd.count("orb.lte.heartbeat", 1, heartbeat_tags).await?;
+        let _ = statsd.count("orb.lte.heartbeat", 1, heartbeat_tags);
     }
 
     for (name, v) in gauges
         .into_iter()
         .filter_map(|(name, opt)| opt.map(|v| (name, v)))
     {
-        statsd.gauge(name, &v.to_string(), Vec::new()).await?;
+        let _ = statsd.gauge(name, v, NO_TAGS);
     }
 
     Ok(())
 }
 
 async fn report_netstats(
-    statsd: &dyn StatsdClient,
-    old_netstats: &NetStats,
-    new_netstats: &NetStats,
+    statsd: &impl MetricEmitter,
+    old_netstats: &oes::NetStats,
+    new_netstats: &oes::NetStats,
 ) -> Result<()> {
     let rx_bytes = new_netstats.rx_bytes - old_netstats.rx_bytes;
     let tx_bytes = new_netstats.tx_bytes - old_netstats.tx_bytes;
@@ -90,21 +91,17 @@ async fn report_netstats(
         return Ok(());
     }
 
-    statsd
-        .incr_by_value(
-            &format!("orb.{}.net.rx_bytes_delta", new_netstats.iface),
-            rx_bytes as i64,
-            Vec::new(),
-        )
-        .await?;
+    let _ = statsd.count(
+        format!("orb.{}.net.rx_bytes_delta", new_netstats.iface),
+        rx_bytes as i64,
+        NO_TAGS,
+    );
 
-    statsd
-        .incr_by_value(
-            &format!("orb.{}.net.tx_bytes_delta", new_netstats.iface),
-            tx_bytes as i64,
-            Vec::new(),
-        )
-        .await?;
+    let _ = statsd.count(
+        format!("orb.{}.net.tx_bytes_delta", new_netstats.iface),
+        tx_bytes as i64,
+        NO_TAGS,
+    );
 
     Ok(())
 }

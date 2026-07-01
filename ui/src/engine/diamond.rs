@@ -330,6 +330,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                     animations::Idle::<DIAMOND_RING_LED_COUNT>::default(),
                 );
             }
+            Event::InternetConnecting => {
+                self.sound.try_queue(sound::Type::Melody(
+                    sound::Melody::InternetConnecting,
+                ))?;
+            }
             Event::NetworkConnectionSuccess => {
                 self.stop_center(LEVEL_BACKGROUND, Transition::ForceStop);
                 self.set_center(

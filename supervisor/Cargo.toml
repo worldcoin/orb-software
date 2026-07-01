@@ -18,20 +18,26 @@ libc.workspace = true
 listenfd = "1.0.0"
 once_cell = "1.15.0"
 orb-build-info.workspace = true
+orb-info = { workspace = true, features = ["orb-id", "async"] }
 orb-telemetry.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 tap = "1.0.1"
 thiserror = { workspace = true, features = ["std"] }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "net", "process", "rt-multi-thread"] }
 tokio-stream = "0.1.11"
 tracing = { workspace = true, features = ["attributes"] }
 zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zbus_systemd = { workspace = true, features = ["systemd1", "login1"] }
+zenorb.workspace = true
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
 dbus-launch = "0.2.0"
+portpicker = "0.1.1"
+tempfile.workspace = true
 tokio = { workspace = true, features = ["sync", "test-util"] }
 
 [package.metadata.deb]

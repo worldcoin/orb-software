@@ -182,6 +182,10 @@ impl CurrentStatus {
                 .core_stats
                 .as_ref()
                 .and_then(|core_stats| core_stats.orb_stand_qr_id.clone()),
+            orb_stand_qr_type: self
+                .core_stats
+                .as_ref()
+                .and_then(|core_stats| core_stats.orb_stand_qr_type.clone()),
             timestamp: Utc::now(),
         }
     }
@@ -241,7 +245,6 @@ mod tests {
             signal_level: -45,
             ssid: "TestAP".into(),
         }];
-
         let request = CurrentStatus {
             wifi_networks: Some(wifi_networks),
             signup_state: Some(SignupState::Ready),
@@ -251,7 +254,6 @@ mod tests {
         .await;
 
         assert!(request.timestamp <= Utc::now());
-
         let location_data = request
             .location_data
             .expect("Location data should be present");

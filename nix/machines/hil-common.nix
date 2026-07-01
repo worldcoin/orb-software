@@ -9,7 +9,9 @@
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
+  unitPattern = "^github-runner-.*\\.service$";
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
+  zorb = pkgs.callPackage ../packages/zorb.nix { };
   mkRcmConnection = (
     number:
     let
@@ -62,6 +64,12 @@ let
   );
 in
 {
+  options.worldcoin.orbId = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "The ID of the orb connected to this HIL (e.g. 287571fc).";
+  };
+
   options.worldcoin.orbPlatform = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
@@ -78,6 +86,9 @@ in
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
+      zorb
+      zenoh
+      tcpdump
       zsync
       casync
       goofys
@@ -95,6 +106,9 @@ in
       libguestfs-with-appliance
       abootimg
       gnupg
+      arp-scan
+      lsof
+      uv
       (python312.withPackages (
         ps: with ps; [
           pyyaml
@@ -204,6 +218,11 @@ in
         "dialout"
       ];
     };
+
+    systemd.tmpfiles.rules = [
+      "d /opt/worldcoin 0755 root root - -"
+      "d /opt/worldcoin/rts 0777 root root - -"
+    ];
     users.groups = {
       "${ghRunnerUser}" = {
         members = [ ghRunnerUser ];
@@ -291,6 +310,18 @@ in
       };
     };
 
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if (
+          action.id === "org.freedesktop.systemd1.manage-units" &&
+          subject.user === "${username}" &&
+          new RegExp("${unitPattern}").test(action.lookup("unit"))
+        ) {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+
     systemd.services."github-runner-${hostname}" = {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
@@ -317,7 +348,13 @@ in
         runnerGroup = "hardware-in-the-loop-server";
 
         serviceOverrides = {
-          Environment = ''"PATH=/run/wrappers/bin:/run/current-system/sw/bin"''; # fixes missing sudo
+          Environment = [
+            "PATH=/run/wrappers/bin:/run/current-system/sw/bin" # fixes missing sudo
+            "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+          ];
+          # Override the NixOS github-runner module's UMask=0066 so artifacts
+          # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.
+          UMask = lib.mkForce "0022";
 
           # Undo NixOS sandboxing
           CapabilityBoundingSet = [

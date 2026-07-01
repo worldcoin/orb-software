@@ -2,6 +2,7 @@ use async_tempfile::TempDir;
 use color_eyre::Result;
 use dbus_launch::BusType;
 use oes::{ActiveConnections, NetworkInterface};
+use orb_dogd::DogstatsdClient;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
@@ -20,6 +21,7 @@ const SAMPLE_NET_DEV: &str = r#"Inter-|   Receive                               
     lo: 351106997 3114910    0    0    0     0          0         0 351106997 3114910    0    0    0     0       0          0
  wlan0: 583824134  881197    0    0    0     0          0         0 992486687  776785    0    0    0     0       0          0
 "#;
+const SAMPLE_BOOT_ID: &str = "0f0e0d0c-0b0a-0908-0706-050403020100";
 
 pub struct Fixture {
     _dbusd: dbus_launch::Daemon,
@@ -190,6 +192,14 @@ impl Fixture {
         fs::write(net_dir.join("dev"), SAMPLE_NET_DEV)
             .await
             .expect("failed to write fake net/dev");
+
+        let random_dir = self.procfs.join("sys").join("kernel").join("random");
+        fs::create_dir_all(&random_dir)
+            .await
+            .expect("failed to create procfs random dir");
+        fs::write(random_dir.join("boot_id"), SAMPLE_BOOT_ID)
+            .await
+            .expect("failed to write fake boot_id");
     }
 
     pub async fn start(&self) -> JoinHandle<Result<()>> {
@@ -210,6 +220,7 @@ impl Fixture {
 
         let task = task::spawn(async move {
             let program = orb_backend_status::program()
+                .metrics(DogstatsdClient::default())
                 .dbus(dbus)
                 .zsession(&zsession)
                 .endpoint(endpoint)

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize, Serializer};
 use tap::TapOptional as _;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::{Component, LocalOrRemote};
 
@@ -407,7 +407,11 @@ mod serde_imp {
         where
             S: serde::Serializer,
         {
-            self.manifest.serialize(serializer)
+            // Need to serialize raw bytes verbatim to preserve the exact manifest
+            // content that was signed.
+            let raw: &serde_json::value::RawValue =
+                serde_json::from_str(&self.raw).map_err(serde::ser::Error::custom)?;
+            raw.serialize(serializer)
         }
     }
 

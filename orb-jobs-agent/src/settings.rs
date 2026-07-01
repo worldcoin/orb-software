@@ -35,6 +35,8 @@ pub struct Settings {
     pub os_release_path: PathBuf,
     /// Path to the versions file (configurable for testing)
     pub versions_file_path: PathBuf,
+    /// Path to the RGB focus calibration file (configurable for testing)
+    pub rgb_focus_calibration_file_path: PathBuf,
     /// Path to the downloads directory (configurable for testing)
     pub downloads_path: PathBuf,
     /// Path to the orb name file (configurable for testing)
@@ -136,6 +138,9 @@ impl Settings {
             calibration_file_path: PathBuf::from("/usr/persistent/calibration.json"),
             os_release_path: PathBuf::from("/etc/os-release"),
             versions_file_path: PathBuf::from("/usr/persistent/versions.json"),
+            rgb_focus_calibration_file_path: PathBuf::from(
+                "/usr/persistent/rgb_focus_calibration.json",
+            ),
             downloads_path,
             orb_name_path: PathBuf::from("/usr/persistent/orb-name"),
             zenoh_port: 7447,
