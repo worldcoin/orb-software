@@ -42,11 +42,42 @@ jobs:
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
 
+      - name: Configure Nix GitHub auth
+        env:
+          NIX_GITHUB_ACCESS_TOKEN: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${NIX_GITHUB_ACCESS_TOKEN}" ]; then
+            echo "::error::ORB_GIT_HUB_TOKEN is required for Nix to fetch private GitHub flake inputs"
+            exit 1
+          fi
+
+          auth_conf="${RUNNER_TEMP}/nix-github-access.conf"
+          install -m 600 /dev/null "${auth_conf}"
+          printf 'access-tokens = github.com=%s\n' "${NIX_GITHUB_ACCESS_TOKEN}" > "${auth_conf}"
+
+          if [ -n "${NIX_USER_CONF_FILES:-}" ]; then
+            echo "NIX_USER_CONF_FILES=${auth_conf}:${NIX_USER_CONF_FILES}" >> "${GITHUB_ENV}"
+          else
+            echo "NIX_USER_CONF_FILES=${auth_conf}" >> "${GITHUB_ENV}"
+          fi
+          echo "NIX_GITHUB_AUTH_CONF=${auth_conf}" >> "${GITHUB_ENV}"
+
       - name: Update nixpkgs-unstable
         run: nix flake update nixpkgs-unstable
 
       - name: Deploy
-        run: sudo nixos-rebuild switch --flake .
+        run: sudo env "NIX_USER_CONF_FILES=${NIX_USER_CONF_FILES}" nixos-rebuild switch --flake .
+
+      - name: Clean up Nix GitHub auth
+        if: always()
+        run: |
+          set -Eeuo pipefail
+
+          if [ -n "${NIX_GITHUB_AUTH_CONF:-}" ]; then
+            rm -f "${NIX_GITHUB_AUTH_CONF}"
+          fi
 
       - name: Restart orb-hil-agent
         run: sudo systemctl restart orb-hil-agent.service

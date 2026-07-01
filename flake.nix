@@ -44,6 +44,16 @@
       url = "github:worldcoin/seek-thermal-sdk";
       flake = false;
     };
+
+    # HIL orchestrator client binaries (orb-hil-agent, hiltop, hil).
+    # HTTPS (not git+ssh) so CI can authenticate via the github_access_token
+    # passed to install-nix-action (the runners have no SSH key).
+    orb-internal = {
+      url = "github:worldcoin/orb-internal?rev=55c6256e49e932e43be42174f5e9ea680f14ed0c";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.fenix.follows = "fenix";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   outputs =
