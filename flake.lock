@@ -176,17 +176,17 @@
         "nixpkgs-cargo-deny": "nixpkgs-cargo-deny"
       },
       "locked": {
-        "lastModified": 1782906451,
-        "narHash": "sha256-HH6GGd7xUcm9CJ9Y+Ri9CktGpFAZ1AHe6DFxEretwwM=",
+        "lastModified": 1782921846,
+        "narHash": "sha256-bwixlm5llgfZbOJ83aRNyPB3Ahdghdx5clJSI8lAovc=",
         "owner": "worldcoin",
         "repo": "orb-internal",
-        "rev": "55c6256e49e932e43be42174f5e9ea680f14ed0c",
+        "rev": "572c2a7f56c1b350bf566d355d9b08105564eafd",
         "type": "github"
       },
       "original": {
         "owner": "worldcoin",
         "repo": "orb-internal",
-        "rev": "55c6256e49e932e43be42174f5e9ea680f14ed0c",
+        "rev": "572c2a7f56c1b350bf566d355d9b08105564eafd",
         "type": "github"
       }
     },
