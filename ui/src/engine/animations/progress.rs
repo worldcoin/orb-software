@@ -271,18 +271,18 @@ impl<const N: usize> Shape<N> {
             paint_solid_ranges(
                 frame,
                 None,
-                white_green_preview(foreground, self.preview_phase),
+                progress_preview(foreground, self.preview_phase),
                 &preview_ranges,
             );
         }
     }
 }
 
-fn white_green_preview(foreground: Argb, phase: f64) -> Argb {
+fn progress_preview(foreground: Argb, phase: f64) -> Argb {
     let brightness = PROGRESS_PREVIEW_MIN_BRIGHTNESS
         + (1.0 - PROGRESS_PREVIEW_MIN_BRIGHTNESS) * (1.0 - phase.cos()) / 2.0;
 
-    foreground.lerp(Argb(foreground.0, 255, 255, 255), 0.35) * brightness
+    foreground * brightness
 }
 
 #[allow(clippy::cast_precision_loss)]

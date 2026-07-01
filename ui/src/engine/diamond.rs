@@ -80,7 +80,8 @@ const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_HOLD_SECONDS: f64 = 2.0;
 const VERIFICATION_SUCCESS_FADE_OUT_SECONDS: f64 = 3.0;
-const DIAMOND_PCP_UPLOAD_CENTER: Argb = Argb(Some(10), 90, 84, 74);
+const DIAMOND_PCP_UPLOAD_CENTER: Argb = Argb(Some(5), 238, 138, 70);
+
 
 struct WrappedCenterMessage(Message);
 
@@ -1162,7 +1163,7 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                             >>()
                     })
                 {
-                    if *in_range {
+                    if *in_range && !self.occlusion_active {
                         biometric_flow.resume_progress();
                         if let Some(melody) = self.capture_sound.peekable().peek()
                             && self.sound.try_queue(sound::Type::Melody(*melody))?

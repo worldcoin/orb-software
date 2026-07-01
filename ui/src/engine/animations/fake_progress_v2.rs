@@ -6,13 +6,16 @@ use std::{any::Any, time::Duration};
 #[cfg(all(feature = "ring-on", feature = "ring-off"))]
 compile_error!("features `ring-on` and `ring-off` are mutually exclusive");
 
+const RING_BACKGROUND_INTENSITY: f64 = 0.25;
+
 /// Background for the fake-progress ring. By default, and with `ring-on`,
-/// the unfilled portion stays white; with `ring-off`, it is off.
-const fn ring_background() -> Argb {
+/// the unfilled portion uses a dimmed version of the progress color; with
+/// `ring-off`, it is off.
+fn ring_background(color: Argb) -> Argb {
     if cfg!(feature = "ring-off") {
         Argb::OFF
     } else {
-        Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS
+        color * RING_BACKGROUND_INTENSITY
     }
 }
 
@@ -81,7 +84,7 @@ impl<const N: usize> FakeProgress<N> {
                 max_fast_forward_duration,
             ),
             progress_animation: Progress::<N>::new(0.0, None, color)
-                .with_background(ring_background())
+                .with_background(ring_background(color))
                 .with_progress_preview(),
             halted: false,
         }

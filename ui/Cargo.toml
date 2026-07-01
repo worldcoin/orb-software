@@ -87,9 +87,9 @@ green-v3 = []   # Argb(Some(10), 0, 200, 100)  - mint / teal green
 green-v4 = []   # Argb(Some(10), 160, 240, 100) - light spring green
 
 # Experiment flags for the fake loading screen ring background.
-# Default and ring-on keep the current white unfilled background; ring-off
+# Default and ring-on keep a dimmed version of the progress color; ring-off
 # leaves the unfilled portion off.
-ring-on = []  # Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS
+ring-on = []
 ring-off = [] # Argb::OFF
 
 # Diagnostic build flag: show only the PCP upload animation at startup.
