@@ -49,7 +49,7 @@
     # HTTPS (not git+ssh) so CI can authenticate via the github_access_token
     # passed to install-nix-action (the runners have no SSH key).
     orb-internal = {
-      url = "github:worldcoin/orb-internal?rev=55c6256e49e932e43be42174f5e9ea680f14ed0c";
+      url = "github:worldcoin/orb-internal?rev=572c2a7f56c1b350bf566d355d9b08105564eafd";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
       inputs.flake-utils.follows = "flake-utils";
