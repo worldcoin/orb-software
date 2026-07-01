@@ -157,7 +157,7 @@ impl Argb {
         Argb(Some(10), 90, 90, 90);
     /// Cool white ~5000K for user QR scan success outer ring fill
     pub const DIAMOND_RING_USER_QR_SCAN_SUCCESS_COOL_WHITE: Argb =
-        Argb(Some(15), 90, 90, 90);
+        Argb(Some(5), 238, 138, 70);
 
     /// Biometric Capture - diamond
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_PROGRESS: Argb =
@@ -165,7 +165,7 @@ impl Argb {
     /// Warm white ~4000K for biometric capture center LED
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_PROGRESS: Argb = Argb(Some(10), 90, 74, 57);
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
-        Argb(Some(15), 0, 100, 0);
+        Argb(Some(255), 0, 100, 0);
     pub const DIAMOND_CENTER_BIOMETRIC_CAPTURE_SUCCESS_GREEN: Argb =
         Argb(Some(10), 0, 100, 0);
     pub const DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS: Argb =

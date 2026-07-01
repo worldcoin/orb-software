@@ -48,35 +48,38 @@ const fn fake_progress_ring_color() -> Argb {
 
 #[cfg(any(
     all(feature = "white", feature = "apple-white"),
-    all(feature = "white", feature = "pure-white"),
+    all(feature = "white", feature = "apple-white-warm"),
     all(feature = "white", feature = "neutral-cool-white"),
-    all(feature = "apple-white", feature = "pure-white"),
+    all(feature = "apple-white", feature = "apple-white-warm"),
     all(feature = "apple-white", feature = "neutral-cool-white"),
-    all(feature = "pure-white", feature = "neutral-cool-white"),
+    all(feature = "apple-white-warm", feature = "neutral-cool-white"),
 ))]
 compile_error!(
-    "features `white`, `apple-white`, `pure-white`, and `neutral-cool-white` are mutually exclusive"
+    "features `white`, `apple-white`, `apple-white-warm`, and `neutral-cool-white` are mutually exclusive"
 );
 
 const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
     Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
 } else if cfg!(feature = "apple-white") {
-    Argb(Some(10), 235, 238, 233)
-} else if cfg!(feature = "pure-white") {
-    Argb(Some(15), 255, 255, 255)
+    Argb(Some(5), 238, 138, 70)
+} else if cfg!(feature = "apple-white-warm") {
+    Argb(Some(10), 238, 138, 59)
 } else if cfg!(feature = "neutral-cool-white") {
     Argb(Some(15), 240, 242, 240)
 } else {
     Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
 };
 
-const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_secs(2);
+const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_millis(2500);
 const USER_QR_CONFIRMATION_DELAY: Duration = Duration::from_millis(500);
+/// Pause before the mirror returns to the home position at the end of signup,
+/// so the user can watch it return and register that they're done.
+const MIRROR_HOME_RETURN_DELAY: Duration = Duration::from_millis(500);
 const VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS: f64 = 0.12;
 const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_BLINK_OFF_SECONDS: f64 = 0.13;
 const VERIFICATION_SUCCESS_HOLD_SECONDS: f64 = 2.0;
-const VERIFICATION_SUCCESS_FADE_OUT_SECONDS: f64 = 1.5;
+const VERIFICATION_SUCCESS_FADE_OUT_SECONDS: f64 = 3.0;
 const DIAMOND_PCP_UPLOAD_CENTER: Argb = Argb(Some(10), 90, 84, 74);
 
 struct WrappedCenterMessage(Message);
@@ -365,8 +368,11 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         );
 
         self.gimbal = Some((0, 0));
-        self.gimbal_send_after =
-            Some(std::time::Instant::now() + Duration::from_secs_f64(fade_out_start));
+        self.gimbal_send_after = Some(
+            std::time::Instant::now()
+                + Duration::from_secs_f64(fade_out_start)
+                + MIRROR_HOME_RETURN_DELAY,
+        );
 
         Ok(())
     }
@@ -377,9 +383,14 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
         self.stop_center(LEVEL_NOTICE, Transition::ForceStop);
 
+        // Keep the outer ring solid green while the inner spinner runs,
+        // to continue signifying success during the upload.
         self.set_ring(
             LEVEL_FOREGROUND,
-            animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+            animations::Static::<DIAMOND_RING_LED_COUNT>::new(
+                Argb::DIAMOND_RING_BIOMETRIC_CAPTURE_SUCCESS_GREEN,
+                None,
+            ),
         );
         self.set_center(
             LEVEL_FOREGROUND,
