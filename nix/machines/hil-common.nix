@@ -91,6 +91,12 @@ in
     description = "URL of the orb-hil-orchestrator server.";
   };
 
+  options.worldcoin.githubRunner.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = "Whether this HIL registers as a GitHub Actions self-hosted runner. Disable for machines that only act as Jenkins agents.";
+  };
+
   config = {
     # Install test-related packages
     environment.systemPackages = with pkgs; [
@@ -334,14 +340,14 @@ in
       });
     '';
 
-    systemd.services."github-runner-${hostname}" = {
+    systemd.services."github-runner-${hostname}" = lib.mkIf config.worldcoin.githubRunner.enable {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
       restartIfChanged = false;
       stopIfChanged = false;
     };
-    services.github-runners = {
+    services.github-runners = lib.mkIf config.worldcoin.githubRunner.enable {
       "${hostname}" = {
         enable = true;
         name = "${hostname}";
