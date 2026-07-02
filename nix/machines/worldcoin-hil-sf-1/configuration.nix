@@ -33,5 +33,10 @@
   worldcoin.jenkinsAgent = {
     enable = true;
     url = "https://jenkins.worldcoin.dev";
+    # jenkins.worldcoin.dev is behind Cloudflare Access; the agent authenticates
+    # with a service token. Provision these two files on the machine (0400, root):
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-id
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-secret
+    cloudflareAccess.enable = true;
   };
 }
