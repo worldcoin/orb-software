@@ -63,6 +63,11 @@ let
   );
 in
 {
+  imports = [
+    # Makes `worldcoin.jenkinsAgent` available to every HIL (disabled by default).
+    ./jenkins-agent.nix
+  ];
+
   options.worldcoin.orbId = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
