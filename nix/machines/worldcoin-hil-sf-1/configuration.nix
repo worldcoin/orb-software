@@ -26,6 +26,10 @@
   #   2. Add label `worldcoin-hil-sf-1` (this is what the Jenkinsfile targets).
   #   3. Copy the node's secret into /etc/worldcoin/secrets/jenkins-agent-secret
   #      on this machine (root-owned, mode 0400).
+  # This machine is Jenkins-only: skip the GitHub Actions runner that
+  # hil-common.nix sets up for every other HIL.
+  worldcoin.githubRunner.enable = false;
+
   worldcoin.jenkinsAgent = {
     enable = true;
     url = "https://jenkins.worldcoin.dev";
