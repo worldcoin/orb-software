@@ -72,6 +72,26 @@ in
       ];
       description = "Extra groups for the agent user (HIL hardware access: USB relays, serial).";
     };
+
+    cloudflareAccess = {
+      enable = lib.mkEnableOption ''
+        authenticating to Cloudflare Access with a service token. Required when
+        the controller URL is behind Cloudflare Access (Zero Trust). The two
+        header values are sent on both the agent.jar download and the agent
+        WebSocket handshake'';
+
+      clientIdFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/etc/worldcoin/secrets/jenkins-cf-access-client-id";
+        description = "File containing the CF Access service-token Client ID (the '<...>.access' value).";
+      };
+
+      clientSecretFile = lib.mkOption {
+        type = lib.types.path;
+        default = "/etc/worldcoin/secrets/jenkins-cf-access-client-secret";
+        description = "File containing the CF Access service-token Client Secret.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -107,22 +127,39 @@ in
         WorkingDirectory = cfg.workDir;
         Restart = "always";
         RestartSec = 10;
-        # Expose the secret at $CREDENTIALS_DIRECTORY/secret without leaking it
+        # Expose secrets at $CREDENTIALS_DIRECTORY/<id> without leaking them
         # into the process table or the Nix store.
-        LoadCredential = "secret:${toString cfg.secretFile}";
+        LoadCredential = [
+          "secret:${toString cfg.secretFile}"
+        ]
+        ++ lib.optionals cfg.cloudflareAccess.enable [
+          "cf-id:${toString cfg.cloudflareAccess.clientIdFile}"
+          "cf-secret:${toString cfg.cloudflareAccess.clientSecretFile}"
+        ];
       };
       script = ''
         set -euo pipefail
 
+        # Cloudflare Access service-token headers (empty arrays when not needed).
+        curl_headers=()
+        ws_headers=()
+        ${lib.optionalString cfg.cloudflareAccess.enable ''
+          cf_id="$(<"$CREDENTIALS_DIRECTORY/cf-id")"
+          cf_secret="$(<"$CREDENTIALS_DIRECTORY/cf-secret")"
+          curl_headers=(-H "CF-Access-Client-Id: $cf_id" -H "CF-Access-Client-Secret: $cf_secret")
+          ws_headers=(-webSocketHeader "CF-Access-Client-Id=$cf_id" -webSocketHeader "CF-Access-Client-Secret=$cf_secret")
+        ''}
+
         # Fetch the agent.jar that matches the controller's version so the
         # protocol never drifts out of sync after a controller upgrade.
-        curl -fsSL -o "${cfg.workDir}/agent.jar" "${cfg.url}/jnlpJars/agent.jar"
+        curl -fsSL "''${curl_headers[@]}" -o "${cfg.workDir}/agent.jar" "${cfg.url}/jnlpJars/agent.jar"
 
         exec java -jar "${cfg.workDir}/agent.jar" \
           -url "${cfg.url}" \
           -name "${cfg.nodeName}" \
           -secret "@$CREDENTIALS_DIRECTORY/secret" \
           -webSocket \
+          "''${ws_headers[@]}" \
           -workDir "${cfg.workDir}"
       '';
     };
