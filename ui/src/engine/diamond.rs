@@ -70,12 +70,12 @@ const DIAMOND_CENTER_SIGNUP: Argb = if cfg!(feature = "white") {
     Argb::DIAMOND_CENTER_USER_QR_SCAN_SUCCESS_COOL_WHITE
 };
 
-const USER_QR_CONFIRMATION_GIMBAL_DELAY: Duration = Duration::from_millis(2500);
 const USER_QR_CONFIRMATION_DELAY: Duration = Duration::from_millis(500);
 /// Pause after the final success animation before the mirror returns home.
 const MIRROR_HOME_RETURN_DELAY: Duration = Duration::from_millis(500);
 /// Delay after the mirror-home command before showing the next user QR prompt.
-const MIRROR_HOME_CLOSED_USER_QR_DELAY: Duration = Duration::from_secs(2);
+const MIRROR_HOME_CLOSED_USER_QR_DELAY: Duration = Duration::from_secs(7);
+const MIRROR_HOME_POSITION: (u32, u32) = (0, 0);
 const CAPTURE_FEEDBACK_SOUND_INTERVAL: Duration = Duration::from_secs(20);
 const VERIFICATION_SUCCESS_BLINK_EDGE_SECONDS: f64 = 0.12;
 const VERIFICATION_SUCCESS_BLINK_ON_SECONDS: f64 = 0.13;
@@ -369,6 +369,10 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
         self.set_ring(
+            LEVEL_BACKGROUND,
+            animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
+        );
+        self.set_ring(
             LEVEL_FOREGROUND,
             animations::Static::<DIAMOND_RING_LED_COUNT>::new(Argb::OFF, None),
         );
@@ -413,7 +417,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             )?,
         );
 
-        self.gimbal = Some((0, 0));
+        self.gimbal = Some(MIRROR_HOME_POSITION);
         self.gimbal_send_after = Some(mirror_home_at);
         self.show_user_qr_center_after =
             Some(mirror_home_at + MIRROR_HOME_CLOSED_USER_QR_DELAY);
@@ -642,6 +646,11 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 );
             }
             Event::QrScanStart { schema } => {
+                if matches!(schema, QrScanSchema::User)
+                    && self.show_user_qr_center_after.is_some()
+                {
+                    return Ok(());
+                }
                 self.show_user_qr_center_after = None;
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 match schema {
@@ -729,9 +738,14 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                         self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                         self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
                         self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
-                        self.gimbal_send_after = Some(
-                            std::time::Instant::now()
-                                + USER_QR_CONFIRMATION_GIMBAL_DELAY,
+                        // Replace the yellow user-QR-scan background so it isn't
+                        // revealed once the foreground blink below finishes.
+                        self.set_center(
+                            LEVEL_BACKGROUND,
+                            animations::Static::<DIAMOND_CENTER_LED_COUNT>::new(
+                                DIAMOND_CENTER_SIGNUP,
+                                None,
+                            ),
                         );
                         self.set_center(
                             LEVEL_FOREGROUND,
@@ -1335,8 +1349,13 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.set_verification_success_animations()?;
             }
             Event::Idle => {
+                let keep_dark_until_user_qr = self.show_user_qr_center_after.is_some();
                 self.capture_succeeded = false;
+                if keep_dark_until_user_qr {
+                    return Ok(());
+                }
                 self.show_user_qr_center_after = None;
+                self.stop_ring(LEVEL_BACKGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
                 self.stop_ring(LEVEL_NOTICE, Transition::ForceStop);
@@ -1398,7 +1417,18 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             }
 
             Event::Gimbal { x, y } => {
-                self.gimbal = Some((*x, *y));
+                let target = (*x, *y);
+                if self.show_user_qr_center_after.is_some() {
+                    tracing::debug!(
+                        "Ignoring gimbal event during post-success mirror-home sequence"
+                    );
+                } else if target == MIRROR_HOME_POSITION && self.capture_succeeded {
+                    tracing::debug!(
+                        "Ignoring mirror-home gimbal event before SignupSuccess"
+                    );
+                } else {
+                    self.gimbal = Some(target);
+                }
             }
             _ => {}
         }
