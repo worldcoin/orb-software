@@ -564,6 +564,12 @@ fn run(
             })
             .map_err(Error::RunUpdate)?;
 
+        info!(
+            "ran update for {} in {}s ",
+            component.name(),
+            start.elapsed().as_secs()
+        );
+
         let _ = metrics.dist(
             "orb.platform.update-agent.component-update",
             start.elapsed().as_millis() as f64,
