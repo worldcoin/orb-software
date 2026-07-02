@@ -15,6 +15,7 @@ use orb_build_info::{make_build_info, BuildInfo};
 use orb_update_agent_core::{Slot, VersionMap};
 pub use settings::{Args, Settings};
 use std::{
+    borrow::Cow,
     fs::File,
     io::{Read, Seek, SeekFrom},
     path::Path,
@@ -75,73 +76,83 @@ impl From<Error> for ExitCode {
 }
 
 impl Error {
-    pub fn to_dd_tag(&self) -> &'static str {
+    pub fn to_dd_tag(&self) -> Cow<'static, str> {
         match self {
-            Error::OrbOsRelease(_) => "orb-info-os-release",
-            Error::SlotControl(_) => "slot-control",
-            Error::Settings(_) => "settings",
-            Error::ReadingVersions(_) => "reading-versions",
-            Error::Other(_) => "other",
-            Error::Manifest(_) => "manifest",
-            Error::Supervisor(_) => "supervisor",
-            Error::RunUpdate(_) => "run-update",
+            Error::OrbOsRelease(_) => "orb-info-os-release".into(),
+            Error::SlotControl(_) => "slot-control".into(),
+            Error::Settings(_) => "settings".into(),
+            Error::ReadingVersions(_) => "reading-versions".into(),
+            Error::Other(_) => "other".into(),
+            Error::Manifest(_) => "manifest".into(),
+            Error::Supervisor(_) => "supervisor".into(),
+            Error::RunUpdate(_) => "run-update".into(),
             Error::UpdateComponentVersionOnDisk(_) => {
-                "update-component-version-on-disk"
+                "update-component-version-on-disk".into()
             }
-            Error::CopyRedundantComponents(_) => "copy-redundant-components",
-            Error::Finalize(_) => "finalize",
+            Error::CopyRedundantComponents(_) => "copy-redundant-components".into(),
+            Error::Finalize(_) => "finalize".into(),
+            Error::Claim(error) => error.to_dd_tag(),
+            Error::Component(error) => error.to_dd_tag().into(),
+        }
+    }
+}
 
-            Error::Claim(error) => {
-                use claim::Error::*;
-                match error {
-                    ReadJson(_) => "claim-read-json",
-                    OpenPath { .. } => "claim-open-path",
-                    InitClient(..) => "claim-init-client",
-                    DBusToken(..) => "claim-dbus-token",
-                    DBusTokenNotAvailable(_) => "claim-dbus-token-not-avaialble",
-                    NoAuthTokenProvided() => "claim-no-auth-token-provided",
-                    SendCheckUpdateRequest(..) => "claim-send-check-update-request",
-                    ResponseAsText(_) => "claim-response-as-text",
-                    Local { .. } => "claim-local",
-                    Remote { .. } => "claim-remote",
-                    DbusRequest(_) => "claim-dbus-request",
-                    DownloadNotAllowed { .. } => "claim-download-not-allowed",
-                    StatusCode { .. } => "claim-status-code",
-                    MissingSlotVersion { .. } => "claim-missing-slot-version",
-                    NoNewVersion => "claim-no-new-version",
-                    Validation(_) => "claim-validation",
-                }
-            }
+impl claim::Error {
+    pub fn to_dd_tag(&self) -> Cow<'static, str> {
+        use claim::Error::*;
+        match self {
+            ReadJson(_) => "claim-read-json".into(),
+            OpenPath { .. } => "claim-open-path".into(),
+            InitClient(..) => "claim-init-client".into(),
+            DBusToken(..) => "claim-dbus-token".into(),
+            DBusTokenNotAvailable(_) => "claim-dbus-token-not-avaialble".into(),
+            NoAuthTokenProvided() => "claim-no-auth-token-provided".into(),
+            SendCheckUpdateRequest(..) => "claim-send-check-update-request".into(),
+            ResponseAsText(_) => "claim-response-as-text".into(),
+            Local { source, .. } => match source.as_ref() {
+                Local { .. } => "claim-local".into(),
+                Remote { .. } => "claim-remote-local".into(),
+                _ => format!("{}-local", source.to_dd_tag()).into(),
+            },
+            Remote { source, .. } => match source.as_ref() {
+                Local { .. } => "claim-local-remote".into(),
+                Remote { .. } => "claim-remote".into(),
+                _ => format!("{}-remote", source.to_dd_tag()).into(),
+            },
+            DbusRequest(_) => "claim-dbus-request".into(),
+            DownloadNotAllowed { .. } => "claim-download-not-allowed".into(),
+            StatusCode { .. } => "claim-status-code".into(),
+            MissingSlotVersion { .. } => "claim-missing-slot-version".into(),
+            NoNewVersion => "claim-no-new-version".into(),
+            Validation(_) => "claim-validation".into(),
+        }
+    }
+}
 
-            Error::Component(error) => {
-                use component::Error::*;
-                match error {
-                    InitClient(_) => "component-init-client",
-                    ClaimSizeRemoteLenMismatch(_, _, _) => {
-                        "component-claim-size-remote-len-mismatch"
-                    }
-                    MissingContentLengthHeader(_) => {
-                        "component-missing-content-length-header"
-                    }
-                    NonStringContentLengthValue(..) => {
-                        "component-non-string-content-length-value"
-                    }
-                    InvalidContentLengthValue(..) => {
-                        "component-invalid-content-length-value"
-                    }
-                    OpenWriteTarget(..) => "component-open-write-target",
-                    InvalidHttpRange(..) => "component-invalid-http-range",
-                    RangeRequest(..) => "component-range-request",
-                    InitialLengthRequest(..) => "component-initial-lenght-request",
-                    ResponseStatus(..) => "component-response-status",
-                    GetBytes(..) => "component-get-bytes",
-                    MergeChunk(..) => "component-merge-chunk",
-                    HashMismatch { .. } => "component-hash-mismatch",
-                    DiskSync(..) => "component-disk-sync",
-                    MimeUnknown { .. } => "component-mime-unknown",
-                    Process(..) => "component-process",
-                }
+impl component::Error {
+    pub fn to_dd_tag(&self) -> &'static str {
+        use component::Error::*;
+        match self {
+            InitClient(_) => "component-init-client",
+            ClaimSizeRemoteLenMismatch(_, _, _) => {
+                "component-claim-size-remote-len-mismatch"
             }
+            MissingContentLengthHeader(_) => "component-missing-content-length-header",
+            NonStringContentLengthValue(..) => {
+                "component-non-string-content-length-value"
+            }
+            InvalidContentLengthValue(..) => "component-invalid-content-length-value",
+            OpenWriteTarget(..) => "component-open-write-target",
+            InvalidHttpRange(..) => "component-invalid-http-range",
+            RangeRequest(..) => "component-range-request",
+            InitialLengthRequest(..) => "component-initial-lenght-request",
+            ResponseStatus(..) => "component-response-status",
+            GetBytes(..) => "component-get-bytes",
+            MergeChunk(..) => "component-merge-chunk",
+            HashMismatch { .. } => "component-hash-mismatch",
+            DiskSync(..) => "component-disk-sync",
+            MimeUnknown { .. } => "component-mime-unknown",
+            Process(..) => "component-process",
         }
     }
 }
