@@ -167,6 +167,14 @@ in
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
     '';
 
+    # HIL device-management tooling (e.g. the relay-controlled reboot-into-EDL
+    # scripts) runs from a standalone Python venv, not a nix-built interpreter,
+    # so it executes through nix-ld (enabled in nixos-common.nix) rather than
+    # picking up libudev via a normal nix RPATH. This makes pyudev's
+    # `ctypes.CDLL("libudev.so.1")` resolve without a manual LD_LIBRARY_PATH
+    # export.
+    programs.nix-ld.libraries = [ pkgs.systemd ];
+
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
     # Select internationalisation properties.
