@@ -30,6 +30,18 @@
   # hil-common.nix sets up for every other HIL.
   worldcoin.githubRunner.enable = false;
 
+  # ADB/fastboot access to Android-based test hardware attached to this HIL.
+  # Ships the udev rules from the Debian `android-sdk-platform-tools-common`
+  # package; `jenkins-agent-user` already gets `plugdev` via jenkins-agent.nix's
+  # default extraGroups. NixOS reloads/retriggers udev rules automatically on
+  # `nixos-rebuild switch`, so no manual `udevadm control --reload-rules` step
+  # is needed.
+  services.udev.packages = [ pkgs.android-udev-rules ];
+
+  # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
+  # `plugdev` USB access above covers the raw usbfs nodes it needs.
+  environment.systemPackages = [ (pkgs.callPackage ../../packages/qdl-rs.nix { }) ];
+
   worldcoin.jenkinsAgent = {
     enable = true;
     url = "https://jenkins.worldcoin.dev";
