@@ -168,12 +168,12 @@ in
     '';
 
     # HIL device-management tooling (e.g. the relay-controlled reboot-into-EDL
-    # scripts) runs from a standalone Python venv, not a nix-built interpreter,
-    # so it executes through nix-ld (enabled in nixos-common.nix) rather than
-    # picking up libudev via a normal nix RPATH. This makes pyudev's
-    # `ctypes.CDLL("libudev.so.1")` resolve without a manual LD_LIBRARY_PATH
-    # export.
-    programs.nix-ld.libraries = [ pkgs.systemd ];
+    # scripts) loads libudev at runtime via pyudev's `ctypes.CDLL`, which
+    # resolves dlopen()s through the standard LD_LIBRARY_PATH, not nix-ld's
+    # NIX_LD_LIBRARY_PATH (that one only patches the ELF interpreter lookup
+    # for the process' own executable, and systemd was already in nix-ld's
+    # default library set anyway — it was never the missing piece here).
+    environment.variables.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.systemd ];
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
