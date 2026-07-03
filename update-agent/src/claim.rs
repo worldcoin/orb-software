@@ -9,6 +9,7 @@ use std::{
 
 use eyre::{ensure, WrapErr as _};
 use orb_dogd::{DogstatsdClient, MetricEmitter};
+use orb_info::orb_os_release::OrbOsPlatform;
 use orb_update_agent_core::{
     reexports::ed25519_dalek::VerifyingKey, Claim, ClaimVerificationContext,
     LocalOrRemote, Slot, Source, VersionMap,
@@ -115,24 +116,25 @@ fn from_path(
 }
 
 fn from_remote(
-    id: &str,
-    slot: Slot,
+    settings: &Settings,
     url: &Url,
     version_map: &VersionMap,
-    verify_manifest_signature_against: Backend,
+    platform: OrbOsPlatform,
     conn_tracker: &ConnectivityTracker,
     metrics: &DogstatsdClient,
 ) -> Result<Option<(String, Claim)>, Error> {
+    let slot = settings.active_slot;
     let current_version = version_map
         .get_slot_version(slot)
         .ok_or_else(|| Error::MissingSlotVersion { slot })?;
 
     let mut api_url = url.clone();
-    api_url.set_path(&format!("/api/v2/orbs/{}/claim", id));
+    api_url.set_path(&format!("/api/v2/orbs/{}/claim", settings.id));
     api_url
         .query_pairs_mut()
         .clear()
-        .append_pair("currentVersion", current_version);
+        .append_pair("currentVersion", current_version)
+        .append_pair("platform", &platform.to_string());
 
     debug!(
         "sending check request to: {} with currentVersion: {}",
@@ -199,7 +201,7 @@ fn from_remote(
             }
 
             let claim_verification_context = ClaimVerificationContext(
-                pubkey_from_backend_type(verify_manifest_signature_against),
+                pubkey_from_backend_type(settings.verify_manifest_signature_against),
             );
             let claim = crate::json::deserialize_seed(
                 claim_verification_context,
@@ -296,6 +298,7 @@ fn ensure_sources_match_claim(
 pub fn get(
     settings: &Settings,
     version_map: &VersionMap,
+    platform: OrbOsPlatform,
     conn_tracker: &ConnectivityTracker,
     metrics: &DogstatsdClient,
 ) -> Result<Claim, Error> {
@@ -310,11 +313,10 @@ pub fn get(
             }
             info!("checking remote update at {url}, for orb {}", &settings.id);
             let result = from_remote(
-                &settings.id,
-                settings.active_slot,
+                settings,
                 url,
                 version_map,
-                settings.verify_manifest_signature_against,
+                platform,
                 conn_tracker,
                 metrics,
             )
@@ -385,11 +387,12 @@ mod tests {
         api_url
             .query_pairs_mut()
             .clear()
-            .append_pair("currentVersion", current_version);
+            .append_pair("currentVersion", current_version)
+            .append_pair("platform", "pearl");
 
         assert_eq!(
             api_url.to_string(),
-            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/3d8af1da/claim?currentVersion=test-version"
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/3d8af1da/claim?currentVersion=test-version&platform=pearl"
         );
     }
 

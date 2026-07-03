@@ -388,6 +388,7 @@ fn run(
     let claim = match orb_update_agent::claim::get(
         &settings,
         &version_map,
+        orb_type,
         &conn_tracker,
         &metrics,
     ) {
