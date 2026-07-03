@@ -230,6 +230,7 @@ in
     systemd.tmpfiles.rules = [
       "d /opt/worldcoin 0755 root root - -"
       "d /opt/worldcoin/rts 0777 root root - -"
+      "d /run/hil-agent 0777 root root - -"
     ];
     users.groups = {
       "${ghRunnerUser}" = {
