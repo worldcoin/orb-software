@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
-import shutil
-import hashlib
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import List, Tuple
-import urllib.request
-import urllib.error
 
 REQUIRED_TOOLS = [
     "ssh-keygen",
-    "mke2fs",
-    "tune2fs",
     "mount",
     "umount",
     "install",
-    "setfacl",
     "sync",
     "cloudflared",
 ]
@@ -172,129 +169,6 @@ class OrbRegistration:
         orb_id = hashlib.sha256(public_key.encode()).hexdigest()[:8]
         return orb_id
 
-    def create_persistent_images(self, mount_point: Path):
-        """Create base persistent images with required JSON files."""
-        self.logger.info("Creating base persistent and persistent-journaled images...")
-
-        persistent_img = self.build_dir / "persistent.img"
-        persistent_journaled_img = self.build_dir / "persistent-journaled.img"
-
-        # Create empty images
-        self.logger.info(
-            f"Creating empty images of size {self.persistent_size} and {self.persistent_journaled_size}"
-        )
-
-        with open(persistent_img, "wb") as f:
-            f.write(b"\x00" * self.persistent_size)
-
-        with open(persistent_journaled_img, "wb") as f:
-            f.write(b"\x00" * self.persistent_journaled_size)
-
-        # Format with ext4
-        self.logger.info("Formatting persistent-journaled.img with ext4 (with journal)")
-        subprocess.run(
-            [
-                "mke2fs",
-                "-q",
-                "-t",
-                "ext4",
-                "-E",
-                "root_owner=0:1000",
-                str(persistent_journaled_img),
-            ],
-            check=True,
-        )
-
-        self.logger.info("Formatting persistent.img with ext4 (no journal)")
-        subprocess.run(
-            [
-                "mke2fs",
-                "-q",
-                "-t",
-                "ext4",
-                "-O",
-                "^has_journal",
-                "-E",
-                "root_owner=0:1000",
-                str(persistent_img),
-            ],
-            check=True,
-        )
-
-        # Set ACL support
-        self.logger.info("Setting ACL support on both images")
-        subprocess.run(
-            ["tune2fs", "-o", "acl", str(persistent_journaled_img)],
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["tune2fs", "-o", "acl", str(persistent_img)],
-            capture_output=True,
-            check=True,
-        )
-
-        # Install baseline JSON files
-        for img_name, img_path in [
-            ("persistent.img", persistent_img),
-            ("persistent-journaled.img", persistent_journaled_img),
-        ]:
-            self.logger.info(f"Mounting {img_name} and installing baseline JSON files")
-            subprocess.run(
-                ["mount", "-o", "loop", str(img_path), str(mount_point)], check=True
-            )
-
-            try:
-                subprocess.run(
-                    [
-                        "install",
-                        "-o",
-                        "0",
-                        "-g",
-                        "1000",
-                        "-m",
-                        "664",
-                        str(self.build_dir / "components.json"),
-                        str(mount_point / "components.json"),
-                    ],
-                    check=True,
-                )
-                subprocess.run(
-                    [
-                        "install",
-                        "-o",
-                        "1000",
-                        "-g",
-                        "1000",
-                        "-m",
-                        "664",
-                        str(self.build_dir / "calibration.json"),
-                        str(mount_point / "calibration.json"),
-                    ],
-                    check=True,
-                )
-                subprocess.run(
-                    [
-                        "install",
-                        "-o",
-                        "1000",
-                        "-g",
-                        "1000",
-                        "-m",
-                        "664",
-                        str(self.build_dir / "versions.json"),
-                        str(mount_point / "versions.json"),
-                    ],
-                    check=True,
-                )
-                subprocess.run(
-                    ["setfacl", "-d", "-m", "u::rwx,g::rwx,o::rx", str(mount_point)],
-                    check=True,
-                )
-                subprocess.run(["sync"], check=True)
-            finally:
-                subprocess.run(["umount", str(mount_point)], check=True)
-
     def fetch_existing_orb_name(self, orb_id: str, cf_token: str) -> str:
         """Fetch existing orb name if already registered."""
         url = f"{self.domain}/api/v1/orbs/{orb_id}/details"
@@ -439,45 +313,7 @@ class OrbRegistration:
             self.logger.error(error_msg)
             raise
 
-    def get_orb_token(self, orb_id: str, cf_token: str) -> str:
-        """Get orb token from MongoDB."""
-        self.logger.info("Fetching Orb token from Management API")
-
-        req = urllib.request.Request(
-            f"{self.domain}/api/v1/tokens?orbId={orb_id}",
-            data=b"{}",
-            method="POST",
-        )
-
-        req.add_header("Content-Type", "application/json")
-        req.add_header("Authorization", f"Bearer {self.args.mongo_token}")
-        req.add_header("cf-access-token", cf_token)
-        req.add_header("User-Agent", "curl/8.1.2")
-
-        try:
-            with urllib.request.urlopen(req) as response:
-                result = json.loads(response.read().decode())
-                return result["token"]
-        except urllib.error.HTTPError as e:
-            error_msg = (
-                f"Failed to get token for orb {orb_id}: HTTP {e.code} {e.reason}"
-            )
-            try:
-                error_response = e.read().decode()
-                if error_response:
-                    try:
-                        error_json = json.loads(error_response)
-                        error_msg += f" - {error_json}"
-                    except json.JSONDecodeError:
-                        error_msg += f" - {error_response}"
-            except:
-                pass
-            self.logger.error(error_msg)
-            raise
-
-    def save_orb_artifacts(
-        self, orb_id: str, orb_name: str, token: str, mount_point: Path
-    ):
+    def save_orb_artifacts(self, orb_id: str, orb_name: str, mount_point: Path):
         """Save orb artifacts (Pearl only)."""
         jet_artifacts_dir = self.artifacts_dir / orb_id
         jet_artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -489,62 +325,6 @@ class OrbRegistration:
         # Save orb name and token
         with open(jet_artifacts_dir / "orb-name", "w") as f:
             f.write(orb_name)
-        with open(jet_artifacts_dir / "token", "w") as f:
-            f.write(token)
-
-        # Copy persistent images
-        self.logger.info(
-            f"Copying base persistent images into artifacts directory for {orb_id}"
-        )
-        shutil.copy(
-            str(self.build_dir / "persistent.img"),
-            str(jet_artifacts_dir / "persistent.img"),
-        )
-        shutil.copy(
-            str(self.build_dir / "persistent-journaled.img"),
-            str(jet_artifacts_dir / "persistent-journaled.img"),
-        )
-
-        # Mount and install orb-name and token in both images
-        for img_name in ["persistent.img", "persistent-journaled.img"]:
-            self.logger.info(f"Mounting {img_name} for Orb ID: {orb_id}")
-            subprocess.run(
-                ["mount", str(jet_artifacts_dir / img_name), str(mount_point)],
-                check=True,
-            )
-
-            try:
-                subprocess.run(
-                    [
-                        "install",
-                        "-o",
-                        "0",
-                        "-g",
-                        "0",
-                        "-m",
-                        "644",
-                        str(jet_artifacts_dir / "orb-name"),
-                        str(mount_point / "orb-name"),
-                    ],
-                    check=True,
-                )
-                subprocess.run(
-                    [
-                        "install",
-                        "-o",
-                        "0",
-                        "-g",
-                        "0",
-                        "-m",
-                        "644",
-                        str(jet_artifacts_dir / "token"),
-                        str(mount_point / "token"),
-                    ],
-                    check=True,
-                )
-                subprocess.run(["sync"], check=True)
-            finally:
-                subprocess.run(["umount", str(mount_point)], check=True)
 
     def process_pearl_orb(self, cf_token: str, mount_point: Path) -> str:
         """Process a single Pearl orb (generate ID, register, create artifacts)."""
@@ -552,9 +332,8 @@ class OrbRegistration:
         platform = self.detect_platform(self.args.hardware_version)
 
         orb_name = self.register_orb_mongo(orb_id, cf_token, platform)
-        token = self.get_orb_token(orb_id, cf_token)
 
-        self.save_orb_artifacts(orb_id, orb_name, token, mount_point)
+        self.save_orb_artifacts(orb_id, orb_name, mount_point)
         self.register_orb_core_app(orb_id, orb_name)
 
         return orb_id
@@ -611,11 +390,9 @@ class OrbRegistration:
                 mount_point = Path(temp_dir) / "loop"
                 mount_point.mkdir()
 
-                self.create_persistent_images(mount_point)
-
                 for i in range(self.args.count):
                     self.logger.info(
-                        f"Generating Pearl Orb ID #{i+1} of {self.args.count}..."
+                        f"Generating Pearl Orb ID #{i + 1} of {self.args.count}..."
                     )
                     orb_id = self.process_pearl_orb(cf_token, mount_point)
                     self.logger.info(f"Successfully processed Pearl Orb: {orb_id}")
