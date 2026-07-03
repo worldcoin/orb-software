@@ -40,7 +40,14 @@
 
   # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
   # `plugdev` USB access above covers the raw usbfs nodes it needs.
-  environment.systemPackages = [ (pkgs.callPackage ../../packages/qdl-rs.nix { }) ];
+  #
+  # android-udev-rules above only ships udev rules (like Debian's
+  # android-sdk-platform-tools-common); android-tools is the actual
+  # adb/fastboot client (like Debian's android-sdk-platform-tools).
+  environment.systemPackages = [
+    (pkgs.callPackage ../../packages/qdl-rs.nix { })
+    pkgs.android-tools
+  ];
 
   worldcoin.jenkinsAgent = {
     enable = true;
