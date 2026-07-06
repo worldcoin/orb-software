@@ -25,6 +25,7 @@ impl Default for CaptureLoopSound {
 
 impl CaptureLoopSound {
     /// Come back to part A of the current playing loop sound
+    #[cfg(test)]
     pub fn restart_current_loop(&mut self) {
         match self {
             CaptureLoopSound::Loop01(_) => {

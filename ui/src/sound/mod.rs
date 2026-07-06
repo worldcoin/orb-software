@@ -167,6 +167,8 @@ pub enum Type {
     Voice(Voice),
     /// Sound type for melodies.
     Melody(Melody),
+    /// Generated tone for minimal signup feedback.
+    Tone(Tone),
 }
 
 macro_rules! sound_enum {
@@ -304,6 +306,53 @@ sound_enum! {
     }
 }
 
+/// Generated tones for signup milestones.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum Tone {
+    SignupStart,
+    SignupQrAccepted,
+    SignupCaptureStart,
+    SignupCaptureComplete,
+    SignupSuccess,
+    SignupFailure,
+}
+
+impl Tone {
+    const ALL: [Self; 6] = [
+        Self::SignupStart,
+        Self::SignupQrAccepted,
+        Self::SignupCaptureStart,
+        Self::SignupCaptureComplete,
+        Self::SignupSuccess,
+        Self::SignupFailure,
+    ];
+
+    fn load_sound_files(sound_files: &DashMap<Type, SoundFile>) {
+        for tone in Self::ALL {
+            sound_files.insert(Type::Tone(tone), tone.sound_file());
+        }
+    }
+
+    fn sound_file(self) -> SoundFile {
+        let (frequency_hz, duration) = self.spec();
+        SoundFile {
+            data: Arc::new(generate_tone_wav(frequency_hz, duration)),
+            duration,
+        }
+    }
+
+    fn spec(self) -> (f64, Duration) {
+        match self {
+            Self::SignupStart => (440.0, Duration::from_millis(110)),
+            Self::SignupQrAccepted => (587.33, Duration::from_millis(110)),
+            Self::SignupCaptureStart => (659.25, Duration::from_millis(110)),
+            Self::SignupCaptureComplete => (783.99, Duration::from_millis(130)),
+            Self::SignupSuccess => (987.77, Duration::from_millis(160)),
+            Self::SignupFailure => (220.0, Duration::from_millis(180)),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct SoundFile {
     data: Arc<Vec<u8>>,
@@ -341,6 +390,7 @@ impl Player for Jetson {
         Box::pin(async move {
             Voice::load_sound_files(&sound_files, &config.clone()).await?;
             Melody::load_sound_files(&sound_files, &config.clone()).await?;
+            Tone::load_sound_files(&sound_files);
             let count = sound_files.len();
             tracing::debug!(
                 "Sound files for language {:?} loaded successfully ({count:?} files)",
@@ -455,6 +505,52 @@ async fn load_sound_file(
     })
 }
 
+fn generate_tone_wav(frequency_hz: f64, duration: Duration) -> Vec<u8> {
+    const SAMPLE_RATE: u32 = 44_100;
+    const BITS_PER_SAMPLE: u16 = 16;
+    const CHANNELS: u16 = 1;
+    const AMPLITUDE: f64 = 0.28;
+
+    let sample_count =
+        (duration.as_secs_f64() * f64::from(SAMPLE_RATE)).round() as usize;
+    let data_len =
+        sample_count * usize::from(CHANNELS) * usize::from(BITS_PER_SAMPLE / 8);
+    let mut wav = Vec::with_capacity(44 + data_len);
+
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_len as u32).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16_u32.to_le_bytes());
+    wav.extend_from_slice(&1_u16.to_le_bytes());
+    wav.extend_from_slice(&CHANNELS.to_le_bytes());
+    wav.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+    wav.extend_from_slice(
+        &(SAMPLE_RATE * u32::from(CHANNELS) * u32::from(BITS_PER_SAMPLE / 8))
+            .to_le_bytes(),
+    );
+    wav.extend_from_slice(&(CHANNELS * (BITS_PER_SAMPLE / 8)).to_le_bytes());
+    wav.extend_from_slice(&BITS_PER_SAMPLE.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&(data_len as u32).to_le_bytes());
+
+    let ramp_samples = ((0.012 * f64::from(SAMPLE_RATE)).round() as usize).max(1);
+    for i in 0..sample_count {
+        let t = i as f64 / f64::from(SAMPLE_RATE);
+        let fade_in = i.min(ramp_samples) as f64 / ramp_samples as f64;
+        let fade_out = (sample_count.saturating_sub(i)).min(ramp_samples) as f64
+            / ramp_samples as f64;
+        let envelope = fade_in.min(fade_out).min(1.0);
+        let sample = (std::f64::consts::TAU * frequency_hz * t).sin()
+            * envelope
+            * AMPLITUDE
+            * f64::from(i16::MAX);
+        wav.extend_from_slice(&(sample as i16).to_le_bytes());
+    }
+
+    wav
+}
+
 impl fmt::Debug for Jetson {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Sound").finish()
@@ -492,6 +588,7 @@ mod tests {
             Box::pin(async move {
                 Voice::load_sound_files(&sound_files, &config).await?;
                 Melody::load_sound_files(&sound_files, &config).await?;
+                super::Tone::load_sound_files(&sound_files);
                 let count = sound_files.len();
                 tracing::debug!("Sound files for language {:?} loaded successfully ({count:?} files)", config.language);
                 Ok(())

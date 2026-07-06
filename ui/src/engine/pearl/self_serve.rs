@@ -72,7 +72,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SignupStartOperator => {
                 self.capture_sound.reset();
                 self.sound.queue(
-                    sound::Type::Melody(sound::Melody::StartSignup),
+                    sound::Type::Tone(sound::Tone::SignupStart),
                     Duration::ZERO,
                 )?;
                 // starting signup sequence
@@ -151,10 +151,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 };
             }
             Event::QrScanCapture => {
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::QrCodeCapture),
-                    Duration::ZERO,
-                )?;
             }
             Event::QrScanCompleted { schema: _ } => {
                 self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);
@@ -200,39 +196,46 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         true,
                     )?,
                 );
-                match reason {
-                    QrScanUnexpectedReason::Invalid => {
-                        self.sound.queue(
-                            sound::Type::Voice(sound::Voice::QrCodeInvalid),
-                            Duration::ZERO,
-                        )?;
-                    }
-                    QrScanUnexpectedReason::WrongFormat => {
-                        self.sound.queue(
-                            sound::Type::Voice(sound::Voice::WrongQrCodeFormat),
-                            Duration::ZERO,
-                        )?;
-                    }
-                }
                 match schema {
                     QrScanSchema::User => {
+                        self.sound.queue(
+                            sound::Type::Tone(sound::Tone::SignupFailure),
+                            Duration::ZERO,
+                        )?;
                         self.operator_signup_phase.user_qr_code_issue();
                     }
                     QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
+                        self.sound.queue(
+                            sound::Type::Tone(sound::Tone::SignupFailure),
+                            Duration::ZERO,
+                        )?;
                         self.operator_signup_phase.operator_qr_code_issue();
                     }
-                    QrScanSchema::Wifi => {}
+                    QrScanSchema::Wifi => match reason {
+                        QrScanUnexpectedReason::Invalid => {
+                            self.sound.queue(
+                                sound::Type::Voice(sound::Voice::QrCodeInvalid),
+                                Duration::ZERO,
+                            )?;
+                        }
+                        QrScanUnexpectedReason::WrongFormat => {
+                            self.sound.queue(
+                                sound::Type::Voice(sound::Voice::WrongQrCodeFormat),
+                                Duration::ZERO,
+                            )?;
+                        }
+                    },
                 }
             }
             Event::QrScanFail { schema } => {
-                self.sound.queue(
-                    sound::Type::Melody(sound::Melody::SoundError),
-                    Duration::ZERO,
-                )?;
                 match schema {
                     QrScanSchema::User
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
+                        self.sound.queue(
+                            sound::Type::Tone(sound::Tone::SignupFailure),
+                            Duration::ZERO,
+                        )?;
                         self.operator_signup_phase.failure();
                         self.set_ring(
                             LEVEL_NOTICE,
@@ -244,18 +247,27 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                             )?,
                         );
                     }
-                    QrScanSchema::Wifi => {}
+                    QrScanSchema::Wifi => {
+                        self.sound.queue(
+                            sound::Type::Melody(sound::Melody::SoundError),
+                            Duration::ZERO,
+                        )?;
+                    }
                 }
             }
             Event::QrScanSuccess { schema } => match schema {
                 QrScanSchema::Operator | QrScanSchema::OperatorSelfServe => {
                     self.sound.queue(
-                        sound::Type::Melody(sound::Melody::QrLoadSuccess),
+                        sound::Type::Tone(sound::Tone::SignupQrAccepted),
                         Duration::ZERO,
                     )?;
                     self.operator_signup_phase.operator_qr_captured();
                 }
                 QrScanSchema::User => {
+                    self.sound.queue(
+                        sound::Type::Tone(sound::Tone::SignupQrAccepted),
+                        Duration::ZERO,
+                    )?;
                     self.operator_signup_phase.user_qr_captured();
                     self.set_ring(
                         LEVEL_BACKGROUND,
@@ -277,12 +289,14 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 }
             },
             Event::QrScanTimeout { schema } => {
-                self.sound
-                    .queue(sound::Type::Voice(sound::Voice::Timeout), Duration::ZERO)?;
                 match schema {
                     QrScanSchema::User
                     | QrScanSchema::Operator
                     | QrScanSchema::OperatorSelfServe => {
+                        self.sound.queue(
+                            sound::Type::Tone(sound::Tone::SignupFailure),
+                            Duration::ZERO,
+                        )?;
                         self.operator_signup_phase.failure();
 
                         // show error animation
@@ -298,6 +312,10 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         );
                     }
                     QrScanSchema::Wifi => {
+                        self.sound.queue(
+                            sound::Type::Voice(sound::Voice::Timeout),
+                            Duration::ZERO,
+                        )?;
                         self.stop_ring(LEVEL_FOREGROUND, Transition::FadeOut(1.0));
                     }
                 }
@@ -319,7 +337,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                 // if not self-serve, the animations to transition
                 // to biometric capture are already set in `QrScanSuccess`
                 self.sound.queue(
-                    sound::Type::Melody(sound::Melody::UserStartCapture),
+                    sound::Type::Tone(sound::Tone::SignupCaptureStart),
                     Duration::ZERO,
                 )?;
                 // pulsing wave animation displayed
@@ -435,22 +453,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         animation.as_any_mut().downcast_mut::<animations::composites::biometric_flow::BiometricFlow<PEARL_RING_LED_COUNT>>()
                     }) {
                         biometric_flow.progress_fast_forward();
-                        let ring_completion_time = biometric_flow.get_progress_completion_time().as_secs_f64();
-
-                        // Play biometric capture sound while the progress is running.
-                        let mut total_duration = 0.0;
-                        while let Some(melody) = self.capture_sound.peekable().peek() {
-                            let melody = sound::Type::Melody(*melody);
-                            let melody_duration =
-                                self.sound.get_duration(melody).unwrap().as_secs_f64();
-                            if total_duration + melody_duration < ring_completion_time {
-                                self.sound.queue(melody, Duration::ZERO)?;
-                                self.capture_sound.next();
-                                total_duration += melody_duration;
-                            } else {
-                                break;
-                            }
-                        }
                     }
             }
             Event::BiometricFlowResult { is_success } => {
@@ -466,7 +468,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
 
                     // Play success/failure sound after the progress bar.
                     self.sound.queue(
-                        sound::Type::Melody(if *is_success { sound::Melody::IrisScanSuccess } else { sound::Melody::SoundError }),
+                        sound::Type::Tone(if *is_success { sound::Tone::SignupCaptureComplete } else { sound::Tone::SignupFailure }),
                         Duration::from_millis(
                             ((ring_completion_time + PROGRESS_BAR_FADE_OUT_DURATION + RESULT_ANIMATION_DELAY)
                                 * 1000.0) as u64,
@@ -509,26 +511,13 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .unwrap_or_default()
                     .as_secs_f64();
 
-                let mut total_duration = 0.0;
-                while let Some(melody) = self.capture_sound.peekable().peek() {
-                    let melody = sound::Type::Melody(*melody);
-                    let melody_duration =
-                        self.sound.get_duration(melody).unwrap().as_secs_f64();
-                    if total_duration + melody_duration < ring_completion_time {
-                        self.sound.queue(melody, Duration::ZERO)?;
-                        self.capture_sound.next();
-                        total_duration += melody_duration;
-                    } else {
-                        break;
-                    }
-                }
                 // Sync biometric capture success animation + sounds, with the fake progress.
                 // Since the ring is ON after the fake progress, we turn it off smoothly in `fade_out_duration`,
                 // and then we do a double blink after `success_delay`.
                 let fade_out_duration = 0.3;
                 let success_delay = 0.4;
                 self.sound.queue(
-                    sound::Type::Melody(sound::Melody::IrisScanSuccess),
+                    sound::Type::Tone(sound::Tone::SignupCaptureComplete),
                     Duration::from_millis(
                         ((ring_completion_time + fade_out_duration + success_delay)
                             * 1000.0) as u64,
@@ -648,17 +637,9 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                         if *in_range {
                             // resume the progress bar and play the capturing sound.
                             biometric_flow.resume_progress();
-                            if let Some(melody) = self.capture_sound.peekable().peek()
-                                && self.sound.try_queue(sound::Type::Melody(*melody))? {
-                                    self.capture_sound.next();
-                                }
                         } else {
                             // halt the progress bar and play silence.
                             biometric_flow.halt_progress();
-                            self.capture_sound = sound::capture::CaptureLoopSound::default();
-                            let _ = self
-                                .sound
-                                .try_queue(sound::Type::Voice(sound::Voice::Silence));
                         }
                     }
             }
@@ -682,37 +663,51 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             Event::SignupFail { reason } => {
                 match reason {
                     SignupFailReason::Timeout => {
-                        self.play_signup_fail_ux(None)?;
+                        self.play_signup_fail_ux()?;
                     }
                     SignupFailReason::FaceNotFound => {
-                        self.play_signup_fail_ux(None)?;
+                        self.play_signup_fail_ux()?;
                     }
-                    SignupFailReason::Server => {}
-                    SignupFailReason::UploadCustodyImages => {}
-                    SignupFailReason::Verification => {}
+                    SignupFailReason::Server => {
+                        self.play_signup_fail_ux()?;
+                    }
+                    SignupFailReason::UploadCustodyImages => {
+                        self.play_signup_fail_ux()?;
+                    }
+                    SignupFailReason::Verification => {
+                        self.play_signup_fail_ux()?;
+                    }
                     SignupFailReason::SoftwareVersionDeprecated => {
                         self.operator_blink.trigger(
                             Argb::PEARL_OPERATOR_VERSIONS_DEPRECATED,
                             vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                         );
-                        self.play_signup_fail_ux(None)?;
+                        self.play_signup_fail_ux()?;
                     }
                     SignupFailReason::SoftwareVersionBlocked => {
                         self.operator_blink.trigger(
                             Argb::PEARL_OPERATOR_VERSIONS_OUTDATED,
                             vec![0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
                         );
-                        self.play_signup_fail_ux(None)?;
+                        self.play_signup_fail_ux()?;
                     }
-                    SignupFailReason::Duplicate => {}
-                    SignupFailReason::Unknown => {}
+                    SignupFailReason::Duplicate => {
+                        self.play_signup_fail_ux()?;
+                    }
+                    SignupFailReason::Unknown => {
+                        self.play_signup_fail_ux()?;
+                    }
                     SignupFailReason::Aborted => {
-                        self.play_signup_fail_ux(None)?;
+                        self.play_signup_fail_ux()?;
                     }
                 }
                 self.operator_signup_phase.failure();
             }
             Event::SignupSuccess => {
+                self.sound.queue(
+                    sound::Type::Tone(sound::Tone::SignupSuccess),
+                    Duration::ZERO,
+                )?;
                 self.operator_signup_phase.signup_successful();
                 self.set_ring(
                     LEVEL_BACKGROUND,
@@ -740,12 +735,6 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     .fade_in(1.5),
                 );
             }
-            Event::VoiceOpenEyes => {
-                self.sound.queue(
-                    sound::Type::Voice(sound::Voice::OpenEyes),
-                    Duration::ZERO,
-                )?;
-            }
             _ => {}
         }
         Ok(())
@@ -757,7 +746,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         // when the sound is queued.
         let fade_out_duration = 0.7;
         self.sound.queue(
-            sound::Type::Melody(sound::Melody::IrisScanSuccess),
+            sound::Type::Tone(sound::Tone::SignupCaptureComplete),
             Duration::from_millis((fade_out_duration * 1000.0) as u64),
         )?;
         // custom alert animation on ring
@@ -784,15 +773,11 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
         Ok(())
     }
 
-    fn play_signup_fail_ux(&mut self, sound: Option<sound::Type>) -> Result<()> {
+    fn play_signup_fail_ux(&mut self) -> Result<()> {
         self.sound.queue(
-            sound::Type::Melody(sound::Melody::SoundError),
+            sound::Type::Tone(sound::Tone::SignupFailure),
             Duration::from_millis(2000),
         )?;
-
-        if let Some(sound) = sound {
-            self.sound.queue(sound, Duration::ZERO)?;
-        }
 
         // turn off center
         self.stop_center(LEVEL_FOREGROUND, Transition::ForceStop);

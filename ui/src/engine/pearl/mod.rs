@@ -282,17 +282,13 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             }
             Event::NoInternetForSignup => {
                 self.sound.queue(
-                    sound::Type::Voice(
-                        sound::Voice::InternetConnectionTooSlowToPerformSignups,
-                    ),
+                    sound::Type::Tone(sound::Tone::SignupFailure),
                     Duration::ZERO,
                 )?;
             }
             Event::SlowInternetForSignup => {
                 self.sound.queue(
-                    sound::Type::Voice(
-                        sound::Voice::InternetConnectionTooSlowSignupsMightTakeLonger,
-                    ),
+                    sound::Type::Tone(sound::Tone::SignupFailure),
                     Duration::ZERO,
                 )?;
             }
