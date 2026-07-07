@@ -624,38 +624,15 @@ pub fn download<P: AsRef<Path>>(
     let mut current_delay = download_delay;
     let mut allowed_before = true;
 
-    let remaining_chunks =
-        ((component_remote_len - start_bytes) / CHUNK_SIZE as u64) as usize;
-
-    let mut progress_percent = 0;
-    for (i, range) in
+    let mut downloaded_bytes = start_bytes;
+    report_download_progress(
+        name,
+        download_progress_percent(downloaded_bytes, component_remote_len),
+        update_iface,
+    );
+    for range in
         util::HttpRangeIter::try_new(start_bytes, component_remote_len - 1, CHUNK_SIZE)?
-            .enumerate()
     {
-        if let Some(current_progress_percent) = (i * 100).checked_div(remaining_chunks)
-        {
-            if progress_percent != current_progress_percent {
-                progress_percent = current_progress_percent;
-            }
-        } else {
-            progress_percent = 100;
-        }
-
-        info!("downloading component `{name}`: {progress_percent}%");
-        if let Some(iface) = update_iface
-            && let Err(e) = interfaces::update_dbus_progress(
-                Some(ComponentStatus {
-                    name: name.to_string(),
-                    state: ComponentState::Downloading,
-                    progress: progress_percent as u8,
-                }),
-                Some(UpdateAgentState::Downloading),
-                iface,
-            )
-        {
-            warn!("{e:?}");
-        }
-
         // We are using `downloads_allowed` as a proxy to set/unset the sleep duration for now.
         // Downloads are no longer blocked entirely. Dbus error when communicating are reported
         // but leave the currently set duration unchanged.
@@ -699,9 +676,15 @@ pub fn download<P: AsRef<Path>>(
         let response = response
             .bytes()
             .map_err(|e| Error::GetBytes(range, url.clone(), e))?;
+        let bytes_read = response.len() as u64;
         io::copy(&mut response.as_ref(), &mut &dst).map_err(|e| {
             Error::MergeChunk(range, component_path.clone(), url.clone(), e)
         })?;
+
+        downloaded_bytes = downloaded_bytes.saturating_add(bytes_read);
+        let progress_percent =
+            download_progress_percent(downloaded_bytes, component_remote_len);
+        report_download_progress(name, progress_percent, update_iface);
 
         std::thread::sleep(current_delay);
     }
@@ -715,6 +698,35 @@ pub fn download<P: AsRef<Path>>(
         .map_err(|e| Error::DiskSync(component_path.clone(), e))?;
 
     Ok(component_path)
+}
+
+fn report_download_progress(
+    name: &str,
+    progress_percent: u8,
+    update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
+) {
+    info!("downloading component `{name}`: {progress_percent}%");
+    if let Some(iface) = update_iface
+        && let Err(e) = interfaces::update_dbus_progress(
+            Some(ComponentStatus {
+                name: name.to_string(),
+                state: ComponentState::Downloading,
+                progress: progress_percent,
+            }),
+            Some(UpdateAgentState::Downloading),
+            iface,
+        )
+    {
+        warn!("{e:?}");
+    }
+}
+
+fn download_progress_percent(downloaded_bytes: u64, total_bytes: u64) -> u8 {
+    if total_bytes == 0 {
+        return 100;
+    }
+    let progress = downloaded_bytes.saturating_mul(100) / total_bytes;
+    progress.min(100) as u8
 }
 
 // Fetches a component by finding it on disk or downloading it from remote.
@@ -775,4 +787,24 @@ pub fn fetch<P: AsRef<Path>>(
         source: source.clone(),
         on_disk: path,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::download_progress_percent;
+
+    #[test]
+    fn download_progress_uses_total_bytes_after_resume() {
+        assert_eq!(download_progress_percent(4_800, 5_600), 85);
+    }
+
+    #[test]
+    fn download_progress_clamps_to_complete() {
+        assert_eq!(download_progress_percent(120, 100), 100);
+    }
+
+    #[test]
+    fn download_progress_treats_empty_component_as_complete() {
+        assert_eq!(download_progress_percent(0, 0), 100);
+    }
 }
