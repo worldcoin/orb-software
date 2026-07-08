@@ -631,9 +631,7 @@ pub fn download<P: AsRef<Path>>(
     {
         let current_progress_percent =
             (start_bytes + (i as u64 * CHUNK_SIZE as u64)) * 100 / component_remote_len;
-        if progress_percent != current_progress_percent {
-            progress_percent = current_progress_percent;
-        }
+        progress_percent = current_progress_percent;
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface
