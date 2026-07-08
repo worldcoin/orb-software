@@ -629,9 +629,8 @@ pub fn download<P: AsRef<Path>>(
         util::HttpRangeIter::try_new(start_bytes, component_remote_len - 1, CHUNK_SIZE)?
             .enumerate()
     {
-        let current_progress_percent =
+        progress_percent =
             (start_bytes + (i as u64 * CHUNK_SIZE as u64)) * 100 / component_remote_len;
-        progress_percent = current_progress_percent;
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface
