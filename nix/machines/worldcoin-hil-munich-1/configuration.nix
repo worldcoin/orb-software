@@ -15,4 +15,19 @@
     ../nixos-common.nix
     ../hil-common.nix
   ];
+
+  # This HIL doubles as a Jenkins agent (in addition to the GitHub Actions
+  # runner set up by hil-common.nix). It runs the HIL test stage of the
+  # build_t824 pipeline.
+  #
+  # Before this connects you must, on the Jenkins controller:
+  #   1. Manage Jenkins -> Nodes -> New Node -> "worldcoin-hil-munich-1"
+  #      (Permanent Agent, launch method "connect agent to controller").
+  #   2. Add label `worldcoin-hil-munich-1` (this is what the Jenkinsfile targets).
+  #   3. Copy the node's secret into /etc/worldcoin/secrets/jenkins-agent-secret
+  #      on this machine (root-owned, mode 0400).
+  worldcoin.jenkinsAgent = {
+    enable = true;
+    url = "https://jenkins.worldcoin.dev";
+  };
 }
