@@ -34,11 +34,10 @@ pub struct Snapshot {
 
 pub struct Args<M: MetricEmitter> {
     pub poll_interval: Duration,
-    pub modem_manager: Arc<dyn ModemManager>,
     pub metrics: Arc<M>,
 }
 
-#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>)]
+#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>, modem_manager: &Box<dyn ModemManager>)]
 pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
 where
     M: MetricEmitter,
@@ -47,7 +46,7 @@ where
 
     let mut snapshot: Option<Snapshot> = None;
     let mut refresh_snapshot = async || -> Result<()> {
-        let new_snapshot = take_snapshot(ctx.modem_manager.as_ref()).await?;
+        let new_snapshot = take_snapshot(modem_manager.as_ref()).await?;
 
         let modem_id_changed_msg = match &snapshot {
             None => Some(format!(
@@ -68,7 +67,7 @@ where
             warn!(msg);
 
             let _ =
-                setup_signal_and_bands(ctx.modem_manager.as_ref(), &new_snapshot.id)
+                setup_signal_and_bands(modem_manager.as_ref(), &new_snapshot.id)
                     .await
                     .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
         }
@@ -91,9 +90,11 @@ where
                 ctx.metrics
                     .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(mcu_util.as_ref(), systemd).await.inspect_err(|e| {
-                error!("failed to to powercycle modem with err: {e:?}");
-            });
+            let _ = powercycle_modem(mcu_util.as_ref(), systemd)
+                .await
+                .inspect_err(|e| {
+                    error!("failed to to powercycle modem with err: {e:?}");
+                });
 
             return Err(e);
         }

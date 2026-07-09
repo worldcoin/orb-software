@@ -210,7 +210,9 @@ impl Fixture {
         let registry = crabwire::Registry::new()
             .insert(Systemd::new(conn.clone()))
             .insert(Box::new(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
-                as Box<dyn McuUtil>);
+                as Box<dyn McuUtil>)
+            .insert(Box::new(modem_manager.unwrap_or_else(default_mockmmcli))
+                as Box<dyn ModemManager>);
 
         let _ = crabwire::try_register!(registry);
 
@@ -222,7 +224,6 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
             .resolved(Resolved::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
@@ -329,7 +330,6 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(default_mockmmcli())
             .network_manager(nm.clone())
             .resolved(Resolved::new(self.conn.clone()))
             .statsd_client(MockStatsd)

@@ -1,4 +1,3 @@
-use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
@@ -24,14 +23,12 @@ pub async fn program(
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl MetricEmitter,
-    modem_manager: impl ModemManager,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
     zenoh: &Zenorb,
 ) -> Result<mini::Ctx<()>> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let procfs = procfs.as_ref().to_path_buf();
-    let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
     let statsd_client = Arc::new(statsd_client);
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
@@ -97,7 +94,6 @@ pub async fn program(
             .task_with()
             .args(modem::Args {
                 poll_interval: Duration::from_secs(30),
-                modem_manager,
                 metrics: statsd_client,
             })
             .on_err(OnErr::Restart {

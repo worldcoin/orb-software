@@ -2476,9 +2476,9 @@ dependencies = [
 
 [[package]]
 name = "crabwire"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "436cde1b854d98a37baace56bf17cd64a4b48821851ccdfe648908c3e1c48666"
+checksum = "d1ccfeb0ef1e063ace4e5a93b51c003d4589906f6fa70a82014c96b2ac6e290b"
 dependencies = [
  "crabwire_macros",
  "foldhash 0.2.0",
@@ -2486,9 +2486,9 @@ dependencies = [
 
 [[package]]
 name = "crabwire_macros"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81c452987f1725b201224dcd5ae680e94c47aa907cf219fbe865a2e3627cd60f"
+checksum = "0d0e325d3562fcd522c37ead25a5912c793cc93dcb345b09b54aca6575575ae7"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

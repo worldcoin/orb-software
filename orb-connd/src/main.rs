@@ -4,7 +4,7 @@ use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
     mcu_util::{cli::McuUtilCli, McuUtil},
-    modem_manager::cli::ModemManagerCli,
+    modem_manager::{cli::ModemManagerCli, ModemManager},
     network_manager::NetworkManager,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
@@ -108,7 +108,8 @@ fn connectivity_daemon() -> Result<()> {
 
         let registry = crabwire::Registry::new()
             .insert(systemd)
-            .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>);
+            .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>)
+            .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>);
 
         crabwire::register!(registry);
 
@@ -121,7 +122,6 @@ fn connectivity_daemon() -> Result<()> {
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
             .statsd_client(DogstatsdClient::default())
-            .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
             .zenoh(&zenoh)
