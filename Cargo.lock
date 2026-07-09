@@ -7536,10 +7536,12 @@ version = "0.0.0"
 name = "orb-dogd"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "dogstatsd",
  "eyre",
  "flume",
  "thiserror 2.0.17",
+ "tokio",
  "tracing",
 ]
 
