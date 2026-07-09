@@ -67,6 +67,7 @@ zenorb.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true
+crabwire = { workspace = true, features = ["testing"] }
 escargot.workspace = true
 test-utils.workspace = true
 nix = { workspace = true, features = ["socket"] }

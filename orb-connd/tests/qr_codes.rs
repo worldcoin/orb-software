@@ -24,13 +24,14 @@ async fn it_applies_netconfig_qr_code() {
         (OrbRelease::Prod, STAGE, false),
         (OrbRelease::Prod, PROD, true),
     ] {
-        let fx = Fixture::platform(OrbOsPlatform::Diamond)
+        let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
             .cap(OrbCapabilities::CellularAndWifi)
             .release(release)
-            .run()
+            .build()
             .await;
 
-        let connd = fx.connd().await;
+        let handle = fx.run().await;
+        let connd = handle.connd().await;
 
         // Act
         // we unwrap the error here because attempting to connect will NOT work
@@ -53,7 +54,7 @@ async fn it_applies_netconfig_qr_code() {
             "org.freedesktop.DBus.Error.Failed: could not find ssid network"
         );
 
-        let profile = fx
+        let profile = handle
             .nm
             .list_wifi_profiles()
             .await
@@ -65,20 +66,21 @@ async fn it_applies_netconfig_qr_code() {
         assert_eq!(profile.ssid, "network");
         assert_eq!(profile.psk, "password");
         assert!(!profile.hidden);
-        assert!(!fx.nm.smart_switching_enabled().await.unwrap());
-        assert!(fx.nm.wifi_enabled().await.unwrap());
+        assert!(!handle.nm.smart_switching_enabled().await.unwrap());
+        assert!(handle.nm.wifi_enabled().await.unwrap());
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_wifi_qr_code() {
     // Arrange (dev orbs)
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act
     // we unwrap the error here because attempting to connect will NOT work
@@ -96,7 +98,7 @@ async fn it_applies_wifi_qr_code() {
         "org.freedesktop.DBus.Error.Failed: could not find ssid example"
     );
 
-    let profile = fx
+    let profile = handle
         .nm
         .list_wifi_profiles()
         .await
@@ -112,12 +114,13 @@ async fn it_applies_wifi_qr_code() {
     assert!(profile.hidden);
 
     // Arrange (prod orbs, fails if there is connectivity, which we do bc this is in a container and host has connectivity)
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Prod)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act
     let result = connd
@@ -131,15 +134,16 @@ async fn it_applies_wifi_qr_code() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn it_applies_magic_reset_qr() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Prod)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // profile added, should be erased once magic qr is applied
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -152,7 +156,7 @@ async fn it_applies_magic_reset_qr() {
         .await
         .unwrap();
 
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -181,10 +185,10 @@ async fn it_applies_magic_reset_qr() {
     connd.apply_magic_reset_qr().await.unwrap();
 
     // Assert: all wifi profiles except default deleted
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     assert_eq!(profiles.len(), 1); // len is 1 bc default wifi profile was created
 
-    let ss_profiles = fx
+    let ss_profiles = handle
         .secure_storage
         .get("nmprofiles".into())
         .await

@@ -1,6 +1,5 @@
-use async_tempfile::TempDir;
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use tokio::process::Command;
 use tokio::task;
@@ -33,33 +32,22 @@ pub async fn build(
 }
 
 /// Starts a container with a temporary directory mounted to /run/integration-tests
-pub async fn run<I, S>(img: impl AsRef<OsStr>, args: I) -> Container
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
-    let tempdir = TempDir::new().await.unwrap();
-
-    run_with(img, args, tempdir).await
-}
-
-/// Starts a container with a temporary directory mounted to /run/integration-tests
 pub async fn run_with<I, S>(
     img: impl AsRef<OsStr>,
     args: I,
-    tempdir: TempDir,
+    tempdir: &Path,
 ) -> Container
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let tempdir_path = tempdir.dir_path().canonicalize().unwrap();
+    let tempdir = tempdir.canonicalize().unwrap();
 
     let out = Command::new("docker")
         .args(["run", "-d", "--rm"])
         .args([
             "-v",
-            &format!("{}:/run/integration-tests", tempdir_path.display()),
+            &format!("{}:/run/integration-tests", tempdir.display()),
         ])
         .args(args)
         .arg(img)
@@ -79,7 +67,7 @@ where
 
 pub struct Container {
     pub id: String,
-    pub tempdir: TempDir,
+    pub tempdir: PathBuf,
 }
 
 impl Drop for Container {
