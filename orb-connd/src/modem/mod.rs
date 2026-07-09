@@ -9,6 +9,7 @@ use color_eyre::{
     eyre::{eyre, Context, ContextCompat},
     Result,
 };
+use crabwire::inject;
 use orb_dogd::{MetricEmitter, NO_TAGS};
 use speare::mini;
 use std::{sync::Arc, time::Duration};
@@ -34,11 +35,10 @@ pub struct Snapshot {
 pub struct Args<M: MetricEmitter> {
     pub poll_interval: Duration,
     pub modem_manager: Arc<dyn ModemManager>,
-    pub mcu_util: Arc<dyn McuUtil>,
-    pub systemd: Systemd,
     pub metrics: Arc<M>,
 }
 
+#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>)]
 pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
 where
     M: MetricEmitter,
@@ -91,11 +91,9 @@ where
                 ctx.metrics
                     .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(ctx.mcu_util.as_ref(), &ctx.systemd)
-                .await
-                .inspect_err(|e| {
-                    error!("failed to to powercycle modem with err: {e:?}");
-                });
+            let _ = powercycle_modem(mcu_util.as_ref(), systemd).await.inspect_err(|e| {
+                error!("failed to to powercycle modem with err: {e:?}");
+            });
 
             return Err(e);
         }

@@ -1,4 +1,4 @@
-use crate::{network_manager::NetworkManager, resolved::Resolved, systemd::Systemd};
+use crate::{network_manager::NetworkManager, resolved::Resolved};
 use color_eyre::Result;
 use orb_dogd::MetricEmitter;
 use speare::{mini::OnErr, Backoff, Limit};
@@ -19,7 +19,6 @@ pub async fn spawn(
     resolved: Resolved,
     session_bus: zbus::Connection,
     statsd: Arc<impl MetricEmitter>,
-    systemd: Systemd,
     zsender: zenorb::Sender,
     sysfs: PathBuf,
     procfs: PathBuf,
@@ -78,7 +77,7 @@ pub async fn spawn(
 
     speare
         .task_with()
-        .args(data_usage::Args { statsd, systemd })
+        .args(data_usage::Args { statsd })
         .on_err(static_backoff(15))
         .spawn(data_usage::report)?;
 

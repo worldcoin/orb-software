@@ -207,7 +207,11 @@ impl Fixture {
             .await
             .unwrap();
 
-        let registry = crabwire::Registry::new();
+        let registry = crabwire::Registry::new()
+            .insert(Systemd::new(conn.clone()))
+            .insert(Box::new(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
+                as Box<dyn McuUtil>);
+
         let _ = crabwire::try_register!(registry);
 
         let speare = program()
@@ -221,7 +225,6 @@ impl Fixture {
             .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
             .resolved(Resolved::new(conn.clone()))
-            .systemd(Systemd::new(conn.clone()))
             .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .procfs(procfs.clone())
@@ -230,7 +233,6 @@ impl Fixture {
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
-            .mcu_util(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
             .run()
             .await
             .unwrap();
@@ -330,7 +332,6 @@ impl Fixture {
             .modem_manager(default_mockmmcli())
             .network_manager(nm.clone())
             .resolved(Resolved::new(self.conn.clone()))
-            .systemd(Systemd::new(self.conn.clone()))
             .statsd_client(MockStatsd)
             .sysfs(self.sysfs.clone())
             .procfs(self.procfs.clone())
@@ -339,7 +340,6 @@ impl Fixture {
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
-            .mcu_util(default_mock_mcu_util_cli())
             .run()
             .await
             .unwrap();

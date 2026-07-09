@@ -3,7 +3,7 @@ use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
-    mcu_util::cli::McuUtilCli,
+    mcu_util::{cli::McuUtilCli, McuUtil},
     modem_manager::cli::ModemManagerCli,
     network_manager::NetworkManager,
     resolved::Resolved,
@@ -106,7 +106,10 @@ fn connectivity_daemon() -> Result<()> {
             .with_name("connd")
             .await?;
 
-        let registry = crabwire::Registry::new();
+        let registry = crabwire::Registry::new()
+            .insert(systemd)
+            .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>);
+
         crabwire::register!(registry);
 
         let speare = connectivity_daemon::program()
@@ -122,8 +125,6 @@ fn connectivity_daemon() -> Result<()> {
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
             .zenoh(&zenoh)
-            .mcu_util(McuUtilCli)
-            .systemd(systemd)
             .run()
             .await?;
 

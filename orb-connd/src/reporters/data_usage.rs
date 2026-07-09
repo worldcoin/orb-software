@@ -1,5 +1,6 @@
 use crate::systemd::{IpAccounting, ServiceProxyExt, Systemd};
 use color_eyre::Result;
+use crabwire::inject;
 use orb_dogd::MetricEmitter;
 use speare::mini;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -8,16 +9,16 @@ use tracing::{info, warn};
 
 pub struct Args<M: MetricEmitter> {
     pub statsd: Arc<M>,
-    pub systemd: Systemd,
 }
 
+#[inject(systemd: &Systemd)]
 pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
     info!("starting data usage reporter");
 
     let mut data_usage_map: HashMap<String, IpAccounting> = HashMap::new();
 
     loop {
-        let new_data_usage_map = get_data_usage_map(&ctx.systemd).await?;
+        let new_data_usage_map = get_data_usage_map(systemd).await?;
 
         for (unit, usage) in new_data_usage_map.iter() {
             let Some(old_usage) = data_usage_map.get(unit) else {

@@ -1,9 +1,7 @@
-use crate::mcu_util::McuUtil;
 use crate::modem_manager::ModemManager;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
-use crate::systemd::Systemd;
 use crate::{modem, reporters, OrbCapabilities};
 use color_eyre::eyre::{Context, Result};
 use orb_dogd::MetricEmitter;
@@ -22,13 +20,11 @@ pub async fn program(
     procfs: impl AsRef<Path>,
     usr_persistent: impl AsRef<Path>,
     network_manager: NetworkManager,
-    systemd: Systemd,
     resolved: Resolved,
     session_bus: zbus::Connection,
     os_release: OrbOsRelease,
     statsd_client: impl MetricEmitter,
     modem_manager: impl ModemManager,
-    mcu_util: impl McuUtil,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
     zenoh: &Zenorb,
@@ -36,7 +32,6 @@ pub async fn program(
     let sysfs = sysfs.as_ref().to_path_buf();
     let procfs = procfs.as_ref().to_path_buf();
     let modem_manager: Arc<dyn ModemManager> = Arc::new(modem_manager);
-    let mcu_util: Arc<dyn McuUtil> = Arc::new(mcu_util);
     let statsd_client = Arc::new(statsd_client);
 
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
@@ -91,7 +86,6 @@ pub async fn program(
         resolved,
         session_bus,
         statsd_client.clone(),
-        systemd.clone(),
         zsender,
         sysfs,
         procfs,
@@ -104,8 +98,6 @@ pub async fn program(
             .args(modem::Args {
                 poll_interval: Duration::from_secs(30),
                 modem_manager,
-                mcu_util,
-                systemd,
                 metrics: statsd_client,
             })
             .on_err(OnErr::Restart {
