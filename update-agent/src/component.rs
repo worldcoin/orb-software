@@ -624,12 +624,11 @@ pub fn download<P: AsRef<Path>>(
     let mut current_delay = download_delay;
     let mut allowed_before = true;
 
-    let mut progress_percent = 0;
     for (i, range) in
         util::HttpRangeIter::try_new(start_bytes, component_remote_len - 1, CHUNK_SIZE)?
             .enumerate()
     {
-        progress_percent =
+        let progress_percent =
             (start_bytes + (i as u64 * CHUNK_SIZE as u64)) * 100 / component_remote_len;
 
         info!("downloading component `{name}`: {progress_percent}%");
