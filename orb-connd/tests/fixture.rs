@@ -207,6 +207,9 @@ impl Fixture {
             .await
             .unwrap();
 
+        let registry = crabwire::Registry::new();
+        let _ = crabwire::try_register!(registry);
+
         let speare = program()
             .os_release(OrbOsRelease {
                 release_type: release,
@@ -266,6 +269,7 @@ impl Fixture {
         &self.zsession
     }
 
+    // TODO: refactor this shit to repeat less code
     pub async fn restart(&mut self) {
         self.speare.abort_children().unwrap();
         self.container.rm().await;

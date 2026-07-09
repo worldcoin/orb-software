@@ -2475,6 +2475,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "crabwire"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "436cde1b854d98a37baace56bf17cd64a4b48821851ccdfe648908c3e1c48666"
+dependencies = [
+ "crabwire_macros",
+ "foldhash 0.2.0",
+]
+
+[[package]]
+name = "crabwire_macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81c452987f1725b201224dcd5ae680e94c47aa907cf219fbe865a2e3627cd60f"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "crc"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7468,6 +7490,7 @@ dependencies = [
  "ciborium",
  "clap",
  "color-eyre",
+ "crabwire",
  "dashmap",
  "derive_more 2.1.1",
  "escargot",

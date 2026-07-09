@@ -106,6 +106,9 @@ fn connectivity_daemon() -> Result<()> {
             .with_name("connd")
             .await?;
 
+        let registry = crabwire::Registry::new();
+        crabwire::register!(registry);
+
         let speare = connectivity_daemon::program()
             .sysfs("/sys")
             .procfs("/proc")
