@@ -22,7 +22,7 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_dogd::MetricEmitter;
+use orb_dogd::DogstatsdClient;
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
     OrbId,
@@ -83,7 +83,6 @@ impl Fixture {
         release: OrbRelease,
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
-        statsd: Option<MockStatsd>,
         wpa_ctrl: Option<MockWpaCli>,
         arrange: Option<Callback<Ctx>>,
         mcu_util: Option<MockMcuUtilCli>,
@@ -207,6 +206,20 @@ impl Fixture {
             .await
             .unwrap();
 
+        let mcu_util: Box<dyn McuUtil> =
+            Box::new(mcu_util.unwrap_or_else(default_mock_mcu_util_cli));
+
+        let modem_manager: Box<dyn ModemManager> =
+            Box::new(modem_manager.unwrap_or_else(default_mockmmcli));
+
+        let registry = crabwire::Registry::new()
+            .insert(Systemd::new(conn.clone()))
+            .insert(mcu_util)
+            .insert(modem_manager)
+            .insert(DogstatsdClient::default());
+
+        let _ = crabwire::try_register!(registry);
+
         let speare = program()
             .os_release(OrbOsRelease {
                 release_type: release,
@@ -215,11 +228,8 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
             .network_manager(nm.clone())
             .resolved(Resolved::new(conn.clone()))
-            .systemd(Systemd::new(conn.clone()))
-            .statsd_client(statsd.unwrap_or(MockStatsd))
             .sysfs(sysfs.clone())
             .procfs(procfs.clone())
             .usr_persistent(usr_persistent.clone())
@@ -227,7 +237,6 @@ impl Fixture {
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
-            .mcu_util(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
             .run()
             .await
             .unwrap();
@@ -266,6 +275,7 @@ impl Fixture {
         &self.zsession
     }
 
+    // TODO: refactor this shit to repeat less code
     pub async fn restart(&mut self) {
         self.speare.abort_children().unwrap();
         self.container.rm().await;
@@ -323,11 +333,8 @@ impl Fixture {
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(default_mockmmcli())
             .network_manager(nm.clone())
             .resolved(Resolved::new(self.conn.clone()))
-            .systemd(Systemd::new(self.conn.clone()))
-            .statsd_client(MockStatsd)
             .sysfs(self.sysfs.clone())
             .procfs(self.procfs.clone())
             .usr_persistent(self.usr_persistent.clone())
@@ -335,7 +342,6 @@ impl Fixture {
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
             .zenoh(&zsession)
-            .mcu_util(default_mock_mcu_util_cli())
             .run()
             .await
             .unwrap();
@@ -504,83 +510,6 @@ mock! {
             allowed: &[&'a str],
             preferred: &'a str,
         ) -> Result<()>;
-    }
-}
-
-pub struct MockStatsd;
-
-impl MetricEmitter for MockStatsd {
-    fn count<S, I>(
-        &self,
-        _stat: S,
-        _val: i64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn incr<S, I>(&self, _stat: S, _tags: I) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn gauge<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn hist<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn dist<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn timing<S, I>(
-        &self,
-        _stat: S,
-        _val: i64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
     }
 }
 

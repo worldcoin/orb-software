@@ -20,6 +20,7 @@ chrono.workspace = true
 ciborium.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
+crabwire.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
 flume.workspace = true
