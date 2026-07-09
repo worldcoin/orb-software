@@ -1,8 +1,7 @@
 use crate::{network_manager::NetworkManager, resolved::Resolved};
 use color_eyre::Result;
-use orb_dogd::MetricEmitter;
 use speare::{mini::OnErr, Backoff, Limit};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use tracing::info;
 
 pub mod active_connections;
@@ -18,7 +17,6 @@ pub async fn spawn(
     nm: NetworkManager,
     resolved: Resolved,
     session_bus: zbus::Connection,
-    statsd: Arc<impl MetricEmitter>,
     zsender: zenorb::Sender,
     sysfs: PathBuf,
     procfs: PathBuf,
@@ -46,9 +44,6 @@ pub async fn spawn(
 
     speare
         .task_with()
-        .args(datadog::Args {
-            statsd: statsd.clone(),
-        })
         .on_err(static_backoff(15))
         .spawn(datadog::report)?;
 
@@ -58,7 +53,6 @@ pub async fn spawn(
             nm: nm.clone(),
             session_bus,
             report_interval: Duration::from_secs(30),
-            metrics: statsd.clone(),
         })
         .on_err(static_backoff(15))
         .spawn(connd_report::report)?;
@@ -77,7 +71,6 @@ pub async fn spawn(
 
     speare
         .task_with()
-        .args(data_usage::Args { statsd })
         .on_err(static_backoff(15))
         .spawn(data_usage::report)?;
 

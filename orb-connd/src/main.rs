@@ -109,7 +109,8 @@ fn connectivity_daemon() -> Result<()> {
         let registry = crabwire::Registry::new()
             .insert(systemd)
             .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>)
-            .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>);
+            .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>)
+            .insert(DogstatsdClient::default());
 
         crabwire::register!(registry);
 
@@ -121,7 +122,6 @@ fn connectivity_daemon() -> Result<()> {
             .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
-            .statsd_client(DogstatsdClient::default())
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
             .zenoh(&zenoh)

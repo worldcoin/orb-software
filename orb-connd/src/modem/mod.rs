@@ -10,9 +10,9 @@ use color_eyre::{
     Result,
 };
 use crabwire::inject;
-use orb_dogd::{MetricEmitter, NO_TAGS};
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tokio::{
     fs,
     time::{self, timeout},
@@ -32,16 +32,12 @@ pub struct Snapshot {
     pub location: Location,
 }
 
-pub struct Args<M: MetricEmitter> {
+pub struct Args {
     pub poll_interval: Duration,
-    pub metrics: Arc<M>,
 }
 
-#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>, modem_manager: &Box<dyn ModemManager>)]
-pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
-where
-    M: MetricEmitter,
-{
+#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>, modem_manager: &Box<dyn ModemManager>, metrics: &DogstatsdClient)]
+pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting modem supervisor");
 
     let mut snapshot: Option<Snapshot> = None;
@@ -66,10 +62,9 @@ where
         if let Some(msg) = modem_id_changed_msg {
             warn!(msg);
 
-            let _ =
-                setup_signal_and_bands(modem_manager.as_ref(), &new_snapshot.id)
-                    .await
-                    .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
+            let _ = setup_signal_and_bands(modem_manager.as_ref(), &new_snapshot.id)
+                .await
+                .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
         }
 
         let _ = ctx.publish("modem-snapshot", new_snapshot.clone());
@@ -86,9 +81,7 @@ where
             error!("failed to refresh modem snapshot with err: {e}");
             error!("powercycling modem");
 
-            let _ =
-                ctx.metrics
-                    .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
+            let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
             let _ = powercycle_modem(mcu_util.as_ref(), systemd)
                 .await
