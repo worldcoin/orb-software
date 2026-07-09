@@ -14633,6 +14633,7 @@ dependencies = [
 name = "zenorb"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "bon",
  "color-eyre",
  "orb-info",
