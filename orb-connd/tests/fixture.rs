@@ -52,7 +52,7 @@ pub struct Fixture {
     wpa_ctrl: Option<MockWpaCli>,
     registry: Option<crabwire::Registry>,
 
-    container_tempdir: TempDir,
+    pub container_tempdir: TempDir,
     sysfs: PathBuf,
     procfs: PathBuf,
     pub usr_persistent: PathBuf,
@@ -141,6 +141,7 @@ impl Fixture {
         #[builder(default = false)] log: bool,
         secure_storage: Option<SecureStorage>,
         secure_storage_cancel_token: Option<CancellationToken>,
+        registry: Option<crabwire::Registry>,
     ) -> FxHandle {
         let _ = color_eyre::install();
 
@@ -211,7 +212,7 @@ impl Fixture {
             Duration::from_millis(1),
         );
 
-        let registry = crabwire::Registry::new()
+        let base_registry = crabwire::Registry::new()
             .insert(mock_systemd())
             .insert(mock_mcu_util())
             .insert(mock_modem_manager())
@@ -219,7 +220,11 @@ impl Fixture {
             .insert(statsd)
             .merge(self.registry.take().unwrap_or_else(crabwire::Registry::new));
 
-        crabwire::reregister!(registry);
+        crabwire::reregister!(base_registry);
+
+        if let Some(registry) = registry {
+            crabwire::merge!(registry);
+        }
 
         let speare = program()
             .os_release(OrbOsRelease {

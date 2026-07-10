@@ -22,7 +22,7 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
     pub id: ModemId,
     pub fw_revision: Option<String>,
@@ -212,8 +212,6 @@ async fn powercycle_modem(
         .await
         .wrap_err("mcu-util power-cycle")?;
 
-    time::sleep(Duration::from_secs(5)).await;
-
     let device_exists = async {
         loop {
             if fs::try_exists(device_path).await.is_ok_and(|x| x) {
@@ -228,9 +226,13 @@ async fn powercycle_modem(
         .await
         .wrap_err("timed out after 30s waiting for modem device to pop back up")?;
 
-    info!("modem detected at {}", device_path.display());
+    println!("device exists!");
 
-    info!("Restarting ModemManager");
+    info!(
+        "modem detected at {}, restarting ModemManager",
+        device_path.display()
+    );
+
     // systemd's default start/stop timeout is 90s; leave a small margin for the D-Bus round trip.
     systemd
         .restart_service("ModemManager.service", Duration::from_secs(100))
