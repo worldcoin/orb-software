@@ -17,7 +17,7 @@ pub async fn run() -> (Container, Port) {
     let container = docker::run_with(
         tag,
         [&format!("-p={port}:7447")],
-        &TempDir::new().await.unwrap().to_path_buf(),
+        &TempDir::new().await.unwrap(),
     )
     .await;
 

@@ -212,7 +212,7 @@ impl Fixture {
             .insert(modem_manager)
             .insert(DogstatsdClient::default());
 
-        let _ = crabwire::reregister!(registry);
+        crabwire::reregister!(registry);
 
         let speare = program()
             .os_release(OrbOsRelease {
