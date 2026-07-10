@@ -78,7 +78,7 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
-        #[builder(default = OrbCapabilities::CellularAndWifi)] cap: OrbCapabilities,
+        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         wpa_ctrl: Option<MockWpaCli>,
         mcu_util: Option<MockMcuUtilCli>,
