@@ -17,7 +17,7 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    systemd::Systemd,
+    systemd::{Systemd, SystemdDbus},
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
@@ -206,8 +206,10 @@ impl Fixture {
         let modem_manager: Box<dyn ModemManager> =
             Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
 
+        let systemd: Box<dyn Systemd> = Box::new(SystemdDbus::new(dbus.clone()));
+
         let registry = crabwire::Registry::new()
-            .insert(Systemd::new(dbus.clone()))
+            .insert(systemd)
             .insert(mcu_util)
             .insert(modem_manager)
             .insert(DogstatsdClient::default());

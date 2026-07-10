@@ -9,7 +9,7 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    systemd::Systemd,
+    systemd::{Systemd, SystemdDbus},
     wpa_ctrl::cli::WpaCli,
 };
 use orb_dogd::DogstatsdClient;
@@ -84,7 +84,7 @@ fn connectivity_daemon() -> Result<()> {
             WpaCli::new(os_release.orb_os_platform_type),
         );
         let resolved = Resolved::new(system_bus.clone());
-        let systemd = Systemd::new(system_bus);
+        let systemd: Box<dyn Systemd> = Box::new(SystemdDbus::new(system_bus));
 
         let cancel_token = CancellationToken::new();
         let profile_storage = match os_release.orb_os_platform_type {

@@ -1,19 +1,44 @@
 use std::time::Duration;
 
+use async_trait::async_trait;
 use color_eyre::{eyre::Context, Result};
 use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy, UnitProxy};
 
 #[derive(Clone)]
-pub struct Systemd {
+pub struct SystemdDbus {
     system_bus: zbus::Connection,
 }
 
-impl Systemd {
+impl SystemdDbus {
     pub fn new(system_bus: zbus::Connection) -> Self {
         Self { system_bus }
     }
 
-    pub async fn restart_service(&self, unit: &str) -> Result<()> {
+    async fn is_service_active(&self, unit: &str) -> Result<bool> {
+        let manager = ManagerProxy::new(&self.system_bus).await?;
+        let path = manager.get_unit(unit.to_string()).await?;
+
+        let unit_proxy = UnitProxy::builder(&self.system_bus)
+            .destination("org.freedesktop.systemd1")?
+            .path(path)?
+            .build()
+            .await?;
+        Ok(unit_proxy.active_state().await? == "active")
+    }
+}
+
+#[async_trait]
+pub trait Systemd: 'static + Send + Sync {
+    async fn restart_service(&self, unit: &str) -> Result<()>;
+
+    async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>>;
+
+    async fn wait_for_active(&self, unit: &str, timeout: Duration) -> Result<()>;
+}
+
+#[async_trait]
+impl Systemd for SystemdDbus {
+    async fn restart_service(&self, unit: &str) -> Result<()> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
         let _ = manager
             .restart_unit(unit.to_string(), "replace".to_string())
@@ -22,7 +47,7 @@ impl Systemd {
         Ok(())
     }
 
-    pub async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>> {
+    async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
 
         let units = manager
@@ -56,7 +81,7 @@ impl Systemd {
         Ok(services)
     }
 
-    pub async fn wait_for_active(&self, unit: &str, timeout: Duration) -> Result<()> {
+    async fn wait_for_active(&self, unit: &str, timeout: Duration) -> Result<()> {
         let is_active = async {
             loop {
                 if self.is_service_active(unit).await.unwrap_or(false) {
@@ -70,18 +95,6 @@ impl Systemd {
         tokio::time::timeout(timeout, is_active)
             .await
             .with_context(|| format!("timed out waiting for {unit} to become active"))
-    }
-
-    async fn is_service_active(&self, unit: &str) -> Result<bool> {
-        let manager = ManagerProxy::new(&self.system_bus).await?;
-        let path = manager.get_unit(unit.to_string()).await?;
-
-        let unit_proxy = UnitProxy::builder(&self.system_bus)
-            .destination("org.freedesktop.systemd1")?
-            .path(path)?
-            .build()
-            .await?;
-        Ok(unit_proxy.active_state().await? == "active")
     }
 }
 

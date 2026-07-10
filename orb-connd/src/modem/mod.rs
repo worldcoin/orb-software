@@ -36,7 +36,12 @@ pub struct Args {
     pub poll_interval: Duration,
 }
 
-#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>, modem_manager: &Box<dyn ModemManager>, metrics: &DogstatsdClient)]
+#[inject(
+    systemd: &Box<dyn Systemd>,
+    mcu_util: &Box<dyn McuUtil>,
+    modem_manager: &Box<dyn ModemManager>,
+    metrics: &DogstatsdClient
+)]
 pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting modem supervisor");
 
@@ -83,7 +88,7 @@ pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
 
             let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(mcu_util.as_ref(), systemd)
+            let _ = powercycle_modem(mcu_util.as_ref(), systemd.as_ref())
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");
@@ -182,7 +187,7 @@ static ALLOWED_BANDS: [&str; 27] = [
     "eutran-28",
 ];
 
-async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<()> {
+async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &dyn Systemd) -> Result<()> {
     mcu_util
         .powercycle(Module::Modem)
         .await

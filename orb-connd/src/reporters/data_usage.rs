@@ -7,14 +7,14 @@ use std::{collections::HashMap, time::Duration};
 use tokio::time;
 use tracing::{info, warn};
 
-#[inject(systemd: &Systemd, statsd: &DogstatsdClient)]
+#[inject(systemd: &Box<dyn Systemd>, statsd: &DogstatsdClient)]
 pub async fn report(_: mini::Ctx<()>) -> Result<()> {
     info!("starting data usage reporter");
 
     let mut data_usage_map: HashMap<String, IpAccounting> = HashMap::new();
 
     loop {
-        let new_data_usage_map = get_data_usage_map(systemd).await?;
+        let new_data_usage_map = get_data_usage_map(systemd.as_ref()).await?;
 
         for (unit, usage) in new_data_usage_map.iter() {
             let Some(old_usage) = data_usage_map.get(unit) else {
@@ -63,7 +63,7 @@ pub async fn report(_: mini::Ctx<()>) -> Result<()> {
 }
 
 async fn get_data_usage_map(
-    systemd: &Systemd,
+    systemd: &dyn Systemd,
 ) -> Result<HashMap<String, IpAccounting>> {
     let mut ip_accountings = HashMap::new();
 
