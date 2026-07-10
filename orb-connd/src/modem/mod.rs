@@ -53,7 +53,7 @@ impl Default for ModemConfig {
 #[inject(
     systemd: &Systemd,
     mcu_util: &McuUtil,
-    modem_manager: &Box<dyn ModemManager>,
+    modem_manager: &ModemManager,
     metrics: &DogstatsdClient,
     config: &ModemConfig
 )]
@@ -62,7 +62,7 @@ pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
 
     let mut snapshot: Option<Snapshot> = None;
     let mut refresh_snapshot = async || -> Result<()> {
-        let new_snapshot = take_snapshot(modem_manager.as_ref()).await?;
+        let new_snapshot = take_snapshot(modem_manager).await?;
 
         let modem_id_changed_msg = match &snapshot {
             None => Some(format!(
@@ -82,7 +82,7 @@ pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
         if let Some(msg) = modem_id_changed_msg {
             warn!(msg);
 
-            let _ = setup_signal_and_bands(modem_manager.as_ref(), &new_snapshot.id)
+            let _ = setup_signal_and_bands(modem_manager, &new_snapshot.id)
                 .await
                 .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
         }
@@ -116,7 +116,7 @@ pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
     }
 }
 
-async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
+async fn take_snapshot(mm: &ModemManager) -> Result<Snapshot> {
     let modem = mm
         .list_modems()
         .await?
@@ -160,7 +160,7 @@ async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
     })
 }
 
-async fn setup_signal_and_bands(mm: &dyn ModemManager, id: &ModemId) -> Result<()> {
+async fn setup_signal_and_bands(mm: &ModemManager, id: &ModemId) -> Result<()> {
     mm.signal_setup(id, std::time::Duration::from_secs(10))
         .await
         .map_err(|e| eyre!("could not update modem signal refresh rate: {e}"))?;

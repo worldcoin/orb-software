@@ -5,7 +5,7 @@ use orb_connd::{
     connectivity_daemon,
     mcu_util::McuUtil,
     modem::ModemConfig,
-    modem_manager::{cli::ModemManagerCli, ModemManager},
+    modem_manager::ModemManager,
     network_manager::NetworkManager,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
@@ -110,7 +110,7 @@ fn connectivity_daemon() -> Result<()> {
         let registry = crabwire::Registry::new()
             .insert(systemd)
             .insert(McuUtil)
-            .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>)
+            .insert(ModemManager)
             .insert(ModemConfig::default())
             .insert(DogstatsdClient::default());
 
