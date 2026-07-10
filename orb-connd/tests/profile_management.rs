@@ -485,7 +485,7 @@ async fn profile_is_persisted_after_bumping_priority() {
 
     // Act: restart connd and environment -- profile should be reloaded
     drop(connd);
-    drop(handle);
+    handle.stop().await;
     let handle = fx.run().await;
 
     // Assert: both profiles are still persisted
