@@ -50,7 +50,6 @@ pub struct Fixture {
 
     modem_manager: Option<MockMMCli>,
     wpa_ctrl: Option<MockWpaCli>,
-    mcu_util: Option<MockMcuUtilCli>,
     registry: Option<crabwire::Registry>,
 
     container_tempdir: TempDir,
@@ -87,7 +86,6 @@ impl Fixture {
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
         wpa_ctrl: Option<MockWpaCli>,
-        mcu_util: Option<MockMcuUtilCli>,
         registry: Option<crabwire::Registry>,
     ) -> Self {
         let connd_build = task::spawn_blocking(|| {
@@ -114,7 +112,6 @@ impl Fixture {
             cap,
             modem_manager,
             wpa_ctrl,
-            mcu_util,
             registry,
             container_tempdir,
             usr_persistent,
@@ -205,12 +202,6 @@ impl Fixture {
             .await
             .unwrap();
 
-        let mcu_util: Box<dyn McuUtil> = Box::new(
-            self.mcu_util
-                .take()
-                .unwrap_or_else(default_mock_mcu_util_cli),
-        );
-
         let modem_manager: Box<dyn ModemManager> =
             Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
 
@@ -227,7 +218,7 @@ impl Fixture {
 
         let registry = crabwire::Registry::new()
             .insert(mock_systemd())
-            .insert(mcu_util)
+            .insert(mock_mcu_util())
             .insert(modem_manager)
             .insert(ModemConfig::default())
             .insert(statsd)
@@ -534,24 +525,17 @@ mock! {
     }
 }
 
-fn default_mock_mcu_util_cli() -> MockMcuUtilCli {
-    let mut mcu_util = MockMcuUtilCli::new();
-    mcu_util.expect_powercycle().returning(|_| Ok(()));
-    mcu_util
-}
+fn mock_mcu_util() -> McuUtil {
+    let mut mcu_util = McuUtil::faux();
+    faux::when!(mcu_util.powercycle).then(|_| Ok(()));
 
-mock! {
-    pub McuUtilCli {}
-    #[async_trait]
-    impl McuUtil for McuUtilCli {
-        async fn powercycle(&self, module: orb_connd::mcu_util::Module) -> Result<()>;
-    }
+    mcu_util
 }
 
 fn mock_systemd() -> Systemd {
     let mut systemd = Systemd::faux();
     faux::when!(systemd.restart_service).then(|(_, _)| Ok(()));
-    faux::when!(systemd.loaded_services).then(|()| Ok(Vec::new()));
+    faux::when!(systemd.loaded_services).then(|_| Ok(Vec::new()));
 
     systemd
 }

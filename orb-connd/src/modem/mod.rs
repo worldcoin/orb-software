@@ -52,7 +52,7 @@ impl Default for ModemConfig {
 
 #[inject(
     systemd: &Systemd,
-    mcu_util: &Box<dyn McuUtil>,
+    mcu_util: &McuUtil,
     modem_manager: &Box<dyn ModemManager>,
     metrics: &DogstatsdClient,
     config: &ModemConfig
@@ -103,7 +103,7 @@ pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
 
             let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(mcu_util.as_ref(), systemd, &config.device_path)
+            let _ = powercycle_modem(mcu_util, systemd, &config.device_path)
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");
@@ -203,7 +203,7 @@ static ALLOWED_BANDS: [&str; 27] = [
 ];
 
 async fn powercycle_modem(
-    mcu_util: &dyn McuUtil,
+    mcu_util: &McuUtil,
     systemd: &Systemd,
     device_path: &Path,
 ) -> Result<()> {
