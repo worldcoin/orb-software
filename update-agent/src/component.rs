@@ -624,22 +624,12 @@ pub fn download<P: AsRef<Path>>(
     let mut current_delay = download_delay;
     let mut allowed_before = true;
 
-    let remaining_chunks =
-        ((component_remote_len - start_bytes) / CHUNK_SIZE as u64) as usize;
-
-    let mut progress_percent = 0;
     for (i, range) in
         util::HttpRangeIter::try_new(start_bytes, component_remote_len - 1, CHUNK_SIZE)?
             .enumerate()
     {
-        if let Some(current_progress_percent) = (i * 100).checked_div(remaining_chunks)
-        {
-            if progress_percent != current_progress_percent {
-                progress_percent = current_progress_percent;
-            }
-        } else {
-            progress_percent = 100;
-        }
+        let progress_percent =
+            (start_bytes + (i as u64 * CHUNK_SIZE as u64)) * 100 / component_remote_len;
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface

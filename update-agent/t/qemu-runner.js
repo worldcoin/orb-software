@@ -17,7 +17,7 @@ import { promises as fs, constants } from 'fs';
 import { join, resolve } from 'path';
 import { createHash } from 'crypto';
 
-const FEDORA_CLOUD_QCOW2_URL = 'https://mirror.us.mirhosting.net/fedora/linux/releases/42/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2';
+const FEDORA_CLOUD_QCOW2_URL = 'https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2';
 const QEMU_MEMORY = '2G';
 const QEMU_DISK_SIZE = '64G';
 
