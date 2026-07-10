@@ -21,6 +21,9 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
+# In case /usr/persistent/se was manually re-proved under root
+ExecStartPre=+/bin/chmod -R +rX /usr/persistent/se
+ExecStartPre=+/bin/chown -R worldcoin:worldcoin /usr/persistent/se
 # TODO: use the orb-info crate
 ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
 IPAccounting=yes
@@ -86,4 +89,3 @@ SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot
 [Install]
 # Start this service when reaching the normal multi-user boot target
 WantedBy=multi-user.target
-

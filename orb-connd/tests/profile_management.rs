@@ -4,7 +4,6 @@ use orb_connd::{
     network_manager::WifiSec, service::zoci::WifiProfileDto, OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
-use prelude::future::Callback;
 use serde_json::json;
 use tokio::fs;
 use tokio_stream::wrappers::ReadDirStream;
@@ -15,13 +14,15 @@ mod fixture;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_increments_priority_when_adding_multiple_networks() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -34,7 +35,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
         .await
         .unwrap();
 
-    let res = fx
+    let res = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -53,7 +54,7 @@ async fn it_increments_priority_when_adding_multiple_networks() {
     println!("e {e:?}");
 
     // Assert
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     println!("{profiles:?}");
 
     // profile 0 is default profile
@@ -80,13 +81,15 @@ async fn it_increments_priority_when_adding_multiple_networks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act
-    let actual1 = fx
+    let actual1 = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -100,7 +103,7 @@ async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
         .unwrap()
         .unwrap_err();
 
-    let actual2 = fx
+    let actual2 = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -126,13 +129,15 @@ async fn it_fails_adding_wifi_if_sec_isnt_wpa2psk_or_wpa3sae() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_removes_a_wifi_profile() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -145,14 +150,14 @@ async fn it_removes_a_wifi_profile() {
         .await
         .unwrap();
 
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command_raw("connd/job/wifi_remove", "one")
         .await
         .unwrap();
 
     // Assert
-    let profiles = fx
+    let profiles = handle
         .zenoh()
         .command_raw("connd/job/wifi_list", "")
         .await
@@ -167,20 +172,22 @@ async fn it_removes_a_wifi_profile() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_creates_default_profiles() {
     // Arrange & Act
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Prod)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Assert
-    let cellular_profiles = fx.nm.list_cellular_profiles().await.unwrap();
+    let cellular_profiles = handle.nm.list_cellular_profiles().await.unwrap();
     assert_eq!(cellular_profiles.len(), 1);
 
     let default_cel_profile = cellular_profiles.into_iter().next().unwrap();
     assert_eq!(default_cel_profile.id, "cellular");
     assert_eq!(default_cel_profile.apn, "em");
 
-    let wifi_profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let wifi_profiles = handle.nm.list_wifi_profiles().await.unwrap();
     assert_eq!(wifi_profiles.len(), 1);
 
     let default_wifi_profile = wifi_profiles.into_iter().next().unwrap();
@@ -194,34 +201,35 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
     // - /usr/persistent/network-manager/connections
     // - /usr/persistent/network-manager/varlib
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Prod)
-        .arrange(Callback::new(async |ctx: fixture::Ctx| {
-            let varlib = ctx.usr_persistent.join("network-manager").join("varlib");
-            fs::create_dir_all(&varlib).await.unwrap();
-
-            // we create a file thats 2mb in size, which puts us
-            // above the 1mb limit for network-manager folder in /usr/persistent
-            let contents = vec![0u8; 2 * 1024 * 1024];
-            fs::write(varlib.join("seen-bssids"), &contents)
-                .await
-                .unwrap();
-
-            for n in 0..30 {
-                fs::write(varlib.join(format!("{n}.lease")), [])
-                    .await
-                    .unwrap();
-            }
-
-            let dir: Vec<_> = ReadDirStream::new(fs::read_dir(varlib).await.unwrap())
-                .try_collect()
-                .await
-                .unwrap();
-
-            assert_eq!(31, dir.len());
-        }))
-        .run()
+        .build()
         .await;
+
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    fs::create_dir_all(&varlib).await.unwrap();
+
+    // we create a file thats 2mb in size, which puts us
+    // above the 1mb limit for network-manager folder in /usr/persistent
+    let contents = vec![0u8; 2 * 1024 * 1024];
+    fs::write(varlib.join("seen-bssids"), &contents)
+        .await
+        .unwrap();
+
+    for n in 0..30 {
+        fs::write(varlib.join(format!("{n}.lease")), [])
+            .await
+            .unwrap();
+    }
+
+    let dir: Vec<_> = ReadDirStream::new(fs::read_dir(varlib).await.unwrap())
+        .try_collect()
+        .await
+        .unwrap();
+
+    assert_eq!(31, dir.len());
+
+    let _handle = fx.run().await;
 
     // Assert
     // after connd starts, it should check if nm folder in persistent is over limit,
@@ -242,13 +250,15 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_protects_default_wifi_and_cellular_profiles() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act
-    let cellular_actual = fx
+    let cellular_actual = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -262,7 +272,7 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
         .unwrap()
         .unwrap_err();
 
-    let wifi_actual = fx
+    let wifi_actual = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -290,13 +300,15 @@ async fn it_protects_default_wifi_and_cellular_profiles() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_returns_saved_wifi_profiles() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -309,7 +321,7 @@ async fn it_returns_saved_wifi_profiles() {
         .await
         .unwrap();
 
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -322,7 +334,7 @@ async fn it_returns_saved_wifi_profiles() {
         .await
         .unwrap();
 
-    let actual = fx
+    let actual = handle
         .zenoh()
         .command_raw("connd/job/wifi_list", "")
         .await
@@ -356,14 +368,16 @@ async fn it_returns_saved_wifi_profiles() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // Act: create profiles
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -376,7 +390,7 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
         .await
         .unwrap();
 
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -390,33 +404,33 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
         .unwrap();
 
     // Assert: newest added profile has higher priority
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
     let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
     assert!(bla.priority < bla2.priority);
 
     // Act: attempt to connect to bla
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command_raw("connd/job/wifi_connect", "bla")
         .await
         .unwrap();
 
     // Assert: last attempted connection profile has higher priority
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     let bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
     let bla2 = profiles.iter().find(|p| p.ssid == "bla2").unwrap();
     assert!(bla.priority > bla2.priority);
 
     // Act: attempt to connect again to bla
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command_raw("connd/job/wifi_connect", "bla")
         .await
         .unwrap();
 
     // Assert: priority hasn't changed as highest bla was already highest prio
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     let new_bla = profiles.iter().find(|p| p.ssid == "bla").unwrap();
     assert!(bla.priority == new_bla.priority);
 }
@@ -427,13 +441,14 @@ async fn profile_is_persisted_after_bumping_priority() {
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act: create profile
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -447,7 +462,7 @@ async fn profile_is_persisted_after_bumping_priority() {
         .unwrap();
 
     // Act: create second profile with higher priority
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -462,7 +477,7 @@ async fn profile_is_persisted_after_bumping_priority() {
 
     // Act: force connect, should rewrite profile to raise priority
     // will fail due to ssid "bla" not existing
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command_raw("connd/job/wifi_connect", "bla")
         .await
@@ -470,10 +485,11 @@ async fn profile_is_persisted_after_bumping_priority() {
 
     // Act: restart connd and environment -- profile should be reloaded
     drop(connd);
-    fx.restart().await;
+    handle.stop().await;
+    let handle = fx.run().await;
 
     // Assert: both profiles are still persisted
-    let profiles = fx.nm.list_wifi_profiles().await.unwrap();
+    let profiles = handle.nm.list_wifi_profiles().await.unwrap();
     assert!(profiles.iter().any(|p| p.ssid == "bla2"));
     assert!(profiles.iter().any(|p| p.ssid == "bla"));
 }

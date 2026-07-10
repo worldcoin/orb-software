@@ -5,7 +5,6 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
-use prelude::future::Callback;
 use serde_json::json;
 use uuid::Uuid;
 use zenorb::zoci::ReplyExt;
@@ -16,36 +15,44 @@ mod fixture;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_adds_removes_and_imports_encrypted_profiles() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Diamond)
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .cap(OrbCapabilities::WifiOnly)
         .release(OrbRelease::Prod)
-        .arrange(Callback::new(async |ctx: fixture::Ctx| {
-            // prepopulate with encrypted profiles
-            let profiles = vec![WifiProfile {
-                id: "imported".into(),
-                uuid: Uuid::new_v4().to_string(),
-                ssid: "imported".into(),
-                sec: WifiSec::Wpa2Psk,
-                psk: "1234567890".into(),
-                autoconnect: false,
-                priority: 0,
-                hidden: false,
-                path: String::new(),
-            }];
+        .build()
+        .await;
 
-            let mut bytes = Vec::new();
-            ciborium::ser::into_writer(&profiles, &mut bytes).unwrap();
+    // prepopulate with encrypted profiles
+    let profiles = vec![WifiProfile {
+        id: "imported".into(),
+        uuid: Uuid::new_v4().to_string(),
+        ssid: "imported".into(),
+        sec: WifiSec::Wpa2Psk,
+        psk: "1234567890".into(),
+        autoconnect: false,
+        priority: 0,
+        hidden: false,
+        path: String::new(),
+    }];
 
-            ctx.secure_storage
-                .put("nmprofiles".into(), bytes)
-                .await
-                .unwrap();
-        }))
-        .run()
+    let mut bytes = Vec::new();
+    ciborium::ser::into_writer(&profiles, &mut bytes).unwrap();
+
+    let (secure_storage, secure_storage_cancel_token) = fx.run_secure_storage().await;
+
+    secure_storage
+        .put("nmprofiles".into(), bytes)
+        .await
+        .unwrap();
+
+    let handle = fx
+        .run_with()
+        .secure_storage(secure_storage)
+        .secure_storage_cancel_token(secure_storage_cancel_token)
+        .call()
         .await;
 
     // Assert profile was imported
-    let imported_profile = fx
+    let imported_profile = handle
         .zenoh()
         .command_raw("connd/job/wifi_list", "")
         .await
@@ -59,13 +66,13 @@ async fn it_adds_removes_and_imports_encrypted_profiles() {
     assert!(imported_profile.is_some());
 
     // Act: remove imported, add new profile
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command_raw("connd/job/wifi_remove", "imported")
         .await
         .unwrap();
 
-    let _ = fx
+    let _ = handle
         .zenoh()
         .command(
             "connd/job/wifi_add",
@@ -79,7 +86,7 @@ async fn it_adds_removes_and_imports_encrypted_profiles() {
         .unwrap();
 
     // Assert: store reflects changes
-    let profiles = fx
+    let profiles = handle
         .secure_storage
         .get("nmprofiles".into())
         .await

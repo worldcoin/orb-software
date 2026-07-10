@@ -9,9 +9,10 @@ use color_eyre::{
     eyre::{eyre, Context, ContextCompat},
     Result,
 };
-use orb_dogd::{MetricEmitter, NO_TAGS};
+use crabwire::inject;
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tokio::{
     fs,
     time::{self, timeout},
@@ -31,23 +32,17 @@ pub struct Snapshot {
     pub location: Location,
 }
 
-pub struct Args<M: MetricEmitter> {
+pub struct Args {
     pub poll_interval: Duration,
-    pub modem_manager: Arc<dyn ModemManager>,
-    pub mcu_util: Arc<dyn McuUtil>,
-    pub systemd: Systemd,
-    pub metrics: Arc<M>,
 }
 
-pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
-where
-    M: MetricEmitter,
-{
+#[inject(systemd: &Systemd, mcu_util: &Box<dyn McuUtil>, modem_manager: &Box<dyn ModemManager>, metrics: &DogstatsdClient)]
+pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting modem supervisor");
 
     let mut snapshot: Option<Snapshot> = None;
     let mut refresh_snapshot = async || -> Result<()> {
-        let new_snapshot = take_snapshot(ctx.modem_manager.as_ref()).await?;
+        let new_snapshot = take_snapshot(modem_manager.as_ref()).await?;
 
         let modem_id_changed_msg = match &snapshot {
             None => Some(format!(
@@ -67,10 +62,9 @@ where
         if let Some(msg) = modem_id_changed_msg {
             warn!(msg);
 
-            let _ =
-                setup_signal_and_bands(ctx.modem_manager.as_ref(), &new_snapshot.id)
-                    .await
-                    .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
+            let _ = setup_signal_and_bands(modem_manager.as_ref(), &new_snapshot.id)
+                .await
+                .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
         }
 
         let _ = ctx.publish("modem-snapshot", new_snapshot.clone());
@@ -87,11 +81,9 @@ where
             error!("failed to refresh modem snapshot with err: {e}");
             error!("powercycling modem");
 
-            let _ =
-                ctx.metrics
-                    .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
+            let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(ctx.mcu_util.as_ref(), &ctx.systemd)
+            let _ = powercycle_modem(mcu_util.as_ref(), systemd)
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");

@@ -11,13 +11,11 @@ use color_eyre::{
     Result,
 };
 use orb_connd_dbus::{Connd, OBJ_PATH, SERVICE};
-use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbRelease;
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs::{self, File};
 use tokio::io::{self};
@@ -33,7 +31,7 @@ mod wifi;
 mod wpa_conf;
 pub mod zoci;
 
-pub struct ConndService<M: MetricEmitter> {
+pub struct ConndService {
     session_dbus: zbus::Connection,
     nm: NetworkManager,
     release: OrbRelease,
@@ -41,7 +39,6 @@ pub struct ConndService<M: MetricEmitter> {
     magic_qr_applied_at: State<DateTime<Utc>>,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
-    metrics: Arc<M>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,10 +53,7 @@ impl ProfileStorage {
     }
 }
 
-impl<M> Clone for ConndService<M>
-where
-    M: MetricEmitter,
-{
+impl Clone for ConndService {
     fn clone(&self) -> Self {
         Self {
             session_dbus: self.session_dbus.clone(),
@@ -69,15 +63,11 @@ where
             magic_qr_applied_at: self.magic_qr_applied_at.clone(),
             connect_timeout: self.connect_timeout,
             profile_storage: self.profile_storage.clone(),
-            metrics: self.metrics.clone(),
         }
     }
 }
 
-impl<M> ConndService<M>
-where
-    M: MetricEmitter,
-{
+impl ConndService {
     const NM_FOLDER: &str = "network-manager";
     const DEFAULT_CELLULAR_PROFILE: &str = "cellular";
     const DEFAULT_CELLULAR_APN: &str = "em";
@@ -98,7 +88,6 @@ where
         connect_timeout: Duration,
         usr_persistent: impl AsRef<Path>,
         profile_storage: ProfileStorage,
-        metrics: Arc<M>,
     ) -> Result<Self> {
         let usr_persistent = usr_persistent.as_ref();
 
@@ -110,7 +99,6 @@ where
             magic_qr_applied_at: State::new(DateTime::default()),
             connect_timeout,
             profile_storage,
-            metrics,
         };
 
         // we start after NM, but NM slow (c++ haha), we also slow, but they slower

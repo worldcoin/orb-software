@@ -22,13 +22,11 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_dogd::MetricEmitter;
+use orb_dogd::DogstatsdClient;
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
     OrbId,
 };
-use prelude::future::Callback;
-use speare::mini;
 use std::{
     env,
     os::unix::fs::FileTypeExt,
@@ -37,269 +35,154 @@ use std::{
     time::Duration,
 };
 use test_utils::docker::{self, Container};
-use tokio::{fs, time};
+use tokio::{fs, task, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
 use zenorb::{zenoh, Zenorb};
 
-#[allow(dead_code)]
 pub struct Fixture {
-    pub nm: NetworkManager,
+    orb_id: OrbId,
+    platform: OrbOsPlatform,
+    release: OrbRelease,
+    cap: OrbCapabilities,
+
+    modem_manager: Option<MockMMCli>,
+    wpa_ctrl: Option<MockWpaCli>,
+    mcu_util: Option<MockMcuUtilCli>,
+
+    container_tempdir: TempDir,
+    sysfs: PathBuf,
+    procfs: PathBuf,
+    pub usr_persistent: PathBuf,
+    connd_bin_path: PathBuf,
+}
+
+pub struct FxHandle {
     pub container: Container,
-    conn: zbus::Connection,
-    speare: mini::Ctx<()>,
-    pub sysfs: PathBuf,
-    pub procfs: PathBuf,
-    pub usr_persistent: PathBuf,
-    pub secure_storage: SecureStorage,
-    pub secure_storage_cancel_token: CancellationToken,
-    pub platform: OrbOsPlatform,
-    zsession: Zenorb,
-    router_socket: PathBuf,
-    pub orb_id: String,
-    pub connd_path: PathBuf,
-}
 
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        self.secure_storage_cancel_token.cancel();
+    zenorb: Zenorb,
+    zenoh_router_socket: PathBuf,
 
-        self.speare.abort_children().unwrap();
-    }
-}
-
-#[allow(dead_code)]
-pub struct Ctx {
-    pub usr_persistent: PathBuf,
+    dbus: zbus::Connection,
     pub nm: NetworkManager,
+
     pub secure_storage: SecureStorage,
+    secure_storage_cancel_token: CancellationToken,
+
+    speare: speare::mini::Ctx,
 }
 
 #[bon]
 impl Fixture {
-    #[builder(start_fn = platform, finish_fn = run)]
+    #[builder(start_fn = platform, finish_fn = build)]
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
         modem_manager: Option<MockMMCli>,
-        statsd: Option<MockStatsd>,
         wpa_ctrl: Option<MockWpaCli>,
-        arrange: Option<Callback<Ctx>>,
         mcu_util: Option<MockMcuUtilCli>,
-        #[builder(default = false)] log: bool,
     ) -> Self {
+        let connd_build = task::spawn_blocking(|| {
+            CargoBuild::new()
+                .bin("orb-connd")
+                .current_target()
+                .current_release()
+                .manifest_path(env!("CARGO_MANIFEST_PATH"))
+                .run()
+                .unwrap()
+        });
+
+        let container_tempdir = TempDir::new().await.unwrap();
+        let usr_persistent = setup_usr_persistent(&container_tempdir).await;
+        let sysfs = setup_sysfs(&container_tempdir, cap).await;
+        let procfs = setup_procfs(&container_tempdir).await;
+
+        let connd_bin_path = connd_build.await.unwrap().path().to_path_buf();
+
+        Self {
+            orb_id: OrbId::from_str("ea2ea744").unwrap(),
+            platform,
+            release,
+            cap,
+            modem_manager,
+            wpa_ctrl,
+            mcu_util,
+            container_tempdir,
+            usr_persistent,
+            sysfs,
+            procfs,
+            connd_bin_path,
+        }
+    }
+
+    pub async fn run_secure_storage(&mut self) -> (SecureStorage, CancellationToken) {
+        let secure_storage_cancel_token = CancellationToken::new();
+        let secure_storage = SecureStorage::new(
+            self.connd_bin_path.clone(),
+            true,
+            secure_storage_cancel_token.clone(),
+            ConndStorageScopes::NmProfiles,
+        );
+
+        (secure_storage, secure_storage_cancel_token)
+    }
+
+    pub async fn run(&mut self) -> FxHandle {
+        self.run_with().log(false).call().await
+    }
+
+    #[builder]
+    pub async fn run_with(
+        &mut self,
+        #[builder(default = false)] log: bool,
+        secure_storage: Option<SecureStorage>,
+        secure_storage_cancel_token: Option<CancellationToken>,
+    ) -> FxHandle {
         let _ = color_eyre::install();
 
         if log {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
 
-        let (container, router_socket) =
-            setup_container(TempDir::new().await.unwrap()).await;
-
-        let sysfs = container.tempdir.dir_path().join("sysfs");
-        let procfs = container.tempdir.dir_path().join("procfs");
-        let usr_persistent = container.tempdir.dir_path().join("usr_persistent");
-
-        let network_manager_folder = usr_persistent.join("network-manager");
-        fs::create_dir_all(&sysfs).await.unwrap();
-        fs::create_dir_all(&procfs).await.unwrap();
-        fs::create_dir_all(&usr_persistent).await.unwrap();
-        fs::create_dir_all(&network_manager_folder).await.unwrap();
-
-        let net_dir = sysfs.join("class").join("net");
-        fs::create_dir_all(net_dir.join("eth0")).await.unwrap();
-        fs::create_dir_all(net_dir.join("wlan0")).await.unwrap();
-
-        fs::write(net_dir.join("eth0").join("operstate"), "down\n")
-            .await
-            .unwrap();
-        fs::write(net_dir.join("wlan0").join("operstate"), "up\n")
-            .await
-            .unwrap();
-
-        if cap == OrbCapabilities::CellularAndWifi {
-            let stats = net_dir.join("wwan0").join("statistics");
-            let tx = stats.join("tx_bytes");
-            let rx = stats.join("rx_bytes");
-
-            fs::create_dir_all(stats).await.unwrap();
-            fs::write(tx, "0").await.unwrap();
-            fs::write(rx, "0").await.unwrap();
-
-            fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
-                .await
-                .unwrap();
-        }
-
-        let procnet = procfs.join("net");
-        let route_path = procnet.join("route");
-
-        fs::create_dir_all(&procnet).await.unwrap();
-        fs::write(
-            &route_path,
-            concat!(
-                "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n",
-                "eth0\t0010A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n",
-                "wlan0\t00000000\t01006C0A\t0003\t0\t0\t400\t00000000\t0\t0\t0\n",
-                "wwan0\t00000000\t39A54664\t0003\t0\t0\t500\t00000000\t0\t0\t0\n",
-                "wlan0\t00006C0A\t00000000\t0001\t0\t0\t400\t0000FFFF\t0\t0\t0\n",
-                "wwan0\t30A54664\t00000000\t0001\t0\t0\t500\tF0FFFFFF\t0\t0\t0\n",
-            ),
-        )
-        .await
-        .unwrap();
+        let (container, zenoh_router_socket) =
+            setup_container(&self.container_tempdir).await;
 
         time::sleep(Duration::from_secs(1)).await;
 
-        let dbus_socket = container.tempdir.dir_path().join("socket");
+        let dbus_socket = container.tempdir.join("socket");
         let dbus_socket = format!("unix:path={}", dbus_socket.display());
         let addr: Address = dbus_socket.parse().unwrap();
 
-        let conn = zbus::ConnectionBuilder::address(addr)
+        let dbus = zbus::ConnectionBuilder::address(addr)
             .unwrap()
             .build()
             .await
             .unwrap();
 
         let nm = NetworkManager::new(
-            conn.clone(),
-            wpa_ctrl.unwrap_or_else(default_mock_wpa_cli),
+            dbus.clone(),
+            self.wpa_ctrl.take().unwrap_or_else(default_mock_wpa_cli),
         );
 
-        let built_connd = CargoBuild::new()
-            .bin("orb-connd")
-            .current_target()
-            .current_release()
-            .manifest_path(env!("CARGO_MANIFEST_PATH"))
-            .run()
-            .unwrap();
+        let (secure_storage, secure_storage_cancel_token) =
+            match (secure_storage, secure_storage_cancel_token) {
+                (Some(ss), Some(ssct)) => (ss, ssct),
 
-        let cancel_token = CancellationToken::new();
-        let secure_storage = SecureStorage::new(
-            built_connd.path().into(),
-            true,
-            cancel_token.clone(),
-            ConndStorageScopes::NmProfiles,
-        );
+                (None, None) => {
+                    let ssct = CancellationToken::new();
+                    let ss = SecureStorage::new(
+                        self.connd_bin_path.clone(),
+                        true,
+                        ssct.clone(),
+                        ConndStorageScopes::NmProfiles,
+                    );
 
-        let profile_storage = match platform {
-            OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
-            OrbOsPlatform::Diamond => {
-                ProfileStorage::SecureStorage(secure_storage.clone())
-            }
-        };
+                    (ss, ssct)
+                }
 
-        if let Some(arrange_cb) = arrange {
-            let ctx = Ctx {
-                usr_persistent: usr_persistent.clone(),
-                nm: nm.clone(),
-                secure_storage: secure_storage.clone(),
+                _ => panic!("secure_storage and secure_storage_cancel_token must be both Some or both None"),
             };
-
-            arrange_cb.call(ctx).await;
-        }
-        let orb_id = OrbId::from_str("ea2ea744").unwrap();
-        let zsession = Zenorb::from_cfg(zenoh_socket_cfg(&router_socket))
-            .orb_id(orb_id.clone())
-            .with_name("connd")
-            .await
-            .unwrap();
-
-        let speare = program()
-            .os_release(OrbOsRelease {
-                release_type: release,
-                orb_os_platform_type: platform,
-                orb_os_version: String::new(),
-                expected_main_mcu_version: String::new(),
-                expected_sec_mcu_version: String::new(),
-            })
-            .modem_manager(modem_manager.unwrap_or_else(default_mockmmcli))
-            .network_manager(nm.clone())
-            .resolved(Resolved::new(conn.clone()))
-            .systemd(Systemd::new(conn.clone()))
-            .statsd_client(statsd.unwrap_or(MockStatsd))
-            .sysfs(sysfs.clone())
-            .procfs(procfs.clone())
-            .usr_persistent(usr_persistent.clone())
-            .session_bus(conn.clone())
-            .connect_timeout(Duration::from_secs(1))
-            .profile_storage(profile_storage)
-            .zenoh(&zsession)
-            .mcu_util(mcu_util.unwrap_or_else(default_mock_mcu_util_cli))
-            .run()
-            .await
-            .unwrap();
-
-        let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
-            4_000
-        } else {
-            500
-        };
-
-        time::sleep(Duration::from_millis(millisecs)).await;
-
-        Self {
-            nm,
-            conn,
-            speare,
-            container,
-            sysfs,
-            procfs,
-            usr_persistent,
-            secure_storage,
-            secure_storage_cancel_token: cancel_token,
-            router_socket,
-            zsession,
-            orb_id: orb_id.to_string(),
-            platform,
-            connd_path: built_connd.path().into(),
-        }
-    }
-
-    pub async fn connd(&self) -> ConndProxy<'_> {
-        ConndProxy::new(&self.conn).await.unwrap()
-    }
-
-    pub fn zenoh(&self) -> &Zenorb {
-        &self.zsession
-    }
-
-    pub async fn restart(&mut self) {
-        self.speare.abort_children().unwrap();
-        self.container.rm().await;
-
-        time::sleep(Duration::from_secs(1)).await;
-
-        let (container, router_socket) =
-            setup_container(self.container.tempdir.try_clone().await.unwrap()).await;
-
-        time::sleep(Duration::from_secs(1)).await;
-
-        self.router_socket = router_socket;
-        self.container = container;
-
-        let dbus_socket = self.container.tempdir.dir_path().join("socket");
-        let dbus_socket = format!("unix:path={}", dbus_socket.display());
-        let addr: Address = dbus_socket.parse().unwrap();
-
-        self.conn = zbus::ConnectionBuilder::address(addr)
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-
-        let nm = NetworkManager::new(self.conn.clone(), default_mock_wpa_cli());
-        nm.wait_for_nm_ready().await.unwrap();
-
-        let cancel_token = CancellationToken::new();
-        let secure_storage = SecureStorage::new(
-            self.connd_path.clone(),
-            true,
-            cancel_token.clone(),
-            ConndStorageScopes::NmProfiles,
-        );
 
         let profile_storage = match self.platform {
             OrbOsPlatform::Pearl => ProfileStorage::NetworkManager,
@@ -308,42 +191,49 @@ impl Fixture {
             }
         };
 
-        let orb_id = OrbId::from_str(&self.orb_id).unwrap();
-        let zsession = Zenorb::from_cfg(zenoh_socket_cfg(&self.router_socket))
-            .orb_id(orb_id)
+        let zenorb = Zenorb::from_cfg(zenoh_socket_cfg(&zenoh_router_socket))
+            .orb_id(self.orb_id.clone())
             .with_name("connd")
             .await
             .unwrap();
 
+        let mcu_util: Box<dyn McuUtil> = Box::new(
+            self.mcu_util
+                .take()
+                .unwrap_or_else(default_mock_mcu_util_cli),
+        );
+
+        let modem_manager: Box<dyn ModemManager> =
+            Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
+
+        let registry = crabwire::Registry::new()
+            .insert(Systemd::new(dbus.clone()))
+            .insert(mcu_util)
+            .insert(modem_manager)
+            .insert(DogstatsdClient::default());
+
+        crabwire::reregister!(registry);
+
         let speare = program()
             .os_release(OrbOsRelease {
-                release_type: OrbRelease::Dev,
+                release_type: self.release,
                 orb_os_platform_type: self.platform,
                 orb_os_version: String::new(),
                 expected_main_mcu_version: String::new(),
                 expected_sec_mcu_version: String::new(),
             })
-            .modem_manager(default_mockmmcli())
             .network_manager(nm.clone())
-            .resolved(Resolved::new(self.conn.clone()))
-            .systemd(Systemd::new(self.conn.clone()))
-            .statsd_client(MockStatsd)
+            .resolved(Resolved::new(dbus.clone()))
             .sysfs(self.sysfs.clone())
             .procfs(self.procfs.clone())
             .usr_persistent(self.usr_persistent.clone())
-            .session_bus(self.conn.clone())
+            .session_bus(dbus.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
-            .zenoh(&zsession)
-            .mcu_util(default_mock_mcu_util_cli())
+            .zenoh(&zenorb)
             .run()
             .await
             .unwrap();
-
-        self.zsession = zsession;
-        self.nm = nm;
-        self.speare = speare;
-        self.secure_storage_cancel_token = cancel_token;
 
         let millisecs = if env::var("GITHUB_ACTIONS").is_ok() {
             4_000
@@ -352,10 +242,109 @@ impl Fixture {
         };
 
         time::sleep(Duration::from_millis(millisecs)).await;
+
+        FxHandle {
+            container,
+            zenorb,
+            zenoh_router_socket,
+            dbus,
+            nm,
+            secure_storage,
+            secure_storage_cancel_token,
+            speare,
+        }
     }
 }
 
-async fn setup_container(tempdir: TempDir) -> (Container, PathBuf) {
+impl Drop for FxHandle {
+    fn drop(&mut self) {
+        self.secure_storage_cancel_token.cancel();
+        self.speare.abort_children().unwrap();
+    }
+}
+
+impl FxHandle {
+    pub async fn stop(self) {
+        self.secure_storage_cancel_token.cancel();
+        self.speare.abort_children().unwrap();
+        self.container.rm().await;
+    }
+
+    pub async fn connd(&self) -> ConndProxy<'_> {
+        ConndProxy::new(&self.dbus).await.unwrap()
+    }
+
+    pub fn zenoh(&self) -> &Zenorb {
+        &self.zenorb
+    }
+}
+
+async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {
+    let sysfs = container_path.join("sysfs");
+    fs::create_dir_all(&sysfs).await.unwrap();
+
+    let net_dir = sysfs.join("class").join("net");
+    fs::create_dir_all(net_dir.join("eth0")).await.unwrap();
+    fs::create_dir_all(net_dir.join("wlan0")).await.unwrap();
+
+    fs::write(net_dir.join("eth0").join("operstate"), "down\n")
+        .await
+        .unwrap();
+    fs::write(net_dir.join("wlan0").join("operstate"), "up\n")
+        .await
+        .unwrap();
+
+    if cap == OrbCapabilities::CellularAndWifi {
+        let stats = net_dir.join("wwan0").join("statistics");
+        let tx = stats.join("tx_bytes");
+        let rx = stats.join("rx_bytes");
+
+        fs::create_dir_all(stats).await.unwrap();
+        fs::write(tx, "0").await.unwrap();
+        fs::write(rx, "0").await.unwrap();
+
+        fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
+            .await
+            .unwrap();
+    }
+
+    sysfs
+}
+
+async fn setup_procfs(container_path: &Path) -> PathBuf {
+    let procfs = container_path.join("procfs");
+    fs::create_dir_all(&procfs).await.unwrap();
+    let procnet = procfs.join("net");
+    let route_path = procnet.join("route");
+
+    fs::create_dir_all(&procnet).await.unwrap();
+    fs::write(
+        &route_path,
+        concat!(
+            "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n",
+            "eth0\t0010A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n",
+            "wlan0\t00000000\t01006C0A\t0003\t0\t0\t400\t00000000\t0\t0\t0\n",
+            "wwan0\t00000000\t39A54664\t0003\t0\t0\t500\t00000000\t0\t0\t0\n",
+            "wlan0\t00006C0A\t00000000\t0001\t0\t0\t400\t0000FFFF\t0\t0\t0\n",
+            "wwan0\t30A54664\t00000000\t0001\t0\t0\t500\tF0FFFFFF\t0\t0\t0\n",
+        ),
+    )
+    .await
+    .unwrap();
+
+    procfs
+}
+
+async fn setup_usr_persistent(container_path: &Path) -> PathBuf {
+    let usr_persistent = container_path.join("usr_persistent");
+    let network_manager_folder = usr_persistent.join("network-manager");
+    fs::create_dir_all(&usr_persistent).await.unwrap();
+    fs::create_dir_all(&network_manager_folder).await.unwrap();
+
+    usr_persistent
+}
+
+async fn setup_container(tempdir: &Path) -> (Container, PathBuf) {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let docker_ctx = crate_dir.join("tests").join("docker");
     let dockerfile = crate_dir.join("tests").join("docker").join("Dockerfile");
@@ -365,8 +354,8 @@ async fn setup_container(tempdir: TempDir) -> (Container, PathBuf) {
     let uid = unsafe { libc::geteuid() };
     let gid = unsafe { libc::getegid() };
 
-    let nm_profiles_dir = tempdir.dir_path().join("system-connections");
-    let zenoh_dir = tempdir.dir_path().join("zenohd");
+    let nm_profiles_dir = tempdir.join("system-connections");
+    let zenoh_dir = tempdir.join("zenohd");
     fs::create_dir_all(&nm_profiles_dir).await.unwrap();
     fs::create_dir_all(&zenoh_dir).await.unwrap();
 
@@ -504,83 +493,6 @@ mock! {
             allowed: &[&'a str],
             preferred: &'a str,
         ) -> Result<()>;
-    }
-}
-
-pub struct MockStatsd;
-
-impl MetricEmitter for MockStatsd {
-    fn count<S, I>(
-        &self,
-        _stat: S,
-        _val: i64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn incr<S, I>(&self, _stat: S, _tags: I) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn gauge<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn hist<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn dist<S, I>(
-        &self,
-        _stat: S,
-        _val: f64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
-    }
-
-    fn timing<S, I>(
-        &self,
-        _stat: S,
-        _val: i64,
-        _tags: I,
-    ) -> Result<(), orb_dogd::MetricError>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item: Into<String>>,
-    {
-        Ok(())
     }
 }
 

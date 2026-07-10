@@ -75,36 +75,52 @@ impl DogstatsdClient {
         max_emit_per_tick: usize,
         tick_duration: Duration,
     ) -> Self {
+        Self::new_with(
+            queue_size,
+            max_emit_per_tick,
+            tick_duration,
+            DOGSTATSD_SOCKET_PATH,
+            DOGSTATSD_BACKOFF,
+        )
+    }
+
+    /// Connect to the local statsd collector.
+    ///
+    /// Fails if the underlying socket cannot be bound.
+    pub fn new_with(
+        queue_size: usize,
+        max_emit_per_tick: usize,
+        tick_duration: Duration,
+        socket_path: impl Into<String>,
+        backoff: Duration,
+    ) -> Self {
+        let socket_path = socket_path.into();
         let start = Instant::now();
         let (tx, rx) = flume::bounded(queue_size);
 
         thread::spawn(move || {
             let client = loop {
-                let err_msg =
-                    if fs::exists(Path::new(DOGSTATSD_SOCKET_PATH)).unwrap_or(false) {
-                        info!(
-                            "datadog-agent socket found, using it for IPC. took {}s",
-                            start.elapsed().as_secs()
-                        );
+                let err_msg = if fs::exists(Path::new(&socket_path)).unwrap_or(false) {
+                    info!(
+                        "datadog-agent socket found, using it for IPC. took {}s",
+                        start.elapsed().as_secs()
+                    );
 
-                        let opts = dogstatsd::OptionsBuilder::new()
-                            .socket_path(Some(DOGSTATSD_SOCKET_PATH.to_string()))
-                            .build();
+                    let opts = dogstatsd::OptionsBuilder::new()
+                        .socket_path(Some(socket_path.to_string()))
+                        .build();
 
-                        match Client::new(opts) {
-                            Ok(client) => break client,
-                            Err(e) => format!("failed to create DD client {e}"),
-                        }
-                    } else {
-                        format!("{DOGSTATSD_SOCKET_PATH} not found")
-                    };
+                    match Client::new(opts) {
+                        Ok(client) => break client,
+                        Err(e) => format!("failed to create DD client {e}"),
+                    }
+                } else {
+                    format!("{socket_path} not found")
+                };
 
-                warn!(
-                    "{err_msg}. waiting {}s and trying again",
-                    DOGSTATSD_BACKOFF.as_secs()
-                );
+                warn!("{err_msg}. waiting {}s and trying again", backoff.as_secs());
 
-                thread::sleep(DOGSTATSD_BACKOFF);
+                thread::sleep(backoff);
             };
 
             let mut current_tick = Instant::now();

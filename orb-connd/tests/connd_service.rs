@@ -10,13 +10,14 @@ mod fixture;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_does_not_change_netconfig_if_no_cellular() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::WifiOnly)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act
     let actual = connd
@@ -35,13 +36,14 @@ async fn it_does_not_change_netconfig_if_no_cellular() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_sets_and_gets_netconfig() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act
     let res = connd.netconfig_set(false, false, false).await.unwrap();
@@ -67,13 +69,14 @@ async fn it_sets_and_gets_netconfig() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_returns_connected_connection_state() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
-    let connd = fx.connd().await;
+    let handle = fx.run().await;
+    let connd = handle.connd().await;
 
     // Act
     let state = connd.connection_state().await.unwrap();
@@ -85,14 +88,16 @@ async fn it_returns_connected_connection_state() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_returns_partial_connection_state() {
     // Arrange
-    let fx = Fixture::platform(OrbOsPlatform::Pearl)
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
         .cap(OrbCapabilities::CellularAndWifi)
         .release(OrbRelease::Dev)
-        .run()
+        .build()
         .await;
 
+    let handle = fx.run().await;
+
     // change connectivity check uri
-    let out = fx.container
+    let out = handle.container
         .exec(&[
             "sed",
             "-i",
@@ -107,7 +112,7 @@ async fn it_returns_partial_connection_state() {
     assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
 
     // reload network manager to apply new connectivity check uri
-    let out = fx.container.exec(&["nmcli", "general", "reload"]).await;
+    let out = handle.container.exec(&["nmcli", "general", "reload"]).await;
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -116,7 +121,7 @@ async fn it_returns_partial_connection_state() {
     // wait enough time for nmcli to reload
     time::sleep(Duration::from_secs(1)).await;
 
-    let connd = fx.connd().await;
+    let connd = handle.connd().await;
 
     // Act
     let state = connd.connection_state().await.unwrap();

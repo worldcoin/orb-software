@@ -3,10 +3,12 @@
 //! Gated behind the `testing` feature; intended for `dev-dependencies` of
 //! crates that want to assert on emitted metrics.
 
-use std::sync::{Arc, Mutex};
-
 use super::dd::Metric;
 use super::{MetricEmitter, MetricError};
+use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "testing")]
+pub mod agent;
 
 /// Counts emitted metrics. Clones share the same record buffer, so a test
 /// can keep a handle for assertions while passing another clone into the

@@ -1,26 +1,27 @@
 use crate::network_manager::{Connection, NetworkManager};
 use color_eyre::{eyre::Context, Result};
+use crabwire::inject;
 use flume::Receiver;
 use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
-use orb_dogd::MetricEmitter;
+use orb_dogd::{DogstatsdClient, MetricEmitter};
 use speare::mini;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tokio::time;
 use tracing::{info, warn};
 
-pub struct Args<M: MetricEmitter> {
+pub struct Args {
     pub nm: NetworkManager,
     pub session_bus: zbus::Connection,
     pub report_interval: Duration,
-    pub metrics: Arc<M>,
 }
 
 const IFACES: &[&str] = &["eth0", "wwan0", "wlan0"];
 
-pub async fn report<M: MetricEmitter>(ctx: mini::Ctx<Args<M>>) -> Result<()> {
+#[inject(metrics: &DogstatsdClient)]
+pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     info!("starting connd report reporter");
 
     async {
@@ -60,7 +61,7 @@ pub async fn report<M: MetricEmitter>(ctx: mini::Ctx<Args<M>>) -> Result<()> {
                     _ => 0.0,
                 };
 
-                let _ = ctx.metrics.gauge(
+                let _ = metrics.gauge(
                     "orb.platform.connd.primary_connection",
                     value,
                     [format!("iface:{conn}")],
