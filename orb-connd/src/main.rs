@@ -4,12 +4,13 @@ use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
     mcu_util::{cli::McuUtilCli, McuUtil},
+    modem::ModemConfig,
     modem_manager::{cli::ModemManagerCli, ModemManager},
     network_manager::NetworkManager,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    systemd::{Systemd, SystemdDbus},
+    systemd::Systemd,
     wpa_ctrl::cli::WpaCli,
 };
 use orb_dogd::DogstatsdClient;
@@ -84,7 +85,7 @@ fn connectivity_daemon() -> Result<()> {
             WpaCli::new(os_release.orb_os_platform_type),
         );
         let resolved = Resolved::new(system_bus.clone());
-        let systemd: Box<dyn Systemd> = Box::new(SystemdDbus::new(system_bus));
+        let systemd = Systemd::new(system_bus);
 
         let cancel_token = CancellationToken::new();
         let profile_storage = match os_release.orb_os_platform_type {
@@ -110,6 +111,7 @@ fn connectivity_daemon() -> Result<()> {
             .insert(systemd)
             .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>)
             .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>)
+            .insert(ModemConfig::default())
             .insert(DogstatsdClient::default());
 
         crabwire::register!(registry);

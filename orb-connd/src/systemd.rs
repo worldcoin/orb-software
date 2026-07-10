@@ -1,34 +1,24 @@
-use std::time::Duration;
-
-use async_trait::async_trait;
 use color_eyre::{
     eyre::{bail, Context},
     Result,
 };
 use futures::StreamExt;
+use std::time::Duration;
 use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy};
 
+#[cfg_attr(feature = "testing", faux::create)]
 #[derive(Clone)]
-pub struct SystemdDbus {
+pub struct Systemd {
     system_bus: zbus::Connection,
 }
 
-impl SystemdDbus {
+#[cfg_attr(feature = "testing", faux::methods)]
+impl Systemd {
     pub fn new(system_bus: zbus::Connection) -> Self {
         Self { system_bus }
     }
-}
 
-#[async_trait]
-pub trait Systemd: 'static + Send + Sync {
-    async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()>;
-
-    async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>>;
-}
-
-#[async_trait]
-impl Systemd for SystemdDbus {
-    async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()> {
+    pub async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
 
         let mut job_removed = manager.receive_job_removed().await?;
@@ -62,7 +52,9 @@ impl Systemd for SystemdDbus {
         Ok(())
     }
 
-    async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>> {
+    pub async fn loaded_services<'a>(
+        &'a self,
+    ) -> Result<Vec<(String, ServiceProxy<'a>)>> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
 
         let units = manager

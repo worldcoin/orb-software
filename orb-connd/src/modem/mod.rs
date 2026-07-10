@@ -12,7 +12,10 @@ use color_eyre::{
 use crabwire::inject;
 use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
-use std::time::Duration;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use tokio::{
     fs,
     time::{self, timeout},
@@ -32,17 +35,29 @@ pub struct Snapshot {
     pub location: Location,
 }
 
-pub struct Args {
+#[derive(Clone)]
+pub struct ModemConfig {
+    pub device_path: PathBuf,
     pub poll_interval: Duration,
 }
 
+impl Default for ModemConfig {
+    fn default() -> Self {
+        Self {
+            device_path: PathBuf::from("/dev/cdc-wdm0"),
+            poll_interval: Duration::from_secs(30),
+        }
+    }
+}
+
 #[inject(
-    systemd: &Box<dyn Systemd>,
+    systemd: &Systemd,
     mcu_util: &Box<dyn McuUtil>,
     modem_manager: &Box<dyn ModemManager>,
-    metrics: &DogstatsdClient
+    metrics: &DogstatsdClient,
+    config: &ModemConfig
 )]
-pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
+pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
     info!("starting modem supervisor");
 
     let mut snapshot: Option<Snapshot> = None;
@@ -79,7 +94,7 @@ pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
         Ok(())
     };
 
-    let mut update_interval = time::interval(ctx.poll_interval);
+    let mut update_interval = time::interval(config.poll_interval);
 
     loop {
         if let Err(e) = refresh_snapshot().await {
@@ -88,7 +103,7 @@ pub async fn supervisor(ctx: mini::Ctx<Args>) -> Result<()> {
 
             let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(mcu_util.as_ref(), systemd.as_ref())
+            let _ = powercycle_modem(mcu_util.as_ref(), systemd, &config.device_path)
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");
@@ -187,7 +202,11 @@ static ALLOWED_BANDS: [&str; 27] = [
     "eutran-28",
 ];
 
-async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &dyn Systemd) -> Result<()> {
+async fn powercycle_modem(
+    mcu_util: &dyn McuUtil,
+    systemd: &Systemd,
+    device_path: &Path,
+) -> Result<()> {
     mcu_util
         .powercycle(Module::Modem)
         .await
@@ -197,7 +216,7 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &dyn Systemd) -> Resu
 
     let device_exists = async {
         loop {
-            if fs::try_exists("/dev/cdc-wdm0").await.is_ok_and(|x| x) {
+            if fs::try_exists(device_path).await.is_ok_and(|x| x) {
                 break;
             }
 
@@ -209,7 +228,7 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &dyn Systemd) -> Resu
         .await
         .wrap_err("timed out after 30s waiting for modem device to pop back up")?;
 
-    info!("modem detected at /dev/cdc-wdm0");
+    info!("modem detected at {}", device_path.display());
 
     info!("Restarting ModemManager");
     // systemd's default start/stop timeout is 90s; leave a small margin for the D-Bus round trip.

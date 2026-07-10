@@ -11,6 +11,9 @@ authors = [
 	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
 
+[features]
+testing = ["dep:faux"]
+
 [dependencies]
 async-trait.workspace = true
 base64.workspace = true
@@ -23,6 +26,7 @@ color-eyre.workspace = true
 crabwire.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
+faux = { workspace = true, optional = true }
 flume.workspace = true
 futures.workspace = true
 hex.workspace = true
@@ -69,7 +73,9 @@ zenorb.workspace = true
 async-tempfile.workspace = true
 crabwire = { workspace = true, features = ["testing"] }
 escargot.workspace = true
+faux.workspace = true
 test-utils.workspace = true
+orb-dogd = { workspace = true, features = ["testing"] }
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true

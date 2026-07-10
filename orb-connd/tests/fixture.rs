@@ -1,3 +1,4 @@
+#![cfg(feature = "testing")]
 #![allow(dead_code)]
 use async_tempfile::TempDir;
 use async_trait::async_trait;
@@ -9,6 +10,7 @@ use nix::libc;
 use orb_connd::{
     connectivity_daemon::program,
     mcu_util::McuUtil,
+    modem::ModemConfig,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
         ModemManager, Signal, SimId, SimInfo,
@@ -22,7 +24,7 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_dogd::DogstatsdClient;
+use orb_dogd::{test::agent::Agent, DogstatsdClient};
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
     OrbId,
@@ -38,7 +40,6 @@ use test_utils::docker::{self, Container};
 use tokio::{fs, task, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
-use zbus_systemd::systemd1::ServiceProxy;
 use zenorb::{zenoh, Zenorb};
 
 pub struct Fixture {
@@ -50,7 +51,7 @@ pub struct Fixture {
     modem_manager: Option<MockMMCli>,
     wpa_ctrl: Option<MockWpaCli>,
     mcu_util: Option<MockMcuUtilCli>,
-    systemd: Option<MockSystemdDbus>,
+    registry: Option<crabwire::Registry>,
 
     container_tempdir: TempDir,
     sysfs: PathBuf,
@@ -71,7 +72,10 @@ pub struct FxHandle {
     pub secure_storage: SecureStorage,
     secure_storage_cancel_token: CancellationToken,
 
-    speare: speare::mini::Ctx,
+    pub dogstatsd: Agent,
+    dogstatsd_tempdir: TempDir,
+
+    pub speare: speare::mini::Ctx,
 }
 
 #[bon]
@@ -84,7 +88,7 @@ impl Fixture {
         modem_manager: Option<MockMMCli>,
         wpa_ctrl: Option<MockWpaCli>,
         mcu_util: Option<MockMcuUtilCli>,
-        systemd: Option<MockSystemdDbus>,
+        registry: Option<crabwire::Registry>,
     ) -> Self {
         let connd_build = task::spawn_blocking(|| {
             CargoBuild::new()
@@ -111,7 +115,7 @@ impl Fixture {
             modem_manager,
             wpa_ctrl,
             mcu_util,
-            systemd,
+            registry,
             container_tempdir,
             usr_persistent,
             sysfs,
@@ -210,14 +214,24 @@ impl Fixture {
         let modem_manager: Box<dyn ModemManager> =
             Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
 
-        let systemd: Box<dyn Systemd> =
-            Box::new(self.systemd.take().unwrap_or_else(default_mock_systemd));
+        let dogstatsd_tempdir = TempDir::new().await.unwrap();
+        let dogstatsd_socket = dogstatsd_tempdir.join("dogstatsd.sock");
+        let dogstatsd = Agent::new(&dogstatsd_socket).await.unwrap();
+        let statsd = DogstatsdClient::new_with(
+            4096,
+            25,
+            Duration::from_millis(50),
+            dogstatsd_socket.to_string_lossy().into_owned(),
+            Duration::from_millis(1),
+        );
 
         let registry = crabwire::Registry::new()
-            .insert(systemd)
+            .insert(mock_systemd())
             .insert(mcu_util)
             .insert(modem_manager)
-            .insert(DogstatsdClient::default());
+            .insert(ModemConfig::default())
+            .insert(statsd)
+            .merge(self.registry.take().unwrap_or_else(crabwire::Registry::new));
 
         crabwire::reregister!(registry);
 
@@ -258,6 +272,8 @@ impl Fixture {
             nm,
             secure_storage,
             secure_storage_cancel_token,
+            dogstatsd,
+            dogstatsd_tempdir,
             speare,
         }
     }
@@ -532,21 +548,10 @@ mock! {
     }
 }
 
-fn default_mock_systemd() -> MockSystemdDbus {
-    let mut systemd = MockSystemdDbus::new();
-    systemd.expect_restart_service().returning(|_, _| Ok(()));
-    systemd
-        .expect_loaded_services()
-        .returning(|| Ok(Vec::new()));
-    systemd
-}
+fn mock_systemd() -> Systemd {
+    let mut systemd = Systemd::faux();
+    faux::when!(systemd.restart_service).then(|(_, _)| Ok(()));
+    faux::when!(systemd.loaded_services).then(|()| Ok(Vec::new()));
 
-mock! {
-    pub SystemdDbus {}
-    #[async_trait]
-    impl Systemd for SystemdDbus {
-        async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()>;
-
-        async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>>;
-    }
+    systemd
 }
