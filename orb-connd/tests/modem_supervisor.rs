@@ -129,6 +129,77 @@ async fn it_powercycles_modem_and_emits_metric_when_snapshot_fails() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_retries_after_restart_service_fails_and_succeeds_on_second_attempt() {
+    // Arrange
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .cap(OrbCapabilities::CellularAndWifi)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+
+    let device_path = fx.container_tempdir.join("cdc-wdm0");
+    let restart_calls = Arc::new(Mutex::new(Vec::new()));
+    let restart_attempt = Arc::new(Mutex::new(0usize));
+
+    let mut modem_manager = ModemManager::faux();
+    when!(modem_manager.list_modems).then(|_| Err(eyre!("snapshot failed")));
+
+    let mut mcu_util = McuUtil::faux();
+    when!(mcu_util.powercycle).then(|_| Ok(()));
+
+    let mut systemd = Systemd::faux();
+    let restart_calls_cl = Arc::clone(&restart_calls);
+    let restart_attempt_cl = Arc::clone(&restart_attempt);
+    when!(systemd.restart_service).then(move |(unit, timeout)| {
+        restart_calls_cl
+            .lock()
+            .unwrap()
+            .push((unit.to_string(), timeout));
+
+        let mut attempt = restart_attempt_cl.lock().unwrap();
+        *attempt += 1;
+
+        if *attempt == 1 {
+            return Err(eyre!("restart failed"));
+        }
+
+        Ok(())
+    });
+    when!(systemd.loaded_services).then(|_| Ok(Vec::new()));
+
+    let registry = crabwire::Registry::new()
+        .insert(modem_manager)
+        .insert(mcu_util)
+        .insert(systemd)
+        .insert(ModemConfig {
+            device_path: device_path.clone(),
+            poll_interval: Duration::from_secs(1),
+        });
+
+    // Act
+    let handle = fx.run_with().registry(registry).call().await;
+    fs::write(&device_path, []).await.unwrap();
+
+    // Assert
+    wait_for_occurrences(
+        &handle.dogstatsd,
+        "orb.platform.connd.modem_powercycle:1|c",
+        2,
+    )
+    .await;
+
+    time::sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(
+        restart_calls.lock().unwrap().as_slice(),
+        [
+            ("ModemManager.service".to_string(), Duration::from_secs(100)),
+            ("ModemManager.service".to_string(), Duration::from_secs(100)),
+        ]
+    );
+}
+
 fn stable_modem_manager() -> ModemManager {
     let mut modem_manager = ModemManager::faux();
 

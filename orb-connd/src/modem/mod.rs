@@ -226,18 +226,23 @@ async fn powercycle_modem(
         .await
         .wrap_err("timed out after 30s waiting for modem device to pop back up")?;
 
-    println!("device exists!");
-
     info!(
         "modem detected at {}, restarting ModemManager",
         device_path.display()
     );
 
     // systemd's default start/stop timeout is 90s; leave a small margin for the D-Bus round trip.
-    systemd
-        .restart_service("ModemManager.service", Duration::from_secs(100))
-        .await
-        .wrap_err("restart ModemManager systemd service")?;
+    let restart = async || {
+        systemd
+            .restart_service("ModemManager.service", Duration::from_secs(100))
+            .await
+            .wrap_err("restart ModemManager systemd service")
+    };
+
+    if let Err(e) = restart().await {
+        warn!("failed first ModemManager restart attempt, trying once more. err: {e}");
+        restart().await?;
+    }
 
     info!("ModemManager restarted!");
 
