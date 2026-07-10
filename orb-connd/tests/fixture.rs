@@ -17,7 +17,7 @@ use orb_connd::{
     resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
-    systemd::{Systemd, SystemdDbus},
+    systemd::Systemd,
     wpa_ctrl::WpaCtrl,
     OrbCapabilities,
 };
@@ -38,6 +38,7 @@ use test_utils::docker::{self, Container};
 use tokio::{fs, task, time};
 use tokio_util::sync::CancellationToken;
 use zbus::Address;
+use zbus_systemd::systemd1::ServiceProxy;
 use zenorb::{zenoh, Zenorb};
 
 pub struct Fixture {
@@ -49,6 +50,7 @@ pub struct Fixture {
     modem_manager: Option<MockMMCli>,
     wpa_ctrl: Option<MockWpaCli>,
     mcu_util: Option<MockMcuUtilCli>,
+    systemd: Option<MockSystemdDbus>,
 
     container_tempdir: TempDir,
     sysfs: PathBuf,
@@ -82,6 +84,7 @@ impl Fixture {
         modem_manager: Option<MockMMCli>,
         wpa_ctrl: Option<MockWpaCli>,
         mcu_util: Option<MockMcuUtilCli>,
+        systemd: Option<MockSystemdDbus>,
     ) -> Self {
         let connd_build = task::spawn_blocking(|| {
             CargoBuild::new()
@@ -108,6 +111,7 @@ impl Fixture {
             modem_manager,
             wpa_ctrl,
             mcu_util,
+            systemd,
             container_tempdir,
             usr_persistent,
             sysfs,
@@ -206,7 +210,8 @@ impl Fixture {
         let modem_manager: Box<dyn ModemManager> =
             Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
 
-        let systemd: Box<dyn Systemd> = Box::new(SystemdDbus::new(dbus.clone()));
+        let systemd: Box<dyn Systemd> =
+            Box::new(self.systemd.take().unwrap_or_else(default_mock_systemd));
 
         let registry = crabwire::Registry::new()
             .insert(systemd)
@@ -524,5 +529,24 @@ mock! {
     #[async_trait]
     impl McuUtil for McuUtilCli {
         async fn powercycle(&self, module: orb_connd::mcu_util::Module) -> Result<()>;
+    }
+}
+
+fn default_mock_systemd() -> MockSystemdDbus {
+    let mut systemd = MockSystemdDbus::new();
+    systemd.expect_restart_service().returning(|_, _| Ok(()));
+    systemd
+        .expect_loaded_services()
+        .returning(|| Ok(Vec::new()));
+    systemd
+}
+
+mock! {
+    pub SystemdDbus {}
+    #[async_trait]
+    impl Systemd for SystemdDbus {
+        async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()>;
+
+        async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>>;
     }
 }

@@ -212,16 +212,11 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &dyn Systemd) -> Resu
     info!("modem detected at /dev/cdc-wdm0");
 
     info!("Restarting ModemManager");
+    // systemd's default start/stop timeout is 90s; leave a small margin for the D-Bus round trip.
     systemd
-        .restart_service("ModemManager.service")
+        .restart_service("ModemManager.service", Duration::from_secs(100))
         .await
         .wrap_err("restart ModemManager systemd service")?;
-
-    info!("Waiting for ModemManager to become active");
-    systemd
-        .wait_for_active("ModemManager.service", Duration::from_secs(30))
-        .await
-        .wrap_err("ModemManager did not become active after powercycle")?;
 
     info!("ModemManager restarted!");
 

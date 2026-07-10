@@ -1,8 +1,12 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use color_eyre::{eyre::Context, Result};
-use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy, UnitProxy};
+use color_eyre::{
+    eyre::{bail, Context},
+    Result,
+};
+use futures::StreamExt;
+use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy};
 
 #[derive(Clone)]
 pub struct SystemdDbus {
@@ -13,41 +17,52 @@ impl SystemdDbus {
     pub fn new(system_bus: zbus::Connection) -> Self {
         Self { system_bus }
     }
-
-    async fn is_service_active(&self, unit: &str) -> Result<bool> {
-        let manager = ManagerProxy::new(&self.system_bus).await?;
-        let path = manager.get_unit(unit.to_string()).await?;
-
-        let unit_proxy = UnitProxy::builder(&self.system_bus)
-            .destination("org.freedesktop.systemd1")?
-            .path(path)?
-            .build()
-            .await?;
-        Ok(unit_proxy.active_state().await? == "active")
-    }
 }
 
 #[async_trait]
 pub trait Systemd: 'static + Send + Sync {
-    async fn restart_service(&self, unit: &str) -> Result<()>;
+    async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()>;
 
-    async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>>;
-
-    async fn wait_for_active(&self, unit: &str, timeout: Duration) -> Result<()>;
+    async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>>;
 }
 
 #[async_trait]
 impl Systemd for SystemdDbus {
-    async fn restart_service(&self, unit: &str) -> Result<()> {
+    async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
-        let _ = manager
+
+        let mut job_removed = manager.receive_job_removed().await?;
+
+        let job_path = manager
             .restart_unit(unit.to_string(), "replace".to_string())
             .await?;
+
+        let job_result = tokio::time::timeout(timeout, async {
+            while let Some(signal) = job_removed.next().await {
+                let args = signal.args()?;
+
+                if args.job == job_path {
+                    return Ok(args.result);
+                }
+            }
+
+            bail!("systemd JobRemoved stream ended before restart job {job_path} completed")
+        })
+        .await
+        .with_context(|| {
+            format!("timed out waiting for systemd restart job {job_path} for {unit}")
+        })??;
+
+        if job_result != "done" {
+            bail!(
+                "systemd restart job {job_path} for {unit} finished with result {job_result:?}"
+            );
+        }
 
         Ok(())
     }
 
-    async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>> {
+    async fn loaded_services<'a>(&'a self) -> Result<Vec<(String, ServiceProxy<'a>)>> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
 
         let units = manager
@@ -79,22 +94,6 @@ impl Systemd for SystemdDbus {
         }
 
         Ok(services)
-    }
-
-    async fn wait_for_active(&self, unit: &str, timeout: Duration) -> Result<()> {
-        let is_active = async {
-            loop {
-                if self.is_service_active(unit).await.unwrap_or(false) {
-                    return;
-                }
-
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        };
-
-        tokio::time::timeout(timeout, is_active)
-            .await
-            .with_context(|| format!("timed out waiting for {unit} to become active"))
     }
 }
 
