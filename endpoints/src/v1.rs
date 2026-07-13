@@ -23,7 +23,9 @@ impl Endpoints {
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            Backend::Analysis => "analysis.ml",
+            // Analysis orbs have been migrated to the stage backend; the
+            // legacy analysis.ml.worldcoin.org domain is no longer used.
+            Backend::Analysis => "stage.orb",
             Backend::Local => todo!(),
         };
 
@@ -68,7 +70,7 @@ mod test {
         );
         assert_eq!(
             analysis.ai_volume.as_str(),
-            "https://management.analysis.ml.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
+            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
         );
 
         assert_eq!(
@@ -78,7 +80,7 @@ mod test {
         assert_eq!(prod.auth.as_str(), "https://auth.orb.worldcoin.org/api/v1/");
         assert_eq!(
             analysis.auth.as_str(),
-            "https://auth.analysis.ml.worldcoin.org/api/v1/"
+            "https://auth.stage.orb.worldcoin.org/api/v1/"
         );
 
         assert_eq!(
@@ -91,7 +93,7 @@ mod test {
         );
         assert_eq!(
             analysis.ping.as_str(),
-            "https://management.analysis.ml.worldcoin.org/api/v1/orbs/ea2ea744/"
+            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/"
         );
     }
 }
