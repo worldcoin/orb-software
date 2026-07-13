@@ -23,7 +23,6 @@ impl Endpoints {
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            // Analysis orbs have been migrated to the stage backend; the
             // legacy analysis.ml.worldcoin.org domain is no longer used.
             Backend::Analysis => "stage.orb",
             Backend::Local => todo!(),
