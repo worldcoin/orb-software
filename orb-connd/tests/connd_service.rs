@@ -1,3 +1,4 @@
+#![cfg(feature = "testing")]
 use fixture::Fixture;
 use orb_connd::OrbCapabilities;
 use orb_connd_dbus::ConnectionState;

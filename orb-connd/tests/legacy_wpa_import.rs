@@ -1,3 +1,4 @@
+#![cfg(feature = "testing")]
 use fixture::Fixture;
 use orb_connd::network_manager::WifiSec;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};

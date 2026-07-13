@@ -87,9 +87,6 @@ pub async fn program(
     if let OrbCapabilities::CellularAndWifi = cap {
         speare
             .task_with()
-            .args(modem::Args {
-                poll_interval: Duration::from_secs(30),
-            })
             .on_err(OnErr::Restart {
                 max: 10.into(),
                 backoff: Backoff::Incremental {

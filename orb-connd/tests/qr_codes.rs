@@ -1,3 +1,4 @@
+#![cfg(feature = "testing")]
 use fixture::Fixture;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
