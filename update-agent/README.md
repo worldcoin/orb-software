@@ -50,27 +50,24 @@ ORB_UPDATE_AGENT_DOWNLOADS=/usr/persistent/downloads ./update-agent
 ### Testing
 
 Tests which require special host environments or hardware in the loop are #[ignore]d
-by default. Pass `-- --ignored` to cargo test to run them anyway.
+by default.
 
-The tests in `update-agent` are not cross platform, and won't work on macos. Set
-`RUSTFLAGS='--cfg docker_runner'` to use docker to run the tests.
+Developers should use `cargo x t -p orb-update-agent` to run tests with nextest
+and `cargo x tw -p orb-update-agent` to watch and rerun tests with Bacon and
+nextest. Both aliases enable all features. Pass `--run-ignored ignored-only` to
+`cargo x t` to run ignored tests.
+
+The tests in `update-agent` are not cross-platform and do not run natively on
+macOS. Set `RUSTFLAGS='--cfg docker_runner'` to run them with Docker.
 
 Example for macos users:
 ```bash
-RUSTFLAGS='--cfg docker_runner' RUST_BACKTRACE=1 cargo-zigbuild test --target aarch64-unknown-linux-gnu --all
+RUSTFLAGS='--cfg docker_runner' RUST_BACKTRACE=1 cargo x t --target aarch64-unknown-linux-gnu -p orb-update-agent
 ```
 
 Example for linux users:
 ```bash
-RUST_BACKTRACE=1 cargo test --all
-```
-
-#### MCU update
-
-Follow the steps with this command: 
-
-```shell
-./tools/tests.sh --mcu-update
+RUST_BACKTRACE=1 cargo x t -p orb-update-agent
 ```
 
 [service file]: ./debian/worldcoin-update-agent.service

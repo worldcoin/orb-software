@@ -147,7 +147,7 @@ jobs:
           done
           echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
-      - name: Cargo Test
+      - name: Cargo Nextest
         run: |
           nix develop -c \
             cargo nextest run --workspace --all-features --all-targets $EXCLUDES

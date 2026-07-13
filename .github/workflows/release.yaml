@@ -71,7 +71,7 @@ jobs:
         run: |
           uname -a
           nix develop -c env
-      - name: Cargo Test
+      - name: Cargo Nextest
         run: |
           set -Eeuxo pipefail
 
