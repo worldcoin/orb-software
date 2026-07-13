@@ -40,6 +40,7 @@ async fn it_publishes_modem_snapshot_on_poll_interval() {
         .insert(ModemConfig {
             device_path: fx.container_tempdir.join("cdc-wdm0"),
             poll_interval: Duration::from_secs(1),
+            powercycle_grace_period: Duration::ZERO,
         });
 
     // Act
@@ -106,6 +107,7 @@ async fn it_powercycles_modem_and_emits_metric_when_snapshot_fails() {
         .insert(ModemConfig {
             device_path: device_path.clone(),
             poll_interval: Duration::from_secs(1),
+            powercycle_grace_period: Duration::ZERO,
         });
 
     // Act
@@ -175,21 +177,15 @@ async fn it_retries_after_restart_service_fails_and_succeeds_on_second_attempt()
         .insert(ModemConfig {
             device_path: device_path.clone(),
             poll_interval: Duration::from_millis(1500),
+            powercycle_grace_period: Duration::ZERO,
         });
 
     // Act
-    let handle = fx.run_with().registry(registry).call().await;
+    let _handle = fx.run_with().registry(registry).call().await;
     fs::write(&device_path, []).await.unwrap();
 
     // Assert
-    wait_for_occurrences(
-        &handle.dogstatsd,
-        "orb.platform.connd.modem_powercycle:1|c",
-        2,
-    )
-    .await;
-
-    time::sleep(Duration::from_millis(1500)).await;
+    wait_for_restart_attempts(&restart_attempt, 2).await;
 
     assert_eq!(
         restart_calls.lock().unwrap().as_slice(),
@@ -309,4 +305,16 @@ async fn wait_for_occurrences(agent: &Agent, needle: &str, expected: usize) {
     }
 
     assert_eq!(agent.occurrences(needle), expected);
+}
+
+async fn wait_for_restart_attempts(attempts: &Mutex<usize>, expected: usize) {
+    for _ in 0..100 {
+        if *attempts.lock().unwrap() >= expected {
+            return;
+        }
+
+        time::sleep(Duration::from_millis(100)).await;
+    }
+
+    assert_eq!(*attempts.lock().unwrap(), expected);
 }

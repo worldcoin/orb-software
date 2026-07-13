@@ -38,7 +38,10 @@ pub struct Snapshot {
 #[derive(Clone)]
 pub struct ModemConfig {
     pub device_path: PathBuf,
+    /// How often we poll the modem for its `Snapshot`
     pub poll_interval: Duration,
+    /// Grace period for the modem powercycle by the MCU (it is not immediate)
+    pub powercycle_grace_period: Duration,
 }
 
 impl Default for ModemConfig {
@@ -46,6 +49,7 @@ impl Default for ModemConfig {
         Self {
             device_path: PathBuf::from("/dev/cdc-wdm0"),
             poll_interval: Duration::from_secs(30),
+            powercycle_grace_period: Duration::from_secs(5),
         }
     }
 }
@@ -103,7 +107,7 @@ pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
 
             let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(mcu_util, systemd, &config.device_path)
+            let _ = powercycle_modem(mcu_util, systemd, &config.device_path, config)
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");
@@ -206,11 +210,15 @@ async fn powercycle_modem(
     mcu_util: &McuUtil,
     systemd: &Systemd,
     device_path: &Path,
+    cfg: &ModemConfig,
 ) -> Result<()> {
     mcu_util
         .powercycle(Module::Modem)
         .await
         .wrap_err("mcu-util power-cycle")?;
+
+    // MCU powercycle is not immediate, give it time
+    time::sleep(cfg.powercycle_grace_period).await;
 
     let device_exists = async {
         loop {
