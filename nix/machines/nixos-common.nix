@@ -80,10 +80,10 @@ in
   programs.nix-ld.enable = true;
 
   # `ctypes.util.find_library` (used by pyudev, etc.) shells out to `ldconfig`/`gcc`
-  # and only ever consults `LD_LIBRARY_PATH`, not `NIX_LD_LIBRARY_PATH`. nix-ld's
-  # default library set already includes systemd (libudev), so just point
-  # LD_LIBRARY_PATH at the same directory nix-ld publishes.
-  environment.variables.LD_LIBRARY_PATH = config.environment.sessionVariables.NIX_LD_LIBRARY_PATH;
+  # and only ever consults `LD_LIBRARY_PATH`, not nix-ld's `NIX_LD_LIBRARY_PATH`
+  # (that one only patches the ELF interpreter lookup for the process' own
+  # executable).
+  environment.variables.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.systemd ];
 
   environment.systemPackages = with pkgs; [
     unstable.awscli2 # todo: remove this when hil can be consumed via flake
