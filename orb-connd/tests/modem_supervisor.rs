@@ -174,7 +174,7 @@ async fn it_retries_after_restart_service_fails_and_succeeds_on_second_attempt()
         .insert(systemd)
         .insert(ModemConfig {
             device_path: device_path.clone(),
-            poll_interval: Duration::from_secs(1),
+            poll_interval: Duration::from_millis(1500),
         });
 
     // Act
@@ -189,7 +189,7 @@ async fn it_retries_after_restart_service_fails_and_succeeds_on_second_attempt()
     )
     .await;
 
-    time::sleep(Duration::from_secs(1)).await;
+    time::sleep(Duration::from_millis(1500)).await;
 
     assert_eq!(
         restart_calls.lock().unwrap().as_slice(),
