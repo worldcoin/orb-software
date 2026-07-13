@@ -3,23 +3,32 @@ use color_eyre::{
     Result,
 };
 use futures::StreamExt;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy};
 
 #[cfg_attr(feature = "testing", faux::create)]
 #[derive(Clone)]
 pub struct Systemd {
     system_bus: zbus::Connection,
+    subscribed: Arc<tokio::sync::OnceCell<()>>,
 }
 
 #[cfg_attr(feature = "testing", faux::methods)]
 impl Systemd {
     pub fn new(system_bus: zbus::Connection) -> Self {
-        Self { system_bus }
+        Self {
+            system_bus,
+            subscribed: Arc::new(tokio::sync::OnceCell::new()),
+        }
     }
 
     pub async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
+
+        self.subscribed
+            .get_or_try_init(|| manager.subscribe())
+            .await
+            .wrap_err("subscribe to systemd manager signals")?;
 
         let mut job_removed = manager.receive_job_removed().await?;
 
