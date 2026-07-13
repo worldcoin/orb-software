@@ -218,7 +218,7 @@ impl Fixture {
             .insert(mock_modem_manager())
             .insert(ModemConfig::default())
             .insert(statsd)
-            .merge(self.registry.take().unwrap_or_else(crabwire::Registry::new));
+            .merge(self.registry.take().unwrap_or_default());
 
         crabwire::reregister!(base_registry);
 

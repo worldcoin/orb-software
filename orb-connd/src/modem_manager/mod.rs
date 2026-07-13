@@ -185,10 +185,10 @@ impl ModemManager {
         parse_sim_info(&output)
     }
 
-    pub async fn set_current_bands<'a>(
+    pub async fn set_current_bands(
         &self,
         modem_id: &ModemId,
-        bands: &[&'a str],
+        bands: &[&str],
     ) -> Result<()> {
         if bands.is_empty() {
             bail!("bands arg cannot be empty!");
