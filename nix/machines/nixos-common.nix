@@ -1,5 +1,6 @@
 # NixOS configuration common to all worldcoin machines.
 {
+  config,
   pkgs,
   lib,
   hostname,
@@ -77,6 +78,12 @@ in
 
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;
+
+  # `ctypes.util.find_library` (used by pyudev, etc.) shells out to `ldconfig`/`gcc`
+  # and only ever consults `LD_LIBRARY_PATH`, not `NIX_LD_LIBRARY_PATH`. nix-ld's
+  # default library set already includes systemd (libudev), so just point
+  # LD_LIBRARY_PATH at the same directory nix-ld publishes.
+  environment.variables.LD_LIBRARY_PATH = config.environment.sessionVariables.NIX_LD_LIBRARY_PATH;
 
   environment.systemPackages = with pkgs; [
     unstable.awscli2 # todo: remove this when hil can be consumed via flake
