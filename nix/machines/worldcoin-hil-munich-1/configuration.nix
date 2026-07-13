@@ -26,8 +26,36 @@
   #   2. Add label `worldcoin-hil-munich-1` (this is what the Jenkinsfile targets).
   #   3. Copy the node's secret into /etc/worldcoin/secrets/jenkins-agent-secret
   #      on this machine (root-owned, mode 0400).
+  # This machine is Jenkins-only: skip the GitHub Actions runner that
+  # hil-common.nix sets up for every other HIL.
+  worldcoin.githubRunner.enable = false;
+
+  # ADB/fastboot access to Android-based test hardware attached to this HIL.
+  # Ships the udev rules from the Debian `android-sdk-platform-tools-common`
+  # package; `jenkins-agent-user` already gets `plugdev` via jenkins-agent.nix's
+  # default extraGroups. NixOS reloads/retriggers udev rules automatically on
+  # `nixos-rebuild switch`, so no manual `udevadm control --reload-rules` step
+  # is needed.
+  services.udev.packages = [ pkgs.android-udev-rules ];
+
+  # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
+  # `plugdev` USB access above covers the raw usbfs nodes it needs.
+  #
+  # android-udev-rules above only ships udev rules (like Debian's
+  # android-sdk-platform-tools-common); android-tools is the actual
+  # adb/fastboot client (like Debian's android-sdk-platform-tools).
+  environment.systemPackages = [
+    (pkgs.callPackage ../../packages/qdl-rs.nix { })
+    pkgs.android-tools
+  ];
+
   worldcoin.jenkinsAgent = {
     enable = true;
     url = "https://jenkins.worldcoin.dev";
+    # jenkins.worldcoin.dev is behind Cloudflare Access; the agent authenticates
+    # with a service token. Provision these two files on the machine (0400, root):
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-id
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-secret
+    cloudflareAccess.enable = true;
   };
 }
