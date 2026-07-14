@@ -36,4 +36,9 @@
     #   /etc/worldcoin/secrets/jenkins-cf-access-client-secret
     cloudflareAccess.enable = true;
   };
+
+  worldcoin.extraPythonPackages = with pkgs.python312Packages; [
+    boto3
+    pyudev
+  ];
 }

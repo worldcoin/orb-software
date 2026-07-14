@@ -97,6 +97,12 @@ in
     description = "Whether this HIL registers as a GitHub Actions self-hosted runner. Disable for machines that only act as Jenkins agents.";
   };
 
+  options.worldcoin.extraPythonPackages = lib.mkOption {
+    type = lib.types.listOf lib.types.package;
+    default = [ ];
+    description = "Extra Python packages to add on top of this HIL's default python312 toolset.";
+  };
+
   config = {
     # Install test-related packages
     environment.systemPackages = with pkgs; [
@@ -129,7 +135,9 @@ in
       lsof
       uv
       (python312.withPackages (
-        ps: with ps; [
+        ps:
+        with ps;
+        [
           pyyaml
           pyserial
           pyftdi
@@ -137,6 +145,7 @@ in
           cmsis-pack-manager
           cffi
         ]
+        ++ config.worldcoin.extraPythonPackages
       ))
     ];
 
