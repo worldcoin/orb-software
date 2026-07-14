@@ -1,17 +1,20 @@
+#![cfg(feature = "testing")]
 #![allow(dead_code)]
 use async_tempfile::TempDir;
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
 use escargot::CargoBuild;
+use faux::when;
 use mockall::mock;
 use nix::libc;
 use orb_connd::{
     connectivity_daemon::program,
     mcu_util::McuUtil,
+    modem::ModemConfig,
     modem_manager::{
         connection_state::ConnectionState, Location, Modem, ModemId, ModemInfo,
-        ModemManager, Signal, SimId, SimInfo,
+        ModemManager, Signal, SimInfo,
     },
     network_manager::NetworkManager,
     resolved::Resolved,
@@ -22,7 +25,7 @@ use orb_connd::{
     OrbCapabilities,
 };
 use orb_connd_dbus::ConndProxy;
-use orb_dogd::DogstatsdClient;
+use orb_dogd::{test::agent::Agent, DogstatsdClient};
 use orb_info::{
     orb_os_release::{OrbOsPlatform, OrbOsRelease, OrbRelease},
     OrbId,
@@ -46,11 +49,10 @@ pub struct Fixture {
     release: OrbRelease,
     cap: OrbCapabilities,
 
-    modem_manager: Option<MockMMCli>,
     wpa_ctrl: Option<MockWpaCli>,
-    mcu_util: Option<MockMcuUtilCli>,
+    registry: Option<crabwire::Registry>,
 
-    container_tempdir: TempDir,
+    pub container_tempdir: TempDir,
     sysfs: PathBuf,
     procfs: PathBuf,
     pub usr_persistent: PathBuf,
@@ -69,7 +71,10 @@ pub struct FxHandle {
     pub secure_storage: SecureStorage,
     secure_storage_cancel_token: CancellationToken,
 
-    speare: speare::mini::Ctx,
+    pub dogstatsd: Agent,
+    dogstatsd_tempdir: TempDir,
+
+    pub speare: speare::mini::Ctx,
 }
 
 #[bon]
@@ -79,9 +84,8 @@ impl Fixture {
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
         #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
-        modem_manager: Option<MockMMCli>,
         wpa_ctrl: Option<MockWpaCli>,
-        mcu_util: Option<MockMcuUtilCli>,
+        registry: Option<crabwire::Registry>,
     ) -> Self {
         let connd_build = task::spawn_blocking(|| {
             CargoBuild::new()
@@ -105,9 +109,8 @@ impl Fixture {
             platform,
             release,
             cap,
-            modem_manager,
             wpa_ctrl,
-            mcu_util,
+            registry,
             container_tempdir,
             usr_persistent,
             sysfs,
@@ -138,6 +141,7 @@ impl Fixture {
         #[builder(default = false)] log: bool,
         secure_storage: Option<SecureStorage>,
         secure_storage_cancel_token: Option<CancellationToken>,
+        registry: Option<crabwire::Registry>,
     ) -> FxHandle {
         let _ = color_eyre::install();
 
@@ -197,22 +201,30 @@ impl Fixture {
             .await
             .unwrap();
 
-        let mcu_util: Box<dyn McuUtil> = Box::new(
-            self.mcu_util
-                .take()
-                .unwrap_or_else(default_mock_mcu_util_cli),
+        let dogstatsd_tempdir = TempDir::new().await.unwrap();
+        let dogstatsd_socket = dogstatsd_tempdir.join("dogstatsd.sock");
+        let dogstatsd = Agent::new(&dogstatsd_socket).await.unwrap();
+        let statsd = DogstatsdClient::new_with(
+            4096,
+            25,
+            Duration::from_millis(50),
+            dogstatsd_socket.to_string_lossy().into_owned(),
+            Duration::from_millis(1),
         );
 
-        let modem_manager: Box<dyn ModemManager> =
-            Box::new(self.modem_manager.take().unwrap_or_else(default_mockmmcli));
+        let base_registry = crabwire::Registry::new()
+            .insert(mock_systemd())
+            .insert(mock_mcu_util())
+            .insert(mock_modem_manager())
+            .insert(ModemConfig::default())
+            .insert(statsd)
+            .merge(self.registry.take().unwrap_or_default());
 
-        let registry = crabwire::Registry::new()
-            .insert(Systemd::new(dbus.clone()))
-            .insert(mcu_util)
-            .insert(modem_manager)
-            .insert(DogstatsdClient::default());
+        crabwire::reregister!(base_registry);
 
-        crabwire::reregister!(registry);
+        if let Some(registry) = registry {
+            crabwire::merge!(registry);
+        }
 
         let speare = program()
             .os_release(OrbOsRelease {
@@ -251,6 +263,8 @@ impl Fixture {
             nm,
             secure_storage,
             secure_storage_cancel_token,
+            dogstatsd,
+            dogstatsd_tempdir,
             speare,
         }
     }
@@ -420,10 +434,10 @@ async fn wait_for_zenoh_socket(socket: &Path) {
     panic!("zenoh socket was not created at {}", socket.display());
 }
 
-fn default_mockmmcli() -> MockMMCli {
-    let mut mm = MockMMCli::new();
+fn mock_modem_manager() -> ModemManager {
+    let mut mm = ModemManager::faux();
 
-    mm.expect_list_modems().returning(|| {
+    when!(mm.list_modems).then(|_| {
         Ok(vec![Modem {
             id: ModemId::from(0),
             vendor: "telit".to_string(),
@@ -431,14 +445,11 @@ fn default_mockmmcli() -> MockMMCli {
         }])
     });
 
-    mm.expect_signal_setup().returning(|_, _| Ok(()));
+    when!(mm.signal_setup).then(|(_, _)| Ok(()));
+    when!(mm.signal_get).then(|_| Ok(Signal::default()));
+    when!(mm.location_get).then(|_| Ok(Location::default()));
 
-    mm.expect_signal_get().returning(|_| Ok(Signal::default()));
-
-    mm.expect_location_get()
-        .returning(|_| Ok(Location::default()));
-
-    mm.expect_modem_info().returning(|_| {
+    when!(mm.modem_info).then(|_| {
         let mi = ModemInfo {
             imei: String::new(),
             fw_revision: None,
@@ -452,7 +463,7 @@ fn default_mockmmcli() -> MockMMCli {
         Ok(mi)
     });
 
-    mm.expect_sim_info().returning(|_| {
+    when!(mm.sim_info).then(|_| {
         let si = SimInfo {
             iccid: String::new(),
             imsi: String::new(),
@@ -461,39 +472,10 @@ fn default_mockmmcli() -> MockMMCli {
         Ok(si)
     });
 
-    mm.expect_set_current_bands().returning(|_, _| Ok(()));
-    mm.expect_set_allowed_and_preferred_modes()
-        .returning(|_, _, _| Ok(()));
+    when!(mm.set_current_bands).then(|(_, _)| Ok(()));
+    when!(mm.set_allowed_and_preferred_modes).then(|(_, _, _)| Ok(()));
 
     mm
-}
-
-mock! {
-    pub MMCli {}
-    #[async_trait]
-    impl ModemManager for MMCli {
-        async fn list_modems(&self) -> Result<Vec<Modem>>;
-
-        async fn modem_info(&self, modem_id: &ModemId) -> Result<ModemInfo>;
-
-        async fn signal_setup(&self, modem_id: &ModemId, rate: Duration) -> Result<()>;
-
-        async fn signal_get(&self, modem_id: &ModemId) -> Result<Signal>;
-
-        async fn location_get(&self, modem_id: &ModemId) -> Result<Location>;
-
-        async fn sim_info(&self, sim_id: &SimId) -> Result<SimInfo>;
-
-        async fn set_current_bands<'a>(&self, modem_id: &ModemId, bands: &[&'a str])
-            -> Result<()>;
-
-        async fn set_allowed_and_preferred_modes<'a>(
-            &self,
-            modem_id: &ModemId,
-            allowed: &[&'a str],
-            preferred: &'a str,
-        ) -> Result<()>;
-    }
 }
 
 fn default_mock_wpa_cli() -> MockWpaCli {
@@ -511,16 +493,17 @@ mock! {
     }
 }
 
-fn default_mock_mcu_util_cli() -> MockMcuUtilCli {
-    let mut mcu_util = MockMcuUtilCli::new();
-    mcu_util.expect_powercycle().returning(|_| Ok(()));
+fn mock_mcu_util() -> McuUtil {
+    let mut mcu_util = McuUtil::faux();
+    when!(mcu_util.powercycle).then(|_| Ok(()));
+
     mcu_util
 }
 
-mock! {
-    pub McuUtilCli {}
-    #[async_trait]
-    impl McuUtil for McuUtilCli {
-        async fn powercycle(&self, module: orb_connd::mcu_util::Module) -> Result<()>;
-    }
+fn mock_systemd() -> Systemd {
+    let mut systemd = Systemd::faux();
+    when!(systemd.restart_service).then(|(_, _)| Ok(()));
+    when!(systemd.loaded_services).then(|_| Ok(Vec::new()));
+
+    systemd
 }

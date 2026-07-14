@@ -20,15 +20,17 @@ step. Try running `cargo check -p foobar`.
 Unlike building the code, tests are expected to run on the same target as the
 host. But not all tests are possible on every target.
 
-*IF* it is supported, you can run `cargo test -p foobar` like normal. But
-support varies from crate to crate.
+*IF* it is supported, you can run `cargo x t -p foobar`. Use
+`cargo x tw -p foobar` to watch and rerun the tests. Both aliases run nextest
+with all features enabled. Support varies from crate to crate.
 
 ## Running tests locally
 
-You can `cargo test --all-targets -p foobar` for any crate named `foobar`, or
-`cargo test --all-targets --all` to test all crates. But some of our crates only
-can build when targetting linux, so if you are on mac you will need to use the `-p`
-version.
+Run `cargo x t --all-targets -p foobar` for any crate named `foobar`, or
+`cargo x t --workspace --all-targets` to test all crates. Use `cargo x tw` with
+the same arguments to watch and rerun tests. Both aliases run nextest with all
+features enabled. Some of our crates can only build when targeting Linux, so on
+macOS you will need to use the `-p` version or one of the Docker runners below.
 
 You can also resort to cross compiling to linux and then running your tests in docker.
 There are two ways to do this:
@@ -39,7 +41,7 @@ A *limited subset* of tests can use a container built from a `Dockerfile` at
 `docker/Dockerfile`. You can choose to run tests this way with the following command:
 
 ```bash
-RUSTFLAGS='--cfg docker_runner' cargo-zigbuild test --target aarch64-unknown-linux-gnu --all-targets --all
+RUSTFLAGS='--cfg docker_runner' cargo x t --target aarch64-unknown-linux-gnu --workspace --all-targets
 ```
 
 ### Using a container built from nix directly
@@ -52,7 +54,7 @@ builder runner for nix set up. The easiest way to do this is to use the
 setting in your `configuration.nix`, you can run:
 
 ```bash
-RUSTFLAGS='--cfg nix_docker_runner' cargo-zigbuild test --target aarch64-unknown-linux-gnu --all-targets --all
+RUSTFLAGS='--cfg nix_docker_runner' cargo x t --target aarch64-unknown-linux-gnu --workspace --all-targets
 ```
 
 Note that the only difference between this command and the other one is that the

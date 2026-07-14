@@ -1,3 +1,4 @@
+#![cfg(feature = "testing")]
 use fixture::Fixture;
 use futures::TryStreamExt;
 use orb_connd::{

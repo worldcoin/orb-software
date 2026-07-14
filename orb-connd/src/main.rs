@@ -3,8 +3,9 @@ use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
-    mcu_util::{cli::McuUtilCli, McuUtil},
-    modem_manager::{cli::ModemManagerCli, ModemManager},
+    mcu_util::McuUtil,
+    modem::ModemConfig,
+    modem_manager::ModemManager,
     network_manager::NetworkManager,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
@@ -108,8 +109,9 @@ fn connectivity_daemon() -> Result<()> {
 
         let registry = crabwire::Registry::new()
             .insert(systemd)
-            .insert(Box::new(McuUtilCli) as Box<dyn McuUtil>)
-            .insert(Box::new(ModemManagerCli) as Box<dyn ModemManager>)
+            .insert(McuUtil)
+            .insert(ModemManager)
+            .insert(ModemConfig::default())
             .insert(DogstatsdClient::default());
 
         crabwire::register!(registry);
