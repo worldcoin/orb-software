@@ -16,6 +16,10 @@
     ../hil-common.nix
   ];
 
+  # This HIL doubles as a Jenkins agent (in addition to the GitHub Actions
+  # runner set up by hil-common.nix).
+  worldcoin.githubRunner.enable = false;
+
   services.udev.packages = [ pkgs.android-udev-rules ];
 
   # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
