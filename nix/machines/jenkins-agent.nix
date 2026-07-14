@@ -1,15 +1,7 @@
 # Jenkins inbound (WebSocket/JNLP) agent, mirroring how `services.github-runners`
 # is wired in hil-common.nix. This lets a HIL machine act as a Jenkins agent in
 # addition to (or instead of) a GitHub Actions runner.
-#
-# The agent dials *out* to the Jenkins controller over WebSocket, so it works
-# behind office NAT with no inbound ports open (same model as our GH runners).
-#
-# Disabled by default. Enable per-machine with:
-#   worldcoin.jenkinsAgent = {
-#     enable = true;
-#     url = "https://<your-jenkins-controller>";
-#   };
+
 {
   config,
   pkgs,

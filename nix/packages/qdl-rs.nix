@@ -13,8 +13,7 @@ let
     hash = "sha256-tj8/rGw2UgKszHItlvzXgxfGPBow3W9LWMbcodsiiFY=";
   };
 in
-# Needs a newer rustc than nixos-25.05 ships (qdlrs uses `is_multiple_of`,
-# stabilized in rustc 1.87), so build with nixpkgs-unstable's rustPlatform.
+
 pkgs.unstable.rustPlatform.buildRustPackage {
   pname = "qdl-rs";
   version = "unstable-2026-06-19";

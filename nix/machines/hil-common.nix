@@ -180,12 +180,6 @@ in
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
     '';
 
-    # HIL device-management tooling (e.g. the relay-controlled reboot-into-EDL
-    # scripts) loads libudev at runtime via pyudev's `ctypes.CDLL`, which
-    # resolves dlopen()s through the standard LD_LIBRARY_PATH, not nix-ld's
-    # NIX_LD_LIBRARY_PATH (that one only patches the ELF interpreter lookup
-    # for the process' own executable, and systemd was already in nix-ld's
-    # default library set anyway — it was never the missing piece here).
     environment.variables.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.systemd ];
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
