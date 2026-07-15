@@ -16,6 +16,8 @@
     ../hil-common.nix
   ];
 
+  worldcoin.orbPlatform = "mini";
+
   services.udev.packages = [ pkgs.android-udev-rules ];
 
   # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
