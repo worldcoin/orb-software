@@ -68,6 +68,11 @@ let
   );
 in
 {
+  imports = [
+    # Makes `worldcoin.jenkinsAgent` available to every HIL (disabled by default).
+    ./jenkins-agent.nix
+  ];
+
   options.worldcoin.orbId = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
@@ -84,6 +89,18 @@ in
     type = lib.types.nullOr lib.types.str;
     default = "http://10.108.4.25:8080";
     description = "URL of the orb-hil-orchestrator server.";
+  };
+
+  options.worldcoin.githubRunner.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = "Whether this HIL registers as a GitHub Actions self-hosted runner. Disable for machines that only act as Jenkins agents.";
+  };
+
+  options.worldcoin.extraPythonPackages = lib.mkOption {
+    type = lib.types.listOf lib.types.package;
+    default = [ ];
+    description = "Extra Python packages to add on top of this HIL's default python312 toolset.";
   };
 
   config = {
@@ -118,7 +135,9 @@ in
       lsof
       uv
       (python312.withPackages (
-        ps: with ps; [
+        ps:
+        with ps;
+        [
           pyyaml
           pyserial
           pyftdi
@@ -126,6 +145,7 @@ in
           cmsis-pack-manager
           cffi
         ]
+        ++ config.worldcoin.extraPythonPackages
       ))
     ];
 
@@ -168,6 +188,8 @@ in
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
     '';
+
+    environment.variables.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.systemd ];
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
@@ -331,14 +353,14 @@ in
       });
     '';
 
-    systemd.services."github-runner-${hostname}" = {
+    systemd.services."github-runner-${hostname}" = lib.mkIf config.worldcoin.githubRunner.enable {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
       restartIfChanged = false;
       stopIfChanged = false;
     };
-    services.github-runners = {
+    services.github-runners = lib.mkIf config.worldcoin.githubRunner.enable {
       "${hostname}" = {
         enable = true;
         name = "${hostname}";
