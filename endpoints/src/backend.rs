@@ -64,8 +64,7 @@ impl FromStr for Backend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
-            "stage" | "staging" | "dev" | "development" | "analysis"
-            | "analysis.ml" | "analysis-ml" => Ok(Self::Staging),
+            "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
             "local" | "localhost" | "127.0.0.1" => Ok(Self::Local),
             _ => Err(BackendParseErr),
         }
@@ -132,7 +131,6 @@ mod test {
         assert_eq!(Backend::from_str("stage").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("staGe").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("dev").unwrap(), Backend::Staging);
-        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("foobar"), Err(BackendParseErr));
     }
 }
