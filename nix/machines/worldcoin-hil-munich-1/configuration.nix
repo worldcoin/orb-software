@@ -16,6 +16,17 @@
     ../hil-common.nix
   ];
 
+  worldcoin.orbId = "muc1mini";
+  worldcoin.orbPlatform = "mini";
+
+  environment.etc."worldcoin/orb.yaml" = {
+    text = ''
+      orb_id: ${config.worldcoin.orbId}
+      platform: ${config.worldcoin.orbPlatform}
+    '';
+    mode = "0644";
+  };
+
   services.udev.packages = [ pkgs.android-udev-rules ];
 
   # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same

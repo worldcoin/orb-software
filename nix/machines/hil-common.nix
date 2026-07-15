@@ -104,6 +104,10 @@ in
   };
 
   config = {
+    nix.extraOptions = ''
+      netrc-file = /etc/worldcoin/secrets/nix-github-netrc
+    '';
+
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
