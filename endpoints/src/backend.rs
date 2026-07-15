@@ -6,7 +6,6 @@ pub const ORB_BACKEND_ENV_VAR_NAME: &str = "ORB_BACKEND";
 pub enum Backend {
     Prod,
     Staging,
-    Analysis,
     Local,
 }
 
@@ -14,7 +13,6 @@ pub enum Backend {
 pub enum BuildType {
     Prod,
     Staging,
-    Analysis,
 }
 
 impl Backend {
@@ -35,12 +33,11 @@ impl Backend {
     /// # Panics
     /// - If the env var was provided but could not parse.
     /// - If the build was staging but the env var was prod.
-    /// - If the build was analysis but the env var was prod.
     ///
     /// # Example usage
     /// ```
     /// use orb_endpoints::{Backend, BuildType};
-    /// Backend::from_env_or_build_type(BuildType::Stage);
+    /// Backend::from_env_or_build_type(BuildType::Staging);
     /// ```
     ///
     pub fn from_env_or_build_type(build_type: BuildType) -> Self {
@@ -49,20 +46,13 @@ impl Backend {
             Err(BackendFromEnvError::NotSet) => match build_type {
                 BuildType::Prod => Backend::Prod,
                 BuildType::Staging => Backend::Staging,
-                BuildType::Analysis => Backend::Analysis,
             },
             Err(err @ BackendFromEnvError::Invalid(_)) => {
                 panic!("could not parse backend from env var: {err}")
             }
         };
-        match (b, build_type) {
-            (Backend::Prod, BuildType::Staging) => {
-                panic!("tried to talk to prod backend but this is a staging build!");
-            }
-            (Backend::Prod, BuildType::Analysis) => {
-                panic!("tried to talk to prod backend but this is an analysis build!");
-            }
-            _ => {}
+        if let (Backend::Prod, BuildType::Staging) = (b, build_type) {
+            panic!("tried to talk to prod backend but this is a staging build!");
         }
         b
     }
@@ -74,8 +64,8 @@ impl FromStr for Backend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "prod" | "production" => Ok(Self::Prod),
-            "stage" | "staging" | "dev" | "development" => Ok(Self::Staging),
-            "analysis" | "analysis.ml" | "analysis-ml" => Ok(Self::Analysis),
+            "stage" | "staging" | "dev" | "development" | "analysis"
+            | "analysis.ml" | "analysis-ml" => Ok(Self::Staging),
             "local" | "localhost" | "127.0.0.1" => Ok(Self::Local),
             _ => Err(BackendParseErr),
         }
@@ -142,7 +132,7 @@ mod test {
         assert_eq!(Backend::from_str("stage").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("staGe").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("dev").unwrap(), Backend::Staging);
-        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Analysis);
+        assert_eq!(Backend::from_str("analysis").unwrap(), Backend::Staging);
         assert_eq!(Backend::from_str("foobar"), Err(BackendParseErr));
     }
 }
