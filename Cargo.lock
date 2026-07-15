@@ -5434,7 +5434,7 @@ dependencies = [
  "pin-project",
  "pkarr",
  "portmapper",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rcgen",
  "reqwest 0.12.24",
  "ring",
@@ -5528,7 +5528,7 @@ checksum = "929d5d8fa77d5c304d3ee7cae9aede31f13908bd049f9de8c7c0094ad6f7c535"
 dependencies = [
  "bytes",
  "getrandom 0.2.16",
- "rand 0.8.5",
+ "rand 0.8.7",
  "ring",
  "rustc-hash",
  "rustls 0.23.35",
@@ -5581,7 +5581,7 @@ dependencies = [
  "pin-project",
  "pkarr",
  "postcard",
- "rand 0.8.5",
+ "rand 0.8.7",
  "reqwest 0.12.24",
  "rustls 0.23.35",
  "rustls-webpki 0.102.8",
@@ -6861,7 +6861,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.7",
  "smallvec",
  "zeroize",
 ]
@@ -7219,7 +7219,7 @@ dependencies = [
  "glob",
  "opentelemetry",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
@@ -7492,7 +7492,7 @@ dependencies = [
  "image",
  "orb-rgb",
  "qrcode",
- "rand 0.8.5",
+ "rand 0.8.7",
  "thiserror 2.0.17",
  "tinybmp",
  "tokio",
@@ -7539,7 +7539,7 @@ dependencies = [
  "portpicker",
  "prelude",
  "proptest",
- "rand 0.8.5",
+ "rand 0.8.7",
  "regex",
  "reqwest 0.12.24",
  "rkyv",
@@ -7645,7 +7645,7 @@ dependencies = [
  "orb-s3-helpers",
  "orb-security-utils",
  "probe-rs",
- "rand 0.8.5",
+ "rand 0.8.7",
  "reqwest 0.12.24",
  "secrecy 0.8.0",
  "serde",
@@ -7788,7 +7788,7 @@ dependencies = [
  "orb-build-info",
  "orb-mcu-interface",
  "orb-telemetry",
- "rand 0.8.5",
+ "rand 0.8.7",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -7983,7 +7983,7 @@ dependencies = [
  "orb-se050-reprovision-validate",
  "orb-security-utils",
  "orb-telemetry",
- "rand 0.8.5",
+ "rand 0.8.7",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
@@ -8022,7 +8022,7 @@ dependencies = [
  "eyre",
  "optee-teec",
  "orb-secure-storage-proto",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rustix 0.38.44",
  "serde",
  "serde_json",
@@ -8096,7 +8096,7 @@ dependencies = [
  "orb-build-info",
  "orb-info",
  "orb-security-utils",
- "rand 0.8.5",
+ "rand 0.8.7",
  "reqwest 0.12.24",
  "serde",
  "serde_json",
@@ -8219,7 +8219,7 @@ dependencies = [
  "orb-uart",
  "pid",
  "prost 0.12.6",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -8323,7 +8323,7 @@ dependencies = [
  "escargot",
  "eyre",
  "nix 0.26.4",
- "rand 0.8.5",
+ "rand 0.8.7",
  "reqwest 0.11.27",
  "tempfile",
  "thiserror 2.0.17",
@@ -9090,7 +9090,7 @@ dependencies = [
  "nested_enum_utils",
  "netwatch",
  "num_enum",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "smallvec",
  "snafu",
@@ -9109,7 +9109,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.8.7",
 ]
 
 [[package]]
@@ -9709,9 +9709,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -9818,7 +9818,7 @@ dependencies = [
  "once_cell",
  "paste",
  "profiling",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rand_chacha 0.3.1",
  "simd_helpers",
  "system-deps 6.2.2",
@@ -10140,7 +10140,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5875471e6cab2871bc150ecb8c727db5113c9338cc3354dc5ee3425b6aa40a1c"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.8.7",
 ]
 
 [[package]]
@@ -11418,7 +11418,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rsa",
  "sha1",
  "sha2",
@@ -11455,7 +11455,7 @@ dependencies = [
  "md-5",
  "memchr",
  "once_cell",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "serde_json",
  "sha2",
@@ -12490,7 +12490,7 @@ dependencies = [
  "indexmap 1.9.3",
  "pin-project",
  "pin-project-lite",
- "rand 0.8.5",
+ "rand 0.8.7",
  "slab",
  "tokio",
  "tokio-util",
@@ -12749,7 +12749,7 @@ dependencies = [
  "humantime",
  "lazy_static",
  "log",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "spin 0.10.0",
 ]
@@ -14221,7 +14221,7 @@ dependencies = [
  "hex 0.4.3",
  "nix 0.29.0",
  "ordered-stream",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "serde_repr",
  "sha1",
@@ -14293,7 +14293,7 @@ dependencies = [
  "once_cell",
  "petgraph 0.8.3",
  "phf",
- "rand 0.8.5",
+ "rand 0.8.7",
  "ref-cast",
  "rustc_version",
  "serde",
@@ -14398,7 +14398,7 @@ checksum = "b433e08df3b03f2af2d23bd29a32aa5f5522c52e66d63e3d135bfa66373736dd"
 dependencies = [
  "aes",
  "hmac",
- "rand 0.8.5",
+ "rand 0.8.7",
  "rand_chacha 0.3.1",
  "sha3",
  "zenoh-result",
@@ -14413,7 +14413,7 @@ dependencies = [
  "getrandom 0.2.16",
  "hashbrown 0.16.0",
  "keyed-set",
- "rand 0.8.5",
+ "rand 0.8.7",
  "schemars 1.2.0",
  "serde",
  "token-cell",
@@ -14532,7 +14532,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4d3dad7aeeea780495692b195cd56515569c32b76b9dd077cc408c3ebca03f"
 dependencies = [
  "const_format",
- "rand 0.8.5",
+ "rand 0.8.7",
  "serde",
  "uhlc",
  "zenoh-buffers",
@@ -14604,7 +14604,7 @@ dependencies = [
  "flume",
  "lazy_static",
  "lz4_flex",
- "rand 0.8.5",
+ "rand 0.8.7",
  "ringbuffer-spsc",
  "serde",
  "sha3",
