@@ -16,9 +16,7 @@
     ../hil-common.nix
   ];
 
-  # This HIL doubles as a Jenkins agent (in addition to the GitHub Actions
-  # runner set up by hil-common.nix).
-  worldcoin.githubRunner.enable = false;
+  worldcoin.orbPlatform = "mini";
 
   services.udev.packages = [ pkgs.android-udev-rules ];
 
