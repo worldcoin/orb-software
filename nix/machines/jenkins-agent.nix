@@ -113,6 +113,12 @@ in
         pkgs.curl
         pkgs.git
         pkgs.bash
+        pkgs.nettools
+        pkgs.coreutils
+        pkgs.uv
+        pkgs.python312
+        pkgs.android-tools
+        (pkgs.callPackage ../packages/qdl-rs.nix { })
       ];
       serviceConfig = {
         User = agentUser;
