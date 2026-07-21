@@ -17,7 +17,8 @@ env:
 jobs:
   prepare:
     name: Prepare deployment matrix
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: arc-public-large-amd64-runner
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
     steps:

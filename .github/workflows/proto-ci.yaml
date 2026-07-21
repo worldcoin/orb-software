@@ -25,7 +25,8 @@ permissions:
 jobs:
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: arc-public-large-amd64-runner
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -49,7 +50,8 @@ jobs:
 
   format:
     name: Format
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: arc-public-large-amd64-runner
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:

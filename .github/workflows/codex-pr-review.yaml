@@ -17,7 +17,8 @@ concurrency:
 jobs:
   authorize:
     name: Check PR author team
-    runs-on: ubuntu-latest
+    runs-on:
+      group: arc-public-large-amd64-runner
     outputs:
       allowed: ${{ steps.team.outputs.allowed }}
     steps:
@@ -51,7 +52,8 @@ jobs:
 
   codex:
     name: Review with Codex
-    runs-on: ubuntu-latest
+    runs-on:
+      group: arc-public-large-amd64-runner
     needs: authorize
     if: ${{ needs.authorize.outputs.allowed == 'true' && !github.event.pull_request.draft }}
     permissions:
@@ -106,7 +108,8 @@ jobs:
 
   post_feedback:
     name: Post Codex feedback
-    runs-on: ubuntu-latest
+    runs-on:
+      group: arc-public-large-amd64-runner
     needs:
       - authorize
       - codex
