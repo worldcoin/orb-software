@@ -10,7 +10,7 @@ jobs:
   clean_tmp:
     name: Delete Expired Releases
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     steps:
       - name: Delete old releases on `tmp` channel
         uses: dev-drprasad/delete-older-releases@0bf4e6748f08135170c2294f877ba7d9b633b028 # pin@v0.3.3

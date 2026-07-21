@@ -18,7 +18,7 @@ jobs:
   prepare:
     name: Prepare deployment matrix
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
     steps:

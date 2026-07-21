@@ -22,7 +22,7 @@ jobs:
   fmt_toml:
     name: TOML Format (Taplo)
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:

@@ -34,7 +34,7 @@ jobs:
   release-name:
     name: Creates the Release Name
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     outputs:
       release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
     steps:
@@ -210,7 +210,7 @@ jobs:
   release:
     name: Release
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     needs:
       - release-name
       - test

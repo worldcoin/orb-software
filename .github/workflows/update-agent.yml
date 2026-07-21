@@ -18,7 +18,7 @@ on:
 jobs:
   test:
     runs-on:
-      group: arc-public-large-amd64-runner
+      group: arc-public-xlarge-amd64-runner
     steps:
       - uses: actions/checkout@v2
       - name: Install dependencies
