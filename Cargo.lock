@@ -3722,6 +3722,9 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+dependencies = [
+ "getrandom 0.2.16",
+]
 
 [[package]]
 name = "faux"
@@ -3899,6 +3902,18 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "nanorand",
+ "spin 0.9.8",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
+dependencies = [
+ "fastrand",
+ "futures-core",
+ "futures-sink",
  "spin 0.9.8",
 ]
 
@@ -7285,7 +7300,7 @@ dependencies = [
  "color-eyre",
  "derive_more 2.1.1",
  "eyre",
- "flume",
+ "flume 0.11.1",
  "futures",
  "iroh",
  "n0-future",
@@ -7317,7 +7332,7 @@ dependencies = [
  "orb-dogd",
  "orb-endpoints",
  "orb-info",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "orb-telemetry",
  "prelude",
  "reqwest 0.12.24",
@@ -7359,7 +7374,7 @@ dependencies = [
  "dbus-launch",
  "derive_more 2.1.1",
  "eyre",
- "flume",
+ "flume 0.11.1",
  "futures-util",
  "oes",
  "orb-backend-status-dbus",
@@ -7369,7 +7384,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "orb-telemetry",
  "orb-update-agent-dbus",
  "portpicker",
@@ -7518,7 +7533,7 @@ dependencies = [
  "derive_more 2.1.1",
  "escargot",
  "faux",
- "flume",
+ "flume 0.11.1",
  "futures",
  "hex 0.4.3",
  "mockall",
@@ -7533,7 +7548,7 @@ dependencies = [
  "orb-dogd",
  "orb-info",
  "orb-secure-storage-ca",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "orb-telemetry",
  "p256 0.13.2",
  "portpicker",
@@ -7586,7 +7601,7 @@ dependencies = [
  "async-tempfile",
  "dogstatsd",
  "eyre",
- "flume",
+ "flume 0.11.1",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -7643,7 +7658,7 @@ dependencies = [
  "nusb 0.2.1",
  "orb-build-info",
  "orb-s3-helpers",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "probe-rs",
  "rand 0.8.7",
  "reqwest 0.12.24",
@@ -7701,7 +7716,7 @@ dependencies = [
  "dbus-launch",
  "dogstatsd",
  "figment",
- "flume",
+ "flume 0.11.1",
  "futures",
  "libc",
  "listenfd",
@@ -7713,7 +7728,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
  "orb-relay-test-utils",
  "orb-speed-test",
  "orb-telemetry",
@@ -7853,14 +7868,16 @@ dependencies = [
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 dependencies = [
  "bon",
  "color-eyre",
  "derive_more 2.1.1",
- "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f)",
+ "flume 0.12.0",
+ "http 1.3.1",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
  "orb-relay-test-utils",
+ "orb-security-utils 0.0.0 (git+https://github.com/worldcoin/orb-software.git?rev=188054122007ba8528413519e4335f45d781e75b)",
  "secrecy 0.10.3",
  "tokio",
  "tokio-stream",
@@ -7872,12 +7889,14 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 dependencies = [
  "blake3",
  "prost 0.14.1",
  "prost-build 0.14.1",
  "prost-types 0.14.1",
+ "schemars 0.8.22",
+ "serde",
  "tonic 0.14.2",
  "tonic-prost",
  "tonic-prost-build",
@@ -7900,12 +7919,13 @@ dependencies = [
 [[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f#301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 dependencies = [
  "async-stream",
- "flume",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=301889d17fa0c283bdbad8eb2f5659ee5effb40f)",
+ "flume 0.12.0",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
  "pollster",
+ "rcgen",
  "tokio",
  "tokio-stream",
  "tonic 0.14.2",
@@ -7973,7 +7993,7 @@ dependencies = [
  "color-eyre",
  "derive_more 2.1.1",
  "escargot",
- "flume",
+ "flume 0.11.1",
  "futures",
  "orb-build-info",
  "orb-const-concat",
@@ -7981,7 +8001,7 @@ dependencies = [
  "orb-info",
  "orb-se050",
  "orb-se050-reprovision-validate",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "orb-telemetry",
  "rand 0.8.7",
  "reqwest 0.12.24",
@@ -8054,6 +8074,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-security-utils"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-software.git?rev=188054122007ba8528413519e4335f45d781e75b#188054122007ba8528413519e4335f45d781e75b"
+dependencies = [
+ "eyre",
+ "hex-literal 0.4.1",
+ "ring",
+]
+
+[[package]]
 name = "orb-slot-ctrl"
 version = "0.4.0"
 dependencies = [
@@ -8095,7 +8125,7 @@ dependencies = [
  "orb-attest-dbus",
  "orb-build-info",
  "orb-info",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "rand 0.8.7",
  "reqwest 0.12.24",
  "serde",
@@ -8244,7 +8274,7 @@ dependencies = [
  "efivar",
  "eyre",
  "figment",
- "flume",
+ "flume 0.11.1",
  "gpt",
  "hex 0.4.3",
  "jod-thread",
@@ -8341,7 +8371,7 @@ dependencies = [
  "can-rs",
  "clap",
  "color-eyre",
- "flume",
+ "flume 0.11.1",
  "httpmock",
  "jod-thread",
  "libc",
@@ -10566,6 +10596,18 @@ dependencies = [
 
 [[package]]
 name = "schemars"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
+dependencies = [
+ "dyn-clone",
+ "schemars_derive 0.8.22",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd191f9397d57d581cddd31014772520aa448f65ef991055d7f61582c65165f"
@@ -10585,9 +10627,21 @@ dependencies = [
  "dyn-clone",
  "either",
  "ref-cast",
- "schemars_derive",
+ "schemars_derive 1.2.0",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "0.8.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32e265784ad618884abaea0600a9adf15393368d840e0222d101a072f3f7534d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -11264,7 +11318,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1db73309d2824b1a95d9e934fa2e2ed1686731926f51a077f6541cf1a3506f8f"
 dependencies = [
- "flume",
+ "flume 0.11.1",
  "futures-core",
  "tokio",
 ]
@@ -11474,7 +11528,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2d12fe70b2c1b4401038055f90f151b78208de1f9f89a7dbfd41587a10c3eea"
 dependencies = [
  "atoi",
- "flume",
+ "flume 0.11.1",
  "futures-channel",
  "futures-core",
  "futures-executor",
@@ -14283,7 +14337,7 @@ dependencies = [
  "bytes",
  "const_format",
  "flate2",
- "flume",
+ "flume 0.11.1",
  "futures",
  "git-version",
  "itertools 0.14.0",
@@ -14441,7 +14495,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b98adc618f7edb570b9333ce583934a7c63e3a619cb49666515bfc06a000d7b6"
 dependencies = [
  "async-trait",
- "flume",
+ "flume 0.11.1",
  "futures",
  "serde",
  "socket2 0.5.10",
@@ -14601,7 +14655,7 @@ checksum = "50739b4c45e0963df8377abddb74701a4b708b178590eae92f27a604e25daf44"
 dependencies = [
  "async-trait",
  "crossbeam-utils",
- "flume",
+ "flume 0.11.1",
  "lazy_static",
  "lz4_flex",
  "rand 0.8.7",
@@ -14634,7 +14688,7 @@ checksum = "9512987c13925d32d3331507c8807853d5b682ea8da94d0ba6534c7a8ace48aa"
 dependencies = [
  "async-trait",
  "const_format",
- "flume",
+ "flume 0.11.1",
  "home",
  "humantime",
  "lazy_static",

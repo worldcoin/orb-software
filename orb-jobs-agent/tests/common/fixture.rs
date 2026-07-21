@@ -160,7 +160,7 @@ impl JobAgentFixture {
 
                         clients.send(msg);
 
-                        Ack { seq }.into_res()
+                        Ack { seq, ..Default::default() }.into_res()
                     }
 
                     _ => None,
@@ -168,7 +168,8 @@ impl JobAgentFixture {
             })
             .await;
 
-        let relay_host = format!("http://{}", server.addr());
+        let relay_host = format!("https://{}", server.addr());
+        let additonal_root_ca = server.ca_cert_pem().to_owned();
         let auth = Auth::Token(Default::default());
 
         let opts = ClientOpts::entity(EntityType::Service)
@@ -180,6 +181,7 @@ impl JobAgentFixture {
             .connection_timeout(Duration::from_secs(1))
             .heartbeat(Duration::from_secs(u64::MAX))
             .ack_timeout(Duration::from_secs(1))
+            .additional_root_ca(additonal_root_ca.clone())
             .build();
 
         // this is the client used by the fleet commander
@@ -211,6 +213,7 @@ impl JobAgentFixture {
             downloads_path: tempdir.to_path_buf().join("downloads"),
             orb_name_path: "/nonexsistent/orb-name".into(),
             zenoh_port,
+            additional_root_ca: Some(additonal_root_ca),
         };
 
         let dbusd = tokio::task::spawn_blocking(|| {

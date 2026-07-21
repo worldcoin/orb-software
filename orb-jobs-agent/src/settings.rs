@@ -42,6 +42,8 @@ pub struct Settings {
     /// Path to the orb name file (configurable for testing)
     pub orb_name_path: PathBuf,
     pub zenoh_port: u16,
+
+    pub additional_root_ca: Option<String>,
 }
 
 impl Settings {
@@ -144,6 +146,7 @@ impl Settings {
             downloads_path,
             orb_name_path: PathBuf::from("/usr/persistent/orb-name"),
             zenoh_port: 7447,
+            additional_root_ca: None,
         })
     }
 }

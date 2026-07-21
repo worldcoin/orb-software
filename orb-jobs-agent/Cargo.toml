@@ -60,16 +60,16 @@ rkyv = { workspace = true, features = ["validation"] }
 
 [dependencies.orb-relay-client]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+rev = "32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 
 [dependencies.orb-relay-messages]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+rev = "32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 features = ["client"]
 
 [dependencies.orb-relay-test-utils]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "301889d17fa0c283bdbad8eb2f5659ee5effb40f"
+rev = "32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
