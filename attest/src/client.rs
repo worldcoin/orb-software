@@ -1,6 +1,7 @@
 use orb_const_concat::const_concat;
 use reqwest::Client;
 use secrecy::ExposeSecret;
+use std::time::Duration;
 use tracing::{error, info, warn};
 
 use crate::BUILD_INFO;
@@ -22,7 +23,7 @@ pub enum Error {
 /// Returns an instance of a http [`Client`] with pinned certificates.
 pub fn create() -> Client {
     let builder = orb_security_utils::reqwest::client_builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(Duration::from_secs(30))
         .user_agent(USER_AGENT);
     #[cfg(test)]
     let builder = builder.https_only(false);
