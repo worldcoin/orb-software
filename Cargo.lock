@@ -7728,7 +7728,7 @@ dependencies = [
  "orb-endpoints",
  "orb-info",
  "orb-relay-client",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474)",
  "orb-relay-test-utils",
  "orb-speed-test",
  "orb-telemetry",
@@ -7868,14 +7868,14 @@ dependencies = [
 [[package]]
 name = "orb-relay-client"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474#acd2890125eec6f47e1caa11392c3bc66883a474"
 dependencies = [
  "bon",
  "color-eyre",
  "derive_more 2.1.1",
  "flume 0.12.0",
  "http 1.3.1",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474)",
  "orb-relay-test-utils",
  "orb-security-utils 0.0.0 (git+https://github.com/worldcoin/orb-software.git?rev=188054122007ba8528413519e4335f45d781e75b)",
  "secrecy 0.10.3",
@@ -7884,22 +7884,6 @@ dependencies = [
  "tokio-util",
  "tonic 0.14.2",
  "tracing",
-]
-
-[[package]]
-name = "orb-relay-messages"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
-dependencies = [
- "blake3",
- "prost 0.14.1",
- "prost-build 0.14.1",
- "prost-types 0.14.1",
- "schemars 0.8.22",
- "serde",
- "tonic 0.14.2",
- "tonic-prost",
- "tonic-prost-build",
 ]
 
 [[package]]
@@ -7917,13 +7901,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-relay-messages"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474#acd2890125eec6f47e1caa11392c3bc66883a474"
+dependencies = [
+ "blake3",
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "schemars 0.8.22",
+ "serde",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "orb-relay-test-utils"
 version = "0.0.1"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70#32a4f0c65c8e556c8cff3ff2486c7068a0dbce70"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474#acd2890125eec6f47e1caa11392c3bc66883a474"
 dependencies = [
  "async-stream",
  "flume 0.12.0",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=32a4f0c65c8e556c8cff3ff2486c7068a0dbce70)",
+ "lazy_static",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=acd2890125eec6f47e1caa11392c3bc66883a474)",
  "pollster",
  "rcgen",
  "tokio",

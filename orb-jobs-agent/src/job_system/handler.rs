@@ -130,7 +130,6 @@ impl JobHandler {
             relay_namespace,
             target_service_id,
             auth,
-            additional_root_ca,
             ..
         } = &deps.settings;
 
@@ -144,7 +143,6 @@ impl JobHandler {
             .keep_alive_interval(Duration::from_secs(30))
             .keep_alive_timeout(Duration::from_secs(10))
             .ack_timeout(Duration::from_secs(5))
-            .maybe_additional_root_ca(additional_root_ca.clone())
             .build();
 
         info!("Connecting to relay: {:?}", relay_host);
