@@ -1,5 +1,6 @@
 use data_encoding::BASE64;
 use orb_dogd::MetricEmitter;
+use reqwest::Client;
 use ring::{digest, digest::digest};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ use tokio::{
 use tracing::{error, event, info, warn, Level};
 use url::Url;
 
-use crate::ConnectivityTracker;
+use crate::{client, ConnectivityTracker};
 
 /// Path to persistent token, don't use it directly, use `Token::from_usr_persistent()` instead
 #[cfg(test)]
@@ -203,10 +204,12 @@ pub struct Challenge {
 }
 
 impl Challenge {
-    #[tracing::instrument]
-    pub async fn request(orb_id: &str, url: &url::Url) -> Result<Self, ChallengeError> {
-        let client = crate::client::client();
-
+    #[tracing::instrument(skip(client))]
+    pub async fn request(
+        client: &Client,
+        orb_id: &str,
+        url: &url::Url,
+    ) -> Result<Self, ChallengeError> {
         let req = serde_json::json!({
             "orbId": orb_id,
         });
@@ -396,15 +399,14 @@ pub struct Token {
 }
 
 impl Token {
-    #[tracing::instrument]
+    #[tracing::instrument(skip(client))]
     pub async fn request(
+        client: &Client,
         url: &url::Url,
         orb_id: &str,
         challenge: &Challenge,
         signature: &Signature,
     ) -> Result<Self, TokenError> {
-        let client = crate::client::client();
-
         info!("requesting token from {}", url);
 
         let req = TokenRequest {
@@ -508,12 +510,14 @@ async fn get_token_inner(
     token_challenge: &url::Url,
     token_fetch: &url::Url,
 ) -> Result<Token, RefreshTokenError> {
+    let client = client::create();
+
     let challenge = retry(
         NUMBER_OF_CHALLENGE_RETRIES,
         CHALLENGE_DELAY,
         "get challenge",
         || async {
-            Challenge::request(orb_id, token_challenge)
+            Challenge::request(&client, orb_id, token_challenge)
                 .await
                 .map_err(RefreshTokenError::ChallengeError)
         },
@@ -548,7 +552,7 @@ async fn get_token_inner(
             if challenge.expired() {
                 return Err(RefreshTokenError::ChallengeExpired);
             }
-            Token::request(token_fetch, orb_id, &challenge, &signature)
+            Token::request(&client, token_fetch, orb_id, &challenge, &signature)
                 .await
                 .map_err(RefreshTokenError::TokenError)
         },
@@ -726,7 +730,9 @@ pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
         }
     };
 
-    let challenge = match Challenge::request(orb_id, &tokenchallenge_url).await {
+    let client = client::create();
+    let challenge = match Challenge::request(&client, orb_id, &tokenchallenge_url).await
+    {
         Ok(c) => c,
         Err(e) => {
             warn!("migrated key probe: challenge request failed: {e}");
@@ -751,7 +757,7 @@ pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
         }
     };
 
-    match Token::request(&token_url, orb_id, &challenge, &sig).await {
+    match Token::request(&client, &token_url, orb_id, &challenge, &sig).await {
         Ok(_) => true,
         Err(e) => {
             warn!("migrated key probe: token request failed (backend not yet activated): {e}");
@@ -774,7 +780,7 @@ pub async fn submit_proof(
     keys_challenge_url: &Url,
     keys_proof_url: &Url,
 ) -> Result<(), ProofError> {
-    let client = crate::client::client();
+    let client = crate::client::create();
 
     // 1. Get challenge nonce
     let resp = client
@@ -907,6 +913,8 @@ mod test {
     use std::os::unix::fs::PermissionsExt;
     use std::time::Duration;
 
+    use crate::client;
+
     use super::{
         ChallengeError, RefreshTokenError, SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
     };
@@ -966,9 +974,11 @@ printf dmFsaWRzaWduYXR1cmU=
         let token_challenge = base_url.join("tokenchallenge").unwrap();
 
         // 1. get challenge
-        let challenge = crate::remote_api::Challenge::request(orb_id, &token_challenge)
-            .await
-            .unwrap();
+        let client = client::create();
+        let challenge =
+            crate::remote_api::Challenge::request(&client, orb_id, &token_challenge)
+                .await
+                .unwrap();
 
         let clone_of_challenge = challenge.clone();
 
@@ -1000,6 +1010,7 @@ printf dmFsaWRzaWduYXR1cmU=
 
         // 3. get token
         let token = crate::remote_api::Token::request(
+            &client,
             &base_url.join("token").unwrap(),
             orb_id,
             &challenge,

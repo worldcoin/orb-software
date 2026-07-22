@@ -174,8 +174,12 @@ async fn wait_for_backend_reachable(orb_id: &str, auth_url: &Url) {
     let tokenchallenge_url = auth_url
         .join("tokenchallenge")
         .expect("auth_url must have a path");
+
+    let client = client::create();
+
     loop {
-        match remote_api::Challenge::request(orb_id, &tokenchallenge_url).await {
+        match remote_api::Challenge::request(&client, orb_id, &tokenchallenge_url).await
+        {
             Ok(_) | Err(remote_api::ChallengeError::ServerReturnedError(..)) => {
                 info!("backend reachable");
                 return;
@@ -280,8 +284,10 @@ async fn get_working_static_token(
     // Loop until we get confirmation from the backend that the token is valid
     // or not. In case of network errors, keep trying.
     info!("got static token {token:#?}, validating it");
+    let client = client::create();
+
     loop {
-        match crate::client::validate_token(orb_id, &token, ping_url).await {
+        match client::validate_token(&client, orb_id, &token, ping_url).await {
             Ok(true) => {
                 info!("Static token is valid");
                 return Ok(token);
