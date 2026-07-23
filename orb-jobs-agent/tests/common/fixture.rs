@@ -160,7 +160,7 @@ impl JobAgentFixture {
 
                         clients.send(msg);
 
-                        Ack { seq }.into_res()
+                        Ack { seq, ..Default::default() }.into_res()
                     }
 
                     _ => None,
@@ -168,7 +168,7 @@ impl JobAgentFixture {
             })
             .await;
 
-        let relay_host = format!("http://{}", server.addr());
+        let relay_host = format!("https://{}", server.addr());
         let auth = Auth::Token(Default::default());
 
         let opts = ClientOpts::entity(EntityType::Service)
