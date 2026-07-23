@@ -79,9 +79,9 @@ mod test {
             assert_eq!(super::default_backend(), Backend::Staging);
             std::env::set_var(
                 orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
-                "analysis",
+                "stage",
             );
-            assert_eq!(super::default_backend(), Backend::Analysis);
+            assert_eq!(super::default_backend(), Backend::Staging);
             std::env::set_var(
                 orb_endpoints::backend::ORB_BACKEND_ENV_VAR_NAME,
                 "SOME RANDOM STRING",
