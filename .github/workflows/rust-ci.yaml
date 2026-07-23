@@ -65,7 +65,15 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
-          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+          # Share one cache across all Rust jobs (clippy/doc/test/build) instead
+          # of a separate per-job cache. GitHub's 10GB/repo cache budget can't
+          # hold 5 multi-GB target caches, so per-job caches evict each other and
+          # every run misses. Swatinem still appends runner OS/arch, so the Test
+          # matrix stays isolated per platform.
+          shared-key: "rust-ci-${{ hashFiles('**/*.nix', 'flake.lock') }}"
+          # Only write the cache from main; PR runs restore-only. Prevents each PR
+          # run from saving (and evicting) caches, keeping main's cache warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Print environment
         run: |
           uname -a
@@ -96,7 +104,15 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
-          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+          # Share one cache across all Rust jobs (clippy/doc/test/build) instead
+          # of a separate per-job cache. GitHub's 10GB/repo cache budget can't
+          # hold 5 multi-GB target caches, so per-job caches evict each other and
+          # every run misses. Swatinem still appends runner OS/arch, so the Test
+          # matrix stays isolated per platform.
+          shared-key: "rust-ci-${{ hashFiles('**/*.nix', 'flake.lock') }}"
+          # Only write the cache from main; PR runs restore-only. Prevents each PR
+          # run from saving (and evicting) caches, keeping main's cache warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Print environment
         run: |
           uname -a
@@ -132,7 +148,15 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
-          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+          # Share one cache across all Rust jobs (clippy/doc/test/build) instead
+          # of a separate per-job cache. GitHub's 10GB/repo cache budget can't
+          # hold 5 multi-GB target caches, so per-job caches evict each other and
+          # every run misses. Swatinem still appends runner OS/arch, so the Test
+          # matrix stays isolated per platform.
+          shared-key: "rust-ci-${{ hashFiles('**/*.nix', 'flake.lock') }}"
+          # Only write the cache from main; PR runs restore-only. Prevents each PR
+          # run from saving (and evicting) caches, keeping main's cache warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Print environment
         run: |
           uname -a
@@ -173,7 +197,15 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
-          key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
+          # Share one cache across all Rust jobs (clippy/doc/test/build) instead
+          # of a separate per-job cache. GitHub's 10GB/repo cache budget can't
+          # hold 5 multi-GB target caches, so per-job caches evict each other and
+          # every run misses. Swatinem still appends runner OS/arch, so the Test
+          # matrix stays isolated per platform.
+          shared-key: "rust-ci-${{ hashFiles('**/*.nix', 'flake.lock') }}"
+          # Only write the cache from main; PR runs restore-only. Prevents each PR
+          # run from saving (and evicting) caches, keeping main's cache warm.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Print environment
         run: |
           uname -a
