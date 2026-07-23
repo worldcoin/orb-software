@@ -19,7 +19,9 @@ env:
   CI_NIXOS_HOSTNAMES: ryan-worldcoin-hil worldcoin-hil-munich-0 worldcoin-hil-munich-1 worldcoin-hil-munich-2 worldcoin-hil-jabil-0
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # PRs coalesce per-PR (and cancel superseded runs); every push/tag/release
+  # gets a unique group so it is never queued-out or cancelled under load.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   # Only cancel superseded PR runs; never cancel main/prod/tag/release builds.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
