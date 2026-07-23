@@ -1,8 +1,7 @@
-use std::sync::OnceLock;
-
 use orb_const_concat::const_concat;
 use reqwest::Client;
 use secrecy::ExposeSecret;
+use std::time::Duration;
 use tracing::{error, info, warn};
 
 use crate::BUILD_INFO;
@@ -21,17 +20,14 @@ pub enum Error {
     ConnectionFailed(#[source] reqwest::Error),
 }
 
-/// Returns a shared instance of a http [`Client`] with pinned certificates.
-pub fn client() -> &'static Client {
-    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        let builder = orb_security_utils::reqwest::client_builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .user_agent(USER_AGENT);
-        #[cfg(test)]
-        let builder = builder.https_only(false);
-        builder.build().expect("Failed to build client")
-    })
+/// Returns an instance of a http [`Client`] with pinned certificates.
+pub fn create() -> Client {
+    let builder = orb_security_utils::reqwest::client_builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent(USER_AGENT);
+    #[cfg(test)]
+    let builder = builder.https_only(false);
+    builder.build().expect("Failed to build client")
 }
 
 /// Contact the backend to verify that the token is valid.
@@ -43,11 +39,12 @@ pub fn client() -> &'static Client {
 ///
 /// If failed to connect to the backend.
 pub async fn validate_token(
+    client: &Client,
     orb_id: &str,
     token: &crate::remote_api::Token,
     ping_url: &url::Url,
 ) -> Result<bool, Error> {
-    let resp = client()
+    let resp = client
         .get(ping_url.clone())
         .basic_auth(orb_id, Some(token.token.expose_secret()))
         .send()
