@@ -175,9 +175,8 @@ async fn wait_for_backend_reachable(orb_id: &str, auth_url: &Url) {
         .join("tokenchallenge")
         .expect("auth_url must have a path");
 
-    let client = client::create();
-
     loop {
+        let client = client::create();
         match remote_api::Challenge::request(&client, orb_id, &tokenchallenge_url).await
         {
             Ok(_) | Err(remote_api::ChallengeError::ServerReturnedError(..)) => {
