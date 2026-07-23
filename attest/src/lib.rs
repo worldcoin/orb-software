@@ -284,9 +284,9 @@ async fn get_working_static_token(
     // Loop until we get confirmation from the backend that the token is valid
     // or not. In case of network errors, keep trying.
     info!("got static token {token:#?}, validating it");
-    let client = client::create();
 
     loop {
+        let client = client::create();
         match client::validate_token(&client, orb_id, &token, ping_url).await {
             Ok(true) => {
                 info!("Static token is valid");
