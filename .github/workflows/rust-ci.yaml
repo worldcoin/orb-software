@@ -21,6 +21,13 @@ on:
     tags:
       - '**'
 
+concurrency:
+  # PRs coalesce per-PR (and cancel superseded runs); every push/tag/release
+  # gets a unique group so it is never queued-out or cancelled under load.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  # Only cancel superseded PR runs; never cancel main/prod/tag/release builds.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   fmt:
     name: Format
@@ -47,7 +54,7 @@ jobs:
 
   clippy:
     name: Clippy
-    runs-on: public-ubuntu-24.04-32core
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -112,7 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ public-ubuntu-24.04-32core ]
+        platform: [ public-ubuntu-24.04-16core ]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
@@ -154,7 +161,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: public-ubuntu-24.04-32core
+    runs-on: public-ubuntu-24.04-8core
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
