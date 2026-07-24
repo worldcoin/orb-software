@@ -10,6 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+clap = { workspace = true, optional = true }
 color-eyre.workspace = true
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
@@ -20,8 +21,9 @@ tokio.workspace = true
 tracing-subscriber.workspace = true
 
 [features]
+default = ["connectivity", "dbus", "future", "logging"]
 connectivity = ["dep:tokio"]
 dbus = ["dep:zbus"]
-default = ["connectivity", "dbus", "future", "logging"]
 future = []
 logging = ["dep:tracing"]
+applet = ["dep:clap"]

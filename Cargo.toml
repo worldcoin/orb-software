@@ -27,6 +27,7 @@ members = [
 	"mcu-util",
 	"oes",
 	"optee/secure-storage/ca",
+	"orb-bin",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
 	"orb-connd",
@@ -35,6 +36,7 @@ members = [
 	"orb-dogd",
 	"orb-info",
 	"orb-jobs-agent",
+	"orb-monitoring-auth",
 	"ota-backend",
 	"pcp-defs/rust",
 	"prelude",
@@ -203,6 +205,7 @@ orb-dogd.path = "orb-dogd"
 orb-endpoints.path = "endpoints"
 orb-header-parsing.path = "header-parsing"
 orb-info = { path = "orb-info", default-features = false }
+orb-monitoring-auth.path = "orb-monitoring-auth"
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"
 orb-s3-helpers.path = "s3-helpers"
