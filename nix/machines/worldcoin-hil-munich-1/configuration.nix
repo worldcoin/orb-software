@@ -18,6 +18,11 @@
 
   services.udev.packages = [ pkgs.android-udev-rules ];
 
+  services.displayManager.autoLogin = {
+    enable = true;
+    user = "worldcoin";
+  };
+
   # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
   # `plugdev` USB access above covers the raw usbfs nodes it needs.
   environment.systemPackages = [
