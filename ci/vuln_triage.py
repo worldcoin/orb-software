@@ -206,16 +206,59 @@ def pick_target(findings, current):
 
 
 def dedup(findings):
-    merged = {}
+    grouped = {}
     for f in findings:
-        key = (f.id, f.package, f.version)
-        if key in merged:
-            merged[key].platforms = sorted(
-                set(merged[key].platforms) | set(f.platforms)
-            )
-        else:
-            merged[key] = f
-    return list(merged.values())
+        artifact_key = (f.package, f.version, f.pkg_type)
+        components = grouped.setdefault(artifact_key, [])
+        finding_ids = set(f.all_ids)
+        overlapping = [
+            index
+            for index, (component_ids, _) in enumerate(components)
+            if component_ids & finding_ids
+        ]
+
+        merged_finding = f
+        for index in reversed(overlapping):
+            component_ids, component = components.pop(index)
+            finding_ids.update(component_ids)
+            merged_finding = _merge_findings(component, merged_finding)
+        components.append((finding_ids, merged_finding))
+
+    return [finding for components in grouped.values() for _, finding in components]
+
+
+def _merge_findings(left, right):
+    ids = set(left.all_ids) | set(right.all_ids)
+    canonical_id = min(ids, key=_advisory_id_key)
+    left.id = canonical_id
+    left.aliases = sorted(ids - {canonical_id})
+    left.severity = max(
+        (left.severity, right.severity), key=lambda severity: SEVERITY_RANK[severity]
+    )
+    left.cvss = max(left.cvss, right.cvss)
+    left.fixes = sorted(set(left.fixes) | set(right.fixes), key=_vkey)
+    if (left.fix_state == "fixed" or right.fix_state == "fixed") and left.fixes:
+        left.fix_state = "fixed"
+    elif left.fix_state == "unknown":
+        left.fix_state = right.fix_state
+    left.url = left.url or right.url
+    left.platforms = sorted(set(left.platforms) | set(right.platforms))
+    return left
+
+
+def _advisory_id_key(advisory_id):
+    prefixes = ("CVE-", "GHSA-", "RUSTSEC-", "GO-")
+    return (
+        next(
+            (
+                rank
+                for rank, prefix in enumerate(prefixes)
+                if advisory_id.upper().startswith(prefix)
+            ),
+            len(prefixes),
+        ),
+        advisory_id,
+    )
 
 
 def build_item(lane, package, findings, kev_ids):
