@@ -224,11 +224,7 @@ def dedup(findings):
             merged_finding = _merge_findings(component, merged_finding)
         components.append((finding_ids, merged_finding))
 
-    return [
-        finding
-        for components in grouped.values()
-        for _, finding in components
-    ]
+    return [finding for components in grouped.values() for _, finding in components]
 
 
 def _merge_findings(left, right):
@@ -241,10 +237,7 @@ def _merge_findings(left, right):
     )
     left.cvss = max(left.cvss, right.cvss)
     left.fixes = sorted(set(left.fixes) | set(right.fixes), key=_vkey)
-    if (
-        (left.fix_state == "fixed" or right.fix_state == "fixed")
-        and left.fixes
-    ):
+    if (left.fix_state == "fixed" or right.fix_state == "fixed") and left.fixes:
         left.fix_state = "fixed"
     elif left.fix_state == "unknown":
         left.fix_state = right.fix_state
