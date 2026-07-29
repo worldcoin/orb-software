@@ -39,6 +39,7 @@ let
     pkgs.android-tools
     qdl-rs
   ];
+  systemPath = "/run/wrappers/bin:/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 in
 {
   options.worldcoin.jenkinsAgent = {
@@ -144,7 +145,7 @@ in
         RestartSec = 10;
         Environment = [
           "LD_LIBRARY_PATH=${nativeLibraryPath}"
-          "PATH=/run/wrappers/bin:${lib.makeBinPath servicePath}"
+          "PATH=${systemPath}:${lib.makeBinPath servicePath}"
         ];
         # Expose secrets at $CREDENTIALS_DIRECTORY/<id> without leaking them
         # into the process table or the Nix store.
