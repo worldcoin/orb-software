@@ -12,6 +12,7 @@ let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
   unitPattern = "^github-runner-.*\\.service$";
+  nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   zorb = pkgs.callPackage ../packages/zorb.nix { };
   # HIL orchestrator client binaries built from the orb-internal flake.
@@ -191,9 +192,21 @@ in
 
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
+
+      # Orb Mini / Qualcomm EDL
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # Orb Mini normal boot USB
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="90db", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # Qualcomm fastboot
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="d00d", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # USB relay board serial interface
+      SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0660", GROUP="dialout", TAG+="uaccess"
     '';
 
-    environment.variables.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.systemd ];
+    environment.variables.LD_LIBRARY_PATH = nativeLibraryPath;
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
@@ -386,6 +399,7 @@ in
           Environment = [
             "PATH=/run/wrappers/bin:/run/current-system/sw/bin" # fixes missing sudo
             "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+            "LD_LIBRARY_PATH=${nativeLibraryPath}"
           ];
           # Override the NixOS github-runner module's UMask=0066 so artifacts
           # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.
