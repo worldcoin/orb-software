@@ -1,6 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options,
 {
 	"name": "Ubuntu",
+	"privileged": true,
 	"build": {
 		"dockerfile": "Dockerfile",
 		"context": "."

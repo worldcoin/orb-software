@@ -13,15 +13,15 @@ use std::{
     process::Command,
 };
 
+use fatfs::{FileSystem, FsOptions};
 use flate2::read::GzDecoder;
 use orb_info::orb_os_release::OrbOsPlatform;
-use sys_mount::{Mount, MountFlags, UnmountFlags};
 use thiserror::Error;
 
 const VERITY_VARIABLES_PATH: &str = "verity_variables.env";
 
 #[derive(Debug, Error)]
-pub(crate) enum VerityError {
+pub enum VerityError {
     #[error("invalid verity metadata")]
     InvalidConfig,
     #[error("block device does not exist: {}", .0.display())]
@@ -30,44 +30,46 @@ pub(crate) enum VerityError {
     ReadSource(#[source] io::Error),
     #[error("failed to run `veritysetup verify`: {0}")]
     Veritysetup(#[source] io::Error),
+    #[error("verity validation on `{0}` failed: {1}")]
+    VerificationFailed(PathBuf, String),
 }
 
 /// `validate_verity` executes an eager integrity check on the rootfs of the device against the
 /// dm-verity hash tree embedded to the relevant partitions during the build process of `orb-os`.
-pub(crate) fn validate_verity(platform: OrbOsPlatform) -> Result<(), VerityError> {
-    if platform == OrbOsPlatform::Pearl {
-        return Ok(());
-    }
-
-    let devices = match platform {
+pub fn validate_verity(
+    platform: OrbOsPlatform,
+    source_root: &Path,
+) -> Result<(), VerityError> {
+    match platform {
         OrbOsPlatform::Diamond => {
-            let cmdline = std::fs::File::open("/proc/cmdline")
+            let cmdline = std::fs::File::open(source_root.join("proc/cmdline"))
                 .map_err(VerityError::ReadSource)?;
-            vec![DeviceConfig::from_cmdline(
-                cmdline,
-                Path::new("/dev/disk/by-partlabel/SYSTEM"),
-            )?]
-        }
-        OrbOsPlatform::Pearl => DeviceConfig::from_initrd(
-            // These are pretty much __set in stone__
-            // TODO: consider fetching the maps dynamically
-            // because this looks somewhat ugly
-            Path::new("/dev/disk/by-partlabel/APP"),
-            &[
-                "/dev/disk/by-partlabel/AI_LAYER",
-                "/dev/disk/by-partlabel/BASE_LAYER",
-                "/dev/disk/by-partlabel/CACHE_LAYER",
-                "/dev/disk/by-partlabel/CUDA_LAYER",
-                "/dev/disk/by-partlabel/LFT_LAYER",
-                "/dev/disk/by-partlabel/PACKAGES_LAYER",
-                "/dev/disk/by-partlabel/SECURITY_LAYER",
-                "/dev/disk/by-partlabel/SOFTWARE_LAYER",
-                "/dev/disk/by-partlabel/SYSTEM_LAYER",
-            ],
-        )?,
-    };
+            let device = source_root.join("dev/disk/by-partlabel/SYSTEM");
 
-    devices.iter().try_for_each(DeviceConfig::validate)
+            DeviceConfig::from_cmdline(cmdline, &device)?.validate()
+        }
+        OrbOsPlatform::Pearl => {
+            // These are pretty much __"set in stone"__
+            // no real reason the fetch them dynamically
+            // other than for further testing infrastructure
+            let app = source_root.join("dev/disk/by-partlabel/APP");
+            let devices = [
+                source_root.join("dev/disk/by-partlabel/AI_LAYER"),
+                source_root.join("dev/disk/by-partlabel/BASE_LAYER"),
+                source_root.join("dev/disk/by-partlabel/CACHE_LAYER"),
+                source_root.join("dev/disk/by-partlabel/CUDA_LAYER"),
+                source_root.join("dev/disk/by-partlabel/LFT_LAYER"),
+                source_root.join("dev/disk/by-partlabel/PACKAGES_LAYER"),
+                source_root.join("dev/disk/by-partlabel/SECURITY_LAYER"),
+                source_root.join("dev/disk/by-partlabel/SOFTWARE_LAYER"),
+                source_root.join("dev/disk/by-partlabel/SYSTEM_LAYER"),
+            ];
+            let device_paths = devices.each_ref().map(PathBuf::as_path);
+            let devices = DeviceConfig::from_initrd(&app, &device_paths)?;
+
+            devices.iter().try_for_each(DeviceConfig::validate)
+        }
+    }
 }
 
 struct DeviceConfig<'a> {
@@ -94,11 +96,10 @@ impl<'a> DeviceConfig<'a> {
             .map_err(VerityError::Veritysetup)?;
 
         if !output.status.success() {
-            return Err(VerityError::Veritysetup(io::Error::other(format!(
-                "exited with {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            ))));
+            return Err(VerityError::VerificationFailed(
+                self.device.into(),
+                String::from_utf8_lossy(&output.stderr).to_string(),
+            ));
         }
 
         Ok(())
@@ -129,30 +130,24 @@ impl<'a> DeviceConfig<'a> {
     }
 
     fn from_initrd(
-        app_device: &Path,
-        devices: &'a [&str],
+        source: &Path,
+        devices: &'a [&'a Path],
     ) -> Result<Vec<Self>, VerityError> {
-        let mount_point = tempfile::tempdir().map_err(VerityError::ReadSource)?;
-        let mut initrd = Vec::new();
-        {
-            let _mount = Mount::builder()
-                .fstype("vfat")
-                .flags(
-                    MountFlags::RDONLY
-                        | MountFlags::NOEXEC
-                        | MountFlags::NODEV
-                        | MountFlags::NOSUID,
-                )
-                .mount_autodrop(app_device, mount_point.path(), UnmountFlags::empty())
-                .map_err(VerityError::ReadSource)?;
+        let filesystem = FileSystem::new(
+            std::fs::File::open(source).map_err(VerityError::ReadSource)?,
+            FsOptions::new().update_accessed_date(false),
+        )
+        .map_err(VerityError::ReadSource)?;
 
-            let initrd_fp =
-                std::fs::File::open(mount_point.path().join("app/boot/initrd"))
-                    .map_err(VerityError::ReadSource)?;
-            GzDecoder::new(initrd_fp)
-                .read_to_end(&mut initrd)
-                .map_err(VerityError::ReadSource)?;
-        }
+        let mut initrd = Vec::new();
+        GzDecoder::new(
+            filesystem
+                .root_dir()
+                .open_file("app/boot/initrd")
+                .map_err(VerityError::ReadSource)?,
+        )
+        .read_to_end(&mut initrd)
+        .map_err(VerityError::ReadSource)?;
 
         let verity_variables = cpio_reader::iter_files(&initrd)
             .find(|entry| entry.name() == VERITY_VARIABLES_PATH)
@@ -182,13 +177,14 @@ fn cmdline_value<'a>(cmdline: &'a str, name: &str) -> Result<&'a str, VerityErro
 
 fn parse_verity_variables<'a>(
     variables: &str,
-    devices: &'a [&str],
+    devices: &'a [&'a Path],
 ) -> Result<Vec<DeviceConfig<'a>>, VerityError> {
     devices
         .iter()
         .map(|device| {
             let layer = device
-                .strip_prefix("/dev/disk/by-partlabel/")
+                .file_name()
+                .and_then(|name| name.to_str())
                 .and_then(|name| name.strip_suffix("_LAYER"))
                 .ok_or(VerityError::InvalidConfig)?;
 
@@ -206,7 +202,7 @@ fn parse_verity_variables<'a>(
                 .map_err(|_| VerityError::InvalidConfig)?;
 
             Ok(DeviceConfig {
-                device: Path::new(device),
+                device,
                 root_hash: root_hash_bytes,
                 data_blocks,
                 hash_offset,
@@ -232,9 +228,7 @@ mod tests {
     use super::*;
 
     const DIAMOND_CMDLINE: &str =
-        "root=/dev/mapper/root net.ifnames=0 systemd.setenv=CURRENT_BOOT_SLOT=b \
-         systemd.hostname=orb-6E3BE65C systemd.setenv=ORB_ID=6E3BE65C \
-         VERITY_ROOT_HASH=1bb6ed665009f74c428725aa817b7b93244facfa778b41edb453c802025cf636 \
+        "root=/dev/mapper/root VERITY_ROOT_HASH=1bb6ed665009f74c428725aa817b7b93244facfa778b41edb453c802025cf636 \
          VERITY_DATA_BLOCKS=1351936 VERITY_HASH_OFFSET=5537529856";
 
     #[test]
@@ -268,14 +262,15 @@ mod tests {
 
     #[test]
     fn parses_verity_variables() -> Result<(), VerityError> {
+        let devices = [Path::new("/dev/disk/by-partlabel/SYSTEM_LAYER")];
         let config = parse_verity_variables(
             "export SYSTEM_VERITY_HASH='55ecce07f56e4ac7156b56f5583b6ade8341eff9ec5b2178e1ebcfc036a48c84'\n\
              export SYSTEM_DATA_BLOCKS='13137'\n\
              export SYSTEM_HASH_OFFSET='53809152'",
-            &["/dev/disk/by-partlabel/SYSTEM_LAYER"],
+            &devices,
         )?
         .pop()
-        .ok_or(VerityError::InvalidConfig)?;
+            .ok_or(VerityError::InvalidConfig)?;
 
         assert_eq!(
             hex::encode(config.root_hash),

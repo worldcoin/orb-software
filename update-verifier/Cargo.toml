@@ -20,6 +20,7 @@ can-rs.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 cpio_reader = "0.1.2"
+fatfs = { version = "0.3.6", default-features = false, features = ["std", "alloc"] }
 flate2.workspace = true
 flume = "0.11.0"
 hex.workspace = true
@@ -33,9 +34,7 @@ orb-telemetry.workspace = true
 polling = "2.2.0"
 prost = "0.12.6"
 semver = "1.0.22"
-sys-mount = { version = "3.1.0", default-features = false }
 tap = "1.0.1"
-tempfile.workspace = true
 thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 zbus.workspace = true
@@ -55,6 +54,7 @@ httpmock = "0.7"
 prost-build = "0.12.6"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+tempfile.workspace = true
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]

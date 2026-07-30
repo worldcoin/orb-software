@@ -1,5 +1,5 @@
 //! The update verifier crate provides methods to check the system health of the Orb.
-mod verity;
+pub mod verity;
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -11,7 +11,7 @@ use eyre::{bail, eyre};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_info::orb_os_release::OrbOsRelease;
 use orb_slot_ctrl::OrbSlotCtrl;
-use std::process::Command;
+use std::{path::Path, process::Command};
 use tracing::{error, info, instrument, warn};
 
 #[allow(missing_docs)]
@@ -53,7 +53,7 @@ pub fn run() -> eyre::Result<()> {
     }
 
     // validate eagerly rootfs integrity
-    verity::validate_verity(platform)?;
+    verity::validate_verity(platform, Path::new("/"))?;
 
     info!("Marking the current slot as OK");
     orb_slot_ctrl.mark_current_slot_ok()?;
