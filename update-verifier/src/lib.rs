@@ -1,4 +1,5 @@
 //! The update verifier crate provides methods to check the system health of the Orb.
+mod verity;
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -37,8 +38,10 @@ pub fn run() -> eyre::Result<()> {
     let _args = Cli::parse();
 
     let os_release = OrbOsRelease::read_blocking()?;
-    let orb_slot_ctrl = OrbSlotCtrl::new("/", os_release.orb_os_platform_type)?;
+    let platform = os_release.orb_os_platform_type;
+    let orb_slot_ctrl = OrbSlotCtrl::new("/", platform)?;
 
+    // validate MCU versions against `/etc/os-release`
     let result = get_mcu_util_info()
         .and_then(|mcu_info| check_mcu_versions(&mcu_info, os_release));
 
@@ -48,6 +51,9 @@ pub fn run() -> eyre::Result<()> {
     } else {
         info!("mcu version check OK");
     }
+
+    // validate eagerly rootfs integrity
+    verity::validate_verity(platform)?;
 
     info!("Marking the current slot as OK");
     orb_slot_ctrl.mark_current_slot_ok()?;
@@ -71,6 +77,7 @@ pub fn get_mcu_util_info() -> Result<String, Error> {
 
     Ok(String::from_utf8_lossy(&mcu_util_output.stdout).to_string())
 }
+
 pub(crate) fn check_mcu_versions(
     stdout: &str,
     os_release: OrbOsRelease,

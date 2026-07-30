@@ -19,7 +19,10 @@ rust-version.workspace = true
 can-rs.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
+cpio_reader = "0.1.2"
+flate2.workspace = true
 flume = "0.11.0"
+hex.workspace = true
 jod-thread = "0.1.2"
 libc.workspace = true
 orb-build-info.workspace = true
@@ -30,7 +33,9 @@ orb-telemetry.workspace = true
 polling = "2.2.0"
 prost = "0.12.6"
 semver = "1.0.22"
+sys-mount = { version = "3.1.0", default-features = false }
 tap = "1.0.1"
+tempfile.workspace = true
 thiserror = { workspace = true, features = ["std"] }
 tracing.workspace = true
 zbus.workspace = true

@@ -2457,6 +2457,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpio_reader"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5793d74f50cf1460a969f028d40963d8d6e01ebae049dea976e944335c7df492"
+dependencies = [
+ "bitflags 2.10.0",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8371,7 +8380,10 @@ dependencies = [
  "can-rs",
  "clap",
  "color-eyre",
+ "cpio_reader",
+ "flate2",
  "flume 0.11.1",
+ "hex 0.4.3",
  "httpmock",
  "jod-thread",
  "libc",
@@ -8387,7 +8399,9 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "sys-mount",
  "tap",
+ "tempfile",
  "thiserror 2.0.17",
  "tracing",
  "zbus",
@@ -11272,6 +11286,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "smart-default"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eb01866308440fc64d6c44d9e86c5cc17adfe33c4d6eed55da9145044d0ffc1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "snafu"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11826,6 +11851,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "sys-mount"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d361f5431256ea04c657c0dce767ad95e24fb054d99f0b8a9275cb1c9ea14bfb"
+dependencies = [
+ "bitflags 2.10.0",
+ "libc",
+ "smart-default",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
