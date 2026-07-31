@@ -193,17 +193,6 @@ in
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
 
-      # Orb Mini / Qualcomm EDL
-      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-
-      # Orb Mini normal boot USB
-      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="90db", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-
-      # Qualcomm fastboot
-      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="d00d", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-
-      # USB relay board serial interface
-      SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0660", GROUP="dialout", TAG+="uaccess"
     '';
 
     environment.variables.LD_LIBRARY_PATH = nativeLibraryPath;
