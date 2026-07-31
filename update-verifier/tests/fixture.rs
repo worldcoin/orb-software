@@ -113,9 +113,9 @@ impl DiamondFixture {
     // metadata instead of reading const values
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let fixture = tempfile::tempdir().unwrap();
-        let cmdline = fixture.path().join("proc/cmdline");
-        let image = fixture
+        let tempdir = tempfile::tempdir().unwrap();
+        let cmdline = tempdir.path().join("proc/cmdline");
+        let image = tempdir
             .path()
             .join("dev/disk/by-partlabel")
             .join(DIAMOND_IMAGE.label);
@@ -132,8 +132,8 @@ impl DiamondFixture {
         .unwrap();
 
         Self {
-            source_root: fixture.path().to_owned(),
-            _tempdir: fixture,
+            source_root: tempdir.path().to_owned(),
+            _tempdir: tempdir,
         }
     }
 
@@ -151,8 +151,8 @@ pub struct PearlFixture {
 impl PearlFixture {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let fixture = tempfile::tempdir().unwrap();
-        let images = fixture.path().join("dev/disk/by-partlabel");
+        let tempdir = tempfile::tempdir().unwrap();
+        let images = tempdir.path().join("dev/disk/by-partlabel");
         fs::create_dir_all(&images).unwrap();
 
         let mut variables = String::new();
@@ -168,10 +168,10 @@ impl PearlFixture {
             ));
         }
 
-        let variables_path = fixture.path().join("verity_variables.env");
+        let variables_path = tempdir.path().join("verity_variables.env");
         fs::write(&variables_path, variables).unwrap();
         let mut cpio = Command::new("cpio")
-            .current_dir(fixture.path())
+            .current_dir(tempdir.path())
             .args(["--quiet", "--create", "--format=newc"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -185,7 +185,7 @@ impl PearlFixture {
         let cpio = cpio.wait_with_output().unwrap();
         assert!(cpio.status.success());
 
-        let initrd_path = fixture.path().join("initrd");
+        let initrd_path = tempdir.path().join("initrd");
         let mut initrd = GzEncoder::new(
             fs::File::create(&initrd_path).unwrap(),
             Compression::default(),
@@ -221,8 +221,8 @@ impl PearlFixture {
             .success());
 
         Self {
-            source_root: fixture.path().to_owned(),
-            _tempdir: fixture,
+            source_root: tempdir.path().to_owned(),
+            _tempdir: tempdir,
         }
     }
 
