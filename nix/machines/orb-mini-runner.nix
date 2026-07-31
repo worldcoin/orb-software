@@ -1,0 +1,51 @@
+# NixOS configuration shared by Orb Mini HIL runners.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  qdl-rs = pkgs.callPackage ../packages/qdl-rs.nix { };
+  runnerUsers = [
+    "worldcoin"
+    "gh-runner-user"
+  ]
+  ++ lib.optional config.worldcoin.jenkinsAgent.enable "jenkins-agent-user";
+in
+{
+  config = lib.mkIf (config.worldcoin.orbPlatform == "mini") {
+    services.udev.packages = [ pkgs.android-udev-rules ];
+
+    services.udev.extraRules = ''
+      # Qualcomm EDL (Emergency Download) mode
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # Orb Mini normal boot / ADB mode
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="90db", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # Qualcomm fastboot
+      SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="d00d", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+      # USB relay board serial interface
+      SUBSYSTEM=="tty", KERNEL=="ttyACM*", MODE="0660", GROUP="dialout", TAG+="uaccess"
+    '';
+
+    environment.systemPackages = [
+      qdl-rs
+      pkgs.android-tools
+    ];
+
+    worldcoin.extraPythonPackages = with pkgs.python312Packages; [
+      boto3
+      pyudev
+    ];
+
+    users.users = lib.genAttrs runnerUsers (_: {
+      extraGroups = [
+        "plugdev"
+        "dialout"
+      ];
+    });
+  };
+}
