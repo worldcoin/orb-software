@@ -52,6 +52,12 @@ in
       flashingRigPython
       qdl-rs
       pkgs.android-tools
+      pkgs.dejavu_fonts
+    ];
+
+    systemd.tmpfiles.rules = [
+      "d /usr/share/fonts/truetype/dejavu 0755 root root - -"
+      "L+ /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf - - - - ${pkgs.dejavu_fonts}/share/fonts/truetype/DejaVuSans.ttf"
     ];
 
     worldcoin.extraPythonPackages = with pkgs.python312Packages; [
