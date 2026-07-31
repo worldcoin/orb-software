@@ -21,6 +21,11 @@ let
 in
 {
   config = lib.mkIf (config.worldcoin.orbPlatform == "mini") {
+    services.displayManager.autoLogin = {
+      enable = true;
+      user = "worldcoin";
+    };
+
     services.udev.packages = [ pkgs.android-udev-rules ];
 
     services.udev.extraRules = ''
