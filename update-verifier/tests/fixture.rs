@@ -207,14 +207,7 @@ impl PearlFixture {
         assert!(Command::new("mmd")
             .args(["-i"])
             .arg(&app_image)
-            .arg("::app")
-            .status()
-            .unwrap()
-            .success());
-        assert!(Command::new("mmd")
-            .args(["-i"])
-            .arg(&app_image)
-            .arg("::app/boot")
+            .arg("::boot")
             .status()
             .unwrap()
             .success());
@@ -222,7 +215,7 @@ impl PearlFixture {
             .args(["-i"])
             .arg(&app_image)
             .arg(&initrd_path)
-            .arg("::app/boot/initrd")
+            .arg("::boot/initrd")
             .status()
             .unwrap()
             .success());

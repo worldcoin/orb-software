@@ -169,7 +169,7 @@ impl<'a> DeviceConfig<'a> {
         GzDecoder::new(
             filesystem
                 .root_dir()
-                .open_file("app/boot/initrd")
+                .open_file("boot/initrd")
                 .map_err(VerityError::ReadSource)?,
         )
         .read_to_end(&mut initrd)
