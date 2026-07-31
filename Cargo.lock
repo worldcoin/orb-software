@@ -2457,6 +2457,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpio_reader"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5793d74f50cf1460a969f028d40963d8d6e01ebae049dea976e944335c7df492"
+dependencies = [
+ "bitflags 2.10.0",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3723,6 +3732,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 dependencies = [
  "getrandom 0.2.16",
+]
+
+[[package]]
+name = "fatfs"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05669f8e7e2d7badc545c513710f0eba09c2fbef683eb859fd79c46c355048e0"
+dependencies = [
+ "bitflags 1.3.2",
+ "byteorder",
+ "log",
 ]
 
 [[package]]
@@ -8371,11 +8391,16 @@ dependencies = [
  "can-rs",
  "clap",
  "color-eyre",
+ "cpio_reader",
+ "fatfs",
+ "flate2",
  "flume 0.11.1",
+ "hex 0.4.3",
  "httpmock",
  "jod-thread",
  "libc",
  "orb-build-info",
+ "orb-dogd",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-slot-ctrl",
@@ -8388,6 +8413,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tap",
+ "tempfile",
  "thiserror 2.0.17",
  "tracing",
  "zbus",
