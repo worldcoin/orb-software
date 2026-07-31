@@ -12,7 +12,7 @@
 let
   cfg = config.worldcoin.jenkinsAgent;
   agentUser = "jenkins-agent-user";
-  nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
+  udevLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   python = pkgs.python312.withPackages (
     ps:
     with ps;
@@ -144,7 +144,7 @@ in
         Restart = "always";
         RestartSec = 10;
         Environment = [
-          "LD_LIBRARY_PATH=${nativeLibraryPath}"
+          "LD_LIBRARY_PATH=${udevLibraryPath}"
           "PATH=${systemPath}:${lib.makeBinPath servicePath}"
         ];
         # Expose secrets at $CREDENTIALS_DIRECTORY/<id> without leaking them

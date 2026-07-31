@@ -14,7 +14,7 @@ let
     ]
   );
   flashingRigPath = "%h/orb-mini-utils/flashing-rig";
-  nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
+  udevLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   flashingRigPathEnv = lib.makeBinPath [
     pkgs.android-tools
     qdl-rs
@@ -85,7 +85,7 @@ in
         RestartSec = 5;
         Environment = [
           "DISPLAY=:0"
-          "LD_LIBRARY_PATH=${nativeLibraryPath}"
+          "LD_LIBRARY_PATH=${udevLibraryPath}"
           "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${flashingRigPathEnv}"
         ];
       };

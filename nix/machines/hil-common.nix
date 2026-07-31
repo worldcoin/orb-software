@@ -12,7 +12,7 @@ let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
   unitPattern = "^github-runner-.*\\.service$";
-  nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
+  udevLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   zorb = pkgs.callPackage ../packages/zorb.nix { };
   # HIL orchestrator client binaries built from the orb-internal flake.
@@ -195,7 +195,7 @@ in
 
     '';
 
-    environment.variables.LD_LIBRARY_PATH = nativeLibraryPath;
+    environment.variables.LD_LIBRARY_PATH = udevLibraryPath;
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
@@ -388,7 +388,7 @@ in
           Environment = [
             "PATH=/run/wrappers/bin:/run/current-system/sw/bin" # fixes missing sudo
             "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
-            "LD_LIBRARY_PATH=${nativeLibraryPath}"
+            "LD_LIBRARY_PATH=${udevLibraryPath}"
           ];
           # Override the NixOS github-runner module's UMask=0066 so artifacts
           # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.
