@@ -7,6 +7,12 @@
 }:
 let
   qdl-rs = pkgs.callPackage ../packages/qdl-rs.nix { };
+  flashingRigPython = pkgs.python312.withPackages (
+    ps: with ps; [
+      kivy
+      pyudev
+    ]
+  );
   flashingRigPath = "%h/orb-mini-utils/flashing-rig";
   nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   flashingRigPathEnv = lib.makeBinPath [
@@ -43,12 +49,14 @@ in
     '';
 
     environment.systemPackages = [
+      flashingRigPython
       qdl-rs
       pkgs.android-tools
     ];
 
     worldcoin.extraPythonPackages = with pkgs.python312Packages; [
       boto3
+      kivy
       pyudev
     ];
 
@@ -66,11 +74,11 @@ in
       wantedBy = [ "graphical-session.target" ];
       serviceConfig = {
         WorkingDirectory = flashingRigPath;
-        ExecStart = "${flashingRigPath}/.venv/bin/python ${flashingRigPath}/main.py";
+        ExecStart = "${flashingRigPython}/bin/python ${flashingRigPath}/main.py";
         Restart = "always";
         RestartSec = 5;
         Environment = [
-          "VIRTUAL_ENV=${flashingRigPath}/.venv"
+          "DISPLAY=:0"
           "LD_LIBRARY_PATH=${nativeLibraryPath}"
           "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${flashingRigPathEnv}"
         ];
