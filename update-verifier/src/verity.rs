@@ -15,10 +15,16 @@ use std::{
 
 use fatfs::{FileSystem, FsOptions};
 use flate2::read::GzDecoder;
+use orb_dogd::{MetricEmitter, NO_TAGS};
 use orb_info::orb_os_release::OrbOsPlatform;
+use std::time::Instant;
 use thiserror::Error;
 
 const VERITY_VARIABLES_PATH: &str = "verity_variables.env";
+const METRIC_VALIDATION_DURATION: &str =
+    "orb.platform.update-verifier.verity_validation_duration";
+const METRIC_VALIDATION_FAILURE: &str =
+    "orb.platform.update-verifier.verity_validation_failure";
 
 #[derive(Debug, Error)]
 pub enum VerityError {
@@ -39,7 +45,9 @@ pub enum VerityError {
 pub fn validate_verity(
     platform: OrbOsPlatform,
     source_root: &Path,
+    metrics: &impl MetricEmitter,
 ) -> Result<(), VerityError> {
+    let start = Instant::now();
     match platform {
         OrbOsPlatform::Diamond => {
             let cmdline = std::fs::File::open(source_root.join("proc/cmdline"))
@@ -70,6 +78,24 @@ pub fn validate_verity(
             devices.iter().try_for_each(DeviceConfig::validate)
         }
     }
+    .inspect_err(|_| {
+        let _ = metrics
+            .incr(METRIC_VALIDATION_FAILURE, NO_TAGS)
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to emit verity failure metric")
+            });
+    })
+    .inspect(|_| {
+        let _ = metrics
+            .dist(
+                METRIC_VALIDATION_DURATION,
+                start.elapsed().as_millis() as f64,
+                NO_TAGS,
+            )
+            .inspect_err(|error| {
+                tracing::error!(?error, "failed to emit verity duration metric")
+            });
+    })
 }
 
 struct DeviceConfig<'a> {

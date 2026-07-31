@@ -1,3 +1,4 @@
+use orb_dogd::DogstatsdClient;
 use orb_update_verifier::run;
 use tracing::error;
 
@@ -9,8 +10,9 @@ fn main() -> color_eyre::Result<()> {
         .with_journald(SYSLOG_IDENTIFIER)
         .init();
 
-    let result =
-        run().inspect_err(|error| error!(?error, "failed to run update-verifier"));
+    let metrics = DogstatsdClient::default();
+    let result = run(&metrics)
+        .inspect_err(|error| error!(?error, "failed to run update-verifier"));
 
     telemetry.flush_blocking();
 

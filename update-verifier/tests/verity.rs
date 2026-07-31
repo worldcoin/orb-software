@@ -4,39 +4,59 @@ mod fixture;
 #[cfg(target_os = "linux")]
 mod test_verity {
     use super::fixture::{DiamondFixture, PearlFixture};
+    use orb_dogd::test::MetricRecorder;
     use orb_info::orb_os_release::OrbOsPlatform;
     use orb_update_verifier::verity::{self, VerityError};
 
     #[test]
     fn validates_diamond_verity_image() {
         let fixture = DiamondFixture::new();
-        verity::validate_verity(OrbOsPlatform::Diamond, &fixture.source_root).unwrap();
+        let metrics = MetricRecorder::new();
+
+        verity::validate_verity(OrbOsPlatform::Diamond, &fixture.source_root, &metrics)
+            .unwrap();
+        assert_eq!(metrics.len(), 1);
     }
 
     #[test]
     fn rejects_corrupted_diamond_verity_image() {
         let fixture = DiamondFixture::new().corrupt();
+        let metrics = MetricRecorder::new();
 
         assert!(matches!(
-            verity::validate_verity(OrbOsPlatform::Diamond, &fixture.source_root),
+            verity::validate_verity(
+                OrbOsPlatform::Diamond,
+                &fixture.source_root,
+                &metrics
+            ),
             Err(VerityError::VerificationFailed(..))
         ));
+        assert_eq!(metrics.len(), 1);
     }
 
     #[test]
     fn validates_pearl_verity_images() {
         let fixture = PearlFixture::new();
+        let metrics = MetricRecorder::new();
 
-        verity::validate_verity(OrbOsPlatform::Pearl, &fixture.source_root).unwrap();
+        verity::validate_verity(OrbOsPlatform::Pearl, &fixture.source_root, &metrics)
+            .unwrap();
+        assert_eq!(metrics.len(), 1);
     }
 
     #[test]
     fn rejects_corrupted_pearl_system_verity_image() {
         let fixture = PearlFixture::new().corrupt_system_image();
+        let metrics = MetricRecorder::new();
 
         assert!(matches!(
-            verity::validate_verity(OrbOsPlatform::Pearl, &fixture.source_root),
+            verity::validate_verity(
+                OrbOsPlatform::Pearl,
+                &fixture.source_root,
+                &metrics
+            ),
             Err(VerityError::VerificationFailed(..))
         ));
+        assert_eq!(metrics.len(), 1);
     }
 }

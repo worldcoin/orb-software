@@ -8400,6 +8400,7 @@ dependencies = [
  "jod-thread",
  "libc",
  "orb-build-info",
+ "orb-dogd",
  "orb-info",
  "orb-messages 0.0.0 (git+https://github.com/worldcoin/orb-messages?rev=af472fadb57ce55ac63f8f94bd2a0608e62405c7)",
  "orb-slot-ctrl",

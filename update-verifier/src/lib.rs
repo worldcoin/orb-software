@@ -9,6 +9,7 @@ use color_eyre::eyre::Error;
 use color_eyre::eyre::{self};
 use eyre::{bail, eyre};
 use orb_build_info::{make_build_info, BuildInfo};
+use orb_dogd::MetricEmitter;
 use orb_info::orb_os_release::OrbOsRelease;
 use orb_slot_ctrl::OrbSlotCtrl;
 use std::{path::Path, process::Command};
@@ -33,8 +34,8 @@ fn clap_v3_styles() -> Styles {
         .placeholder(AnsiColor::Green.on_default())
 }
 
-#[instrument(err)]
-pub fn run() -> eyre::Result<()> {
+#[instrument(skip(metrics), err)]
+pub fn run(metrics: &impl MetricEmitter) -> eyre::Result<()> {
     let _args = Cli::parse();
 
     let os_release = OrbOsRelease::read_blocking()?;
@@ -53,7 +54,8 @@ pub fn run() -> eyre::Result<()> {
     }
 
     // validate eagerly rootfs integrity
-    verity::validate_verity(platform, Path::new("/"))?;
+    verity::validate_verity(platform, Path::new("/"), metrics)?;
+    info!("verity validation OK");
 
     info!("Marking the current slot as OK");
     orb_slot_ctrl.mark_current_slot_ok()?;

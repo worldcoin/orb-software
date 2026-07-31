@@ -107,6 +107,11 @@ pub struct DiamondFixture {
 }
 
 impl DiamondFixture {
+    // The fixtures are not a public API of a crate,
+    // but just test specific infrastructure.
+    // Might evolve to take a `config` as constructing
+    // metadata instead of reading const values
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let fixture = tempfile::tempdir().unwrap();
         let cmdline = fixture.path().join("proc/cmdline");
@@ -144,6 +149,7 @@ pub struct PearlFixture {
 }
 
 impl PearlFixture {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let fixture = tempfile::tempdir().unwrap();
         let images = fixture.path().join("dev/disk/by-partlabel");
