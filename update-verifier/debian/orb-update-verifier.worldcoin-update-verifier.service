@@ -1,9 +1,7 @@
 [Unit]
 Description=Worldcoin Update Verifier Service
 StartLimitInterval=0
-After=worldcoin-create-hardware-version.service
 After=worldcoin-configure-can@can0.service
-After=worldcoin-core.service
 After=network-online.target
 
 [Service]
@@ -16,12 +14,7 @@ SupplementaryGroups=tty
 
 SyslogIdentifier=worldcoin-update-verifier
 Environment=RUST_BACKTRACE=1
-# Waiting for a stability window before marking the slot as approved.
-# This is essential to avoid unmanaged boot loops.
-ExecStartPre=/bin/sleep 40
 ExecStart=/usr/local/bin/orb-update-verifier
-Restart=on-failure
-RestartSec=10s
 
 # Capabilities required:
 #   CAP_NET_RAW         — CAN-FD SOCK_RAW socket for orb-mcu-util
