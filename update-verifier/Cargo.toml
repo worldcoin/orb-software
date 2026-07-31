@@ -19,10 +19,15 @@ rust-version.workspace = true
 can-rs.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
+cpio_reader = "0.1.2"
+fatfs = { version = "0.3.6", default-features = false, features = ["std", "alloc"] }
+flate2.workspace = true
 flume = "0.11.0"
+hex.workspace = true
 jod-thread = "0.1.2"
 libc.workspace = true
 orb-build-info.workspace = true
+orb-dogd.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release"] }
 orb-messages.workspace = true
 orb-slot-ctrl.workspace = true
@@ -50,6 +55,8 @@ httpmock = "0.7"
 prost-build = "0.12.6"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+tempfile.workspace = true
+orb-dogd = { workspace = true, features = ["testing"] }
 
 [package.metadata.orb]
 unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
