@@ -7,6 +7,12 @@
 }:
 let
   qdl-rs = pkgs.callPackage ../packages/qdl-rs.nix { };
+  flashingRigPath = "%h/orb-mini-utils/flashing-rig";
+  nativeLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
+  flashingRigPathEnv = lib.makeBinPath [
+    pkgs.android-tools
+    qdl-rs
+  ];
   runnerUsers = [
     "worldcoin"
     "gh-runner-user"
@@ -47,5 +53,23 @@ in
         "dialout"
       ];
     });
+
+    systemd.user.services.flashing-rig = {
+      description = "QDL Flashing Rig";
+      after = [ "graphical-session.target" ];
+      wants = [ "graphical-session.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
+        WorkingDirectory = flashingRigPath;
+        ExecStart = "${flashingRigPath}/.venv/bin/python ${flashingRigPath}/main.py";
+        Restart = "always";
+        RestartSec = 5;
+        Environment = [
+          "VIRTUAL_ENV=${flashingRigPath}/.venv"
+          "LD_LIBRARY_PATH=${nativeLibraryPath}"
+          "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${flashingRigPathEnv}"
+        ];
+      };
+    };
   };
 }
