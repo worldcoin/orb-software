@@ -39,7 +39,7 @@ let
     pkgs.android-tools
     qdl-rs
   ];
-  systemPath = "/run/wrappers/bin:/run/current-system/sw/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+  systemPath = "/run/wrappers/bin:/run/current-system/sw/bin";
 in
 {
   options.worldcoin.jenkinsAgent = {
