@@ -14,6 +14,7 @@
     ./hardware-configuration.nix
     ../nixos-common.nix
     ../hil-common.nix
+    ../orb-mini-runner.nix
   ];
 
   worldcoin.orbId = "sf1mini1";
@@ -27,15 +28,6 @@
     mode = "0644";
   };
 
-  services.udev.packages = [ pkgs.android-udev-rules ];
-
-  # qdl-rs/qramdump for flashing Qualcomm SoCs in EDL/QDL mode over USB. Same
-  # `plugdev` USB access above covers the raw usbfs nodes it needs.
-  environment.systemPackages = [
-    (pkgs.callPackage ../../packages/qdl-rs.nix { })
-    pkgs.android-tools
-  ];
-
   worldcoin.jenkinsAgent = {
     enable = true;
     url = "https://jenkins.worldcoin.dev";
@@ -44,8 +36,4 @@
     cloudflareAccess.enable = true;
   };
 
-  worldcoin.extraPythonPackages = with pkgs.python312Packages; [
-    boto3
-    pyudev
-  ];
 }

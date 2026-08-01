@@ -12,6 +12,34 @@
 let
   cfg = config.worldcoin.jenkinsAgent;
   agentUser = "jenkins-agent-user";
+  udevLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
+  python = pkgs.python312.withPackages (
+    ps:
+    with ps;
+    [
+      cffi
+      cmsis-pack-manager
+      pyftdi
+      pyocd
+      pyserial
+      pyyaml
+    ]
+    ++ config.worldcoin.extraPythonPackages
+  );
+  qdl-rs = pkgs.callPackage ../packages/qdl-rs.nix { };
+  servicePath = [
+    cfg.javaPackage
+    pkgs.curl
+    pkgs.git
+    pkgs.bash
+    pkgs.nettools
+    pkgs.coreutils
+    pkgs.uv
+    python
+    pkgs.android-tools
+    qdl-rs
+  ];
+  systemPath = "/run/wrappers/bin:/run/current-system/sw/bin";
 in
 {
   options.worldcoin.jenkinsAgent = {
@@ -90,7 +118,7 @@ in
     users.users.${agentUser} = {
       isNormalUser = true;
       description = "User for Jenkins inbound agent";
-      home = cfg.workDir;
+      home = "/home/${agentUser}";
       createHome = true;
       extraGroups = [ "wheel" ] ++ cfg.extraGroups;
     };
@@ -108,23 +136,16 @@ in
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       # Tools the build/test steps typically need on PATH, plus the JDK.
-      path = [
-        cfg.javaPackage
-        pkgs.curl
-        pkgs.git
-        pkgs.bash
-        pkgs.nettools
-        pkgs.coreutils
-        pkgs.uv
-        pkgs.python312
-        pkgs.android-tools
-        (pkgs.callPackage ../packages/qdl-rs.nix { })
-      ];
+      path = servicePath;
       serviceConfig = {
         User = agentUser;
         WorkingDirectory = cfg.workDir;
         Restart = "always";
         RestartSec = 10;
+        Environment = [
+          "LD_LIBRARY_PATH=${udevLibraryPath}"
+          "PATH=${systemPath}:${lib.makeBinPath servicePath}"
+        ];
         # Expose secrets at $CREDENTIALS_DIRECTORY/<id> without leaking them
         # into the process table or the Nix store.
         LoadCredential = [
