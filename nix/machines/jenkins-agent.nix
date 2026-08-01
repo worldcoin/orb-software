@@ -128,7 +128,6 @@ in
 
     systemd.tmpfiles.rules = [
       "d ${cfg.workDir} 0755 ${agentUser} ${agentUser} - -"
-      "d /home/${agentUser} 0755 ${agentUser} ${agentUser} - -"
     ];
 
     systemd.services.jenkins-agent = {
