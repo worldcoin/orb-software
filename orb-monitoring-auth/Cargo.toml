@@ -36,6 +36,7 @@ testing = ["dep:faux"]
 [dev-dependencies]
 async-tempfile.workspace = true
 dbus-launch.workspace = true
+orb-attest-dbus.workspace = true
 wiremock.workspace = true
 orb-security-utils = { workspace = true, features = [
     "reqwest",

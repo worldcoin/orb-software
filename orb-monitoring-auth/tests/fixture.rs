@@ -11,6 +11,7 @@ use async_tempfile::TempDir;
 use chrono::{DateTime, Utc};
 use color_eyre::Result;
 use dbus_launch::BusType;
+use orb_attest_dbus::{AuthTokenManager, AuthTokenManagerT};
 use orb_info::OrbId;
 use orb_monitoring_auth::{
     server::{self, secure_storage::SecureStorage, Clock, Dependencies},
@@ -33,6 +34,22 @@ pub fn token(value: &str, expiry: DateTime<Utc>) -> Token {
         "expiry": expiry.timestamp_millis(),
     }))
     .expect("fixture token should deserialize")
+}
+
+struct MockAuthTokenManager {
+    token: String,
+}
+
+impl AuthTokenManagerT for MockAuthTokenManager {
+    fn token(&self) -> zbus::fdo::Result<String> {
+        Ok(self.token.clone())
+    }
+
+    fn force_token_refresh(&mut self, _context: zbus::SignalContext<'_>) {}
+
+    fn new_keys_active(&self) -> zbus::fdo::Result<bool> {
+        Ok(false)
+    }
 }
 
 /// Prepared, isolated infrastructure that has not started the server.
@@ -95,6 +112,30 @@ impl Fixture {
             orb_id,
             uid,
         }
+    }
+
+    /// Registers an attestation-token service on the isolated session bus.
+    ///
+    /// The configured token is returned to the production monitoring-auth
+    /// server when it requests credentials during refresh. The fixture is
+    /// returned so setup can continue before application startup.
+    pub async fn attest_token(self, token: &str) -> Self {
+        self.dbus
+            .request_name("org.worldcoin.AuthTokenManager1")
+            .await
+            .expect("failed to claim AuthTokenManager test service name");
+        self.dbus
+            .object_server()
+            .at(
+                "/org/worldcoin/AuthTokenManager1",
+                AuthTokenManager::from(MockAuthTokenManager {
+                    token: token.to_string(),
+                }),
+            )
+            .await
+            .expect("failed to register AuthTokenManager test service");
+
+        self
     }
 
     /// Starts the production server and waits until its Unix socket is ready.

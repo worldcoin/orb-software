@@ -7872,6 +7872,7 @@ dependencies = [
  "dbus-launch",
  "faux",
  "nix 0.28.0",
+ "orb-attest-dbus",
  "orb-info",
  "orb-secure-storage-ca",
  "orb-security-utils 0.0.0",
