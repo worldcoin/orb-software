@@ -46,6 +46,7 @@ async fn preserves_empty_state_when_backend_rejects_refresh() -> Result<()> {
         .await
         .attest_token("attestation-token")
         .await;
+
     Mock::given(method("GET"))
         .and(path("/monitoring-token"))
         .and(header(
@@ -56,6 +57,7 @@ async fn preserves_empty_state_when_backend_rejects_refresh() -> Result<()> {
         .expect(1)
         .mount(&fixture.backend)
         .await;
+
     let fx = fixture.run().await;
 
     // Act

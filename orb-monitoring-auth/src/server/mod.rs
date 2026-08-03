@@ -1,5 +1,5 @@
-//! Runs the monitoring-auth server and coordinates token loading, refresh, and
-//! publication over its Unix socket.
+//! Runs the monitoring-auth server and coordinates persisted token loading,
+//! expiry validation, refresh, and publication over its Unix socket.
 
 use crate::{server::secure_storage::SecureStorage, Token};
 use chrono::{DateTime, Utc};
@@ -68,7 +68,7 @@ impl Applet for OrbMonitoringAuthServer {
 pub async fn main(deps: Dependencies) -> Result<()> {
     let token: StoredToken = Default::default();
 
-    get_token_from_secure_storage(&deps.secure_storage, &token).await?;
+    get_token_from_secure_storage(&deps.secure_storage, &token, &deps.clock).await?;
 
     let speare = mini::root();
     let restart = OnErr::Restart {
@@ -154,9 +154,21 @@ impl Dependencies {
 async fn get_token_from_secure_storage(
     ss: &SecureStorage,
     token: &StoredToken,
+    clock: &Clock,
 ) -> Result<()> {
-    let ss_token = ss.get().await?;
-    (*token.write().map_err(|e| eyre!("{e:?}"))?) = ss_token;
+    let Some(ss_token) = ss.get().await? else {
+        return Ok(());
+    };
+
+    if ss_token.expiry <= clock.now() {
+        if let Err(error) = ss.clear().await {
+            warn!("failed to clear expired token from secure storage: {error:?}");
+        }
+
+        return Ok(());
+    }
+
+    (*token.write().map_err(|e| eyre!("{e:?}"))?) = Some(ss_token);
 
     Ok(())
 }

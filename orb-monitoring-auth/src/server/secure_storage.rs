@@ -1,3 +1,6 @@
+//! Persists monitoring-token state in OP-TEE secure storage and translates
+//! between stored bytes, a current token, and the explicit empty state.
+
 use crate::Token;
 use color_eyre::{
     eyre::{eyre, Context},
@@ -44,6 +47,25 @@ impl SecureStorage {
         Ok(())
     }
 
+    /// Replaces the persisted monitoring token with the empty token state.
+    ///
+    /// Returns an error when serialization, secure-storage access, locking,
+    /// or the blocking task fails.
+    pub async fn clear(&self) -> Result<()> {
+        let ss = self.0.clone();
+        let bytes = serde_json::to_vec(&Option::<Token>::None)?;
+        task::spawn_blocking(move || -> Result<()> {
+            ss.lock()
+                .map_err(|e| eyre!("{e:?}"))?
+                .put(SS_TOKEN_KEY, &bytes)?;
+
+            Ok(())
+        })
+        .await??;
+
+        Ok(())
+    }
+
     pub async fn get(&self) -> Result<Option<Token>> {
         let ss = self.0.clone();
         let bytes = task::spawn_blocking(move || -> Result<_> {
@@ -52,12 +74,13 @@ impl SecureStorage {
         })
         .await??;
 
-        let token: Option<Token> = bytes.and_then(|b| {
-            serde_json::from_slice(&b)
+        let token = bytes.and_then(|b| {
+            serde_json::from_slice::<Option<Token>>(&b)
                 .inspect_err(|e| {
                     warn!("failed to deserialize Token from secure storage {e:?}")
                 })
                 .ok()
+                .flatten()
         });
 
         Ok(token)
