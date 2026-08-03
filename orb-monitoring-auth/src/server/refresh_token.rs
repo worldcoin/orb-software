@@ -74,10 +74,7 @@ pub async fn task(ctx: mini::Ctx<Args>) -> Result<()> {
 
         let new_token: Token = serde_json::from_slice(&new_token)?;
 
-        ctx.secure_storage.put(
-            &new_token
-        ).await?;
-
+        ctx.secure_storage.put(&new_token).await?;
 
         let mut old_token = ctx
             .token

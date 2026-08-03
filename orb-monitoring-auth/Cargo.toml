@@ -37,8 +37,8 @@ testing = ["dep:faux"]
 async-tempfile.workspace = true
 dbus-launch.workspace = true
 orb-attest-dbus.workspace = true
-wiremock.workspace = true
 orb-security-utils = { workspace = true, features = [
-    "reqwest",
-    "dangerously-allow-http",
+	"reqwest",
+	"dangerously-allow-http",
 ] }
+wiremock.workspace = true
