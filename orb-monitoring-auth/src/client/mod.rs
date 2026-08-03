@@ -19,7 +19,7 @@ use std::{
     path::Path,
     process::ExitCode,
 };
-use tracing::error;
+use tracing::{error, warn};
 
 #[derive(Debug, Default)]
 pub struct OrbMonitoringAuthClient;
@@ -63,7 +63,9 @@ pub fn main(
     token_server_socket: impl AsRef<Path>,
     mut output: impl Write,
 ) -> Result<()> {
-    color_eyre::install()?;
+    if let Err(error) = color_eyre::install() {
+        warn!("failed to install color-eyre error hook: {error}");
+    }
 
     unsafe {
         let uid = getuid();
