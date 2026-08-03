@@ -1,8 +1,13 @@
+//! Refreshes monitoring credentials from the backend.
+//!
+//! The task validates decoded tokens before persisting or publishing them; an
+//! invalid response leaves the current token unchanged and enters supervisor
+//! retry handling.
+
 use crate::{
     server::{Clock, SecureStorage, StoredToken},
     Token,
 };
-use chrono::TimeDelta;
 use color_eyre::{
     eyre::{bail, eyre, Context},
     Result,
@@ -35,17 +40,10 @@ pub async fn task(ctx: mini::Ctx<Args>) -> Result<()> {
             (*t).clone()
         };
 
-        if let Some(token) = token {
-            let now = ctx.clock.now();
-            let time_left = token.expiry - now;
-            // we expect monitoring tokens to have 1 year of expiry date
-            // but we try to refresh at least 6 months earlier to have a
-            // bigger buffer in case orbs are not on for a long period of time
-            let should_refresh = time_left < TimeDelta::days(180);
-
-            if !should_refresh {
-                return Ok(());
-            }
+        if let Some(token) = token
+            && !token.needs_refresh_at(ctx.clock.now())
+        {
+            return Ok(());
         }
 
         let ct = CancellationToken::new();
@@ -73,6 +71,10 @@ pub async fn task(ctx: mini::Ctx<Args>) -> Result<()> {
             .wrap_err("failed to deserialize token json")?;
 
         let new_token: Token = serde_json::from_slice(&new_token)?;
+
+        if new_token.needs_refresh_at(ctx.clock.now()) {
+            bail!("backend returned a monitoring token that already needs refresh");
+        }
 
         ctx.secure_storage.put(&new_token).await?;
 

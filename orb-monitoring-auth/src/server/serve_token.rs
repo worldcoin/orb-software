@@ -1,4 +1,9 @@
-use crate::server::StoredToken;
+//! Serves the current monitoring token to authorized Unix-socket peers.
+//!
+//! The socket boundary filters tokens against the supplied clock so an expired
+//! token is never exposed, even when it expires after server startup.
+
+use crate::server::{Clock, StoredToken};
 use color_eyre::{
     eyre::{eyre, Context},
     Result,
@@ -12,6 +17,7 @@ pub struct Args {
     pub token: StoredToken,
     pub socket_path: PathBuf,
     pub dd_agent_uid: u32,
+    pub clock: Clock,
 }
 
 pub async fn task(ctx: mini::Ctx<Args>) -> Result<()> {
@@ -33,9 +39,15 @@ pub async fn task(ctx: mini::Ctx<Args>) -> Result<()> {
         }
 
         let token = ctx.token.clone();
+        let clock = ctx.clock.clone();
 
         ctx.oneshot(async move |_| -> Result<()> {
-            let token = token.read().map_err(|e| eyre!("{e:?}"))?.deref().clone();
+            let token = token
+                .read()
+                .map_err(|e| eyre!("{e:?}"))?
+                .deref()
+                .clone()
+                .filter(|token| !token.is_expired_at(clock.now()));
             let payload = serde_json::to_vec(&token)?;
             stream.write_all(&payload).await?;
 

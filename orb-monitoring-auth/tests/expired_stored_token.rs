@@ -1,7 +1,7 @@
 #![cfg(feature = "testing")]
 
-//! Verifies that expired stored monitoring tokens are cleared and never
-//! exposed through the monitoring-auth client boundary.
+//! Verifies that monitoring auth never exposes an expired persisted token,
+//! whether it is already expired at startup or expires while the server runs.
 
 mod fixture;
 
@@ -11,8 +11,57 @@ use orb_monitoring_auth::server::{secure_storage::SecureStorage, Clock};
 use serde_json::Value;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    Arc, RwLock,
 };
+
+#[tokio::test]
+async fn stops_serving_cached_token_after_it_expires_while_running() -> Result<()> {
+    // Arrange
+    let initial_now = "2026-08-03T12:00:00Z".parse::<DateTime<Utc>>()?;
+    let expiry = initial_now + TimeDelta::days(181);
+    let current_time = Arc::new(RwLock::new(initial_now));
+    let current_time_for_clock = Arc::clone(&current_time);
+    let mut clock = Clock::faux();
+    faux::when!(clock.now).then(move |_| {
+        current_time_for_clock
+            .read()
+            .expect("current-time lock poisoned")
+            .to_owned()
+    });
+
+    let cached_token = fixture::token("cached-token", expiry);
+    let mut secure_storage = SecureStorage::faux();
+    faux::when!(secure_storage.get).then(move |_| Ok(Some(cached_token.clone())));
+
+    let fx = fixture::Fixture::new(clock, secure_storage)
+        .await
+        .run()
+        .await;
+
+    // Act
+    let valid_output = fx.run_client().await?;
+    let valid_response: Value = serde_json::from_slice(&valid_output)?;
+    *current_time.write().expect("current-time lock poisoned") = expiry;
+    let expired_output = fx.run_client().await?;
+    let expired_response: Value = serde_json::from_slice(&expired_output)?;
+
+    // Assert
+    assert_eq!(valid_response["monitoring_token"]["value"], "cached-token");
+    assert_eq!(valid_response["monitoring_token"]["error"], Value::Null);
+    assert_eq!(
+        expired_response["monitoring_token"]["value"],
+        Value::Null,
+        "a token must not be served at its expiry instant"
+    );
+    assert_eq!(
+        expired_response["monitoring_token"]["error"],
+        "there is no token available"
+    );
+
+    fx.stop().await;
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn clears_and_does_not_serve_expired_stored_token() -> Result<()> {

@@ -1,5 +1,5 @@
 //! Runs the monitoring-auth server and coordinates persisted token loading,
-//! expiry validation, refresh, and publication over its Unix socket.
+//! freshness validation, backend refresh, and publication over its Unix socket.
 
 use crate::{server::secure_storage::SecureStorage, Token};
 use chrono::{DateTime, Utc};
@@ -82,6 +82,7 @@ pub async fn main(deps: Dependencies) -> Result<()> {
             token: token.clone(),
             socket_path: deps.server_socket_path,
             dd_agent_uid: deps.dd_agent_uid,
+            clock: deps.clock.clone(),
         })
         .on_err(restart)
         .spawn(serve_token::task)?;
@@ -115,7 +116,11 @@ pub async fn main(deps: Dependencies) -> Result<()> {
 type StoredToken = Arc<RwLock<Option<Token>>>;
 
 #[cfg_attr(feature = "testing", faux::create)]
-#[derive(Default)]
+/// Supplies the current UTC time to monitoring-auth workflows.
+///
+/// Clones represent the same stateless production clock. Tests may configure the
+/// generated mock so both supervised workflows observe controlled time.
+#[derive(Clone, Default)]
 pub struct Clock;
 
 #[cfg_attr(feature = "testing", faux::methods)]
@@ -160,7 +165,7 @@ async fn get_token_from_secure_storage(
         return Ok(());
     };
 
-    if ss_token.expiry <= clock.now() {
+    if ss_token.is_expired_at(clock.now()) {
         if let Err(error) = ss.clear().await {
             warn!("failed to clear expired token from secure storage: {error:?}");
         }
