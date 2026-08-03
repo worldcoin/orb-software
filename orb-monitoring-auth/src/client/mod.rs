@@ -1,3 +1,9 @@
+//! Implements the Datadog external-auth client for monitoring credentials.
+//!
+//! The applet adapts process startup to `main`; `main` validates the caller,
+//! reads the token from the Unix socket, and writes the external-auth response
+//! to the caller-supplied destination.
+
 use crate::{server, Token};
 use clap::ArgMatches;
 use color_eyre::{
@@ -7,7 +13,12 @@ use color_eyre::{
 use nix::libc::getuid;
 use prelude::applet::Applet;
 use serde_json::json;
-use std::{io::Read, os::unix::net::UnixStream, path::Path, process::ExitCode};
+use std::{
+    io::{Read, Write},
+    os::unix::net::UnixStream,
+    path::Path,
+    process::ExitCode,
+};
 use tracing::error;
 
 #[derive(Debug, Default)]
@@ -23,7 +34,11 @@ impl Applet for OrbMonitoringAuthClient {
     }
 
     fn main(&self, _args: &ArgMatches) -> ExitCode {
-        match main(crate::DD_AGENT_UID, server::DEFAULT_SOCKET) {
+        match main(
+            crate::DD_AGENT_UID,
+            server::DEFAULT_SOCKET,
+            std::io::stdout(),
+        ) {
             Err(e) => {
                 error!("failed with {e}");
                 ExitCode::FAILURE
@@ -34,7 +49,20 @@ impl Applet for OrbMonitoringAuthClient {
     }
 }
 
-pub fn main(dd_agent_uid: u32, token_server_socket: impl AsRef<Path>) -> Result<()> {
+/// Fetches the monitoring token and writes the Datadog external-auth response.
+///
+/// `dd_agent_uid` is the only UID allowed to invoke the client.
+/// `token_server_socket` identifies the server's Unix socket.
+/// `output` receives one JSON response followed by a newline.
+///
+/// The function returns an error when client setup, UID validation, socket I/O,
+/// response serialization, or output writing fails. A missing token is encoded
+/// in the response's `error` field.
+pub fn main(
+    dd_agent_uid: u32,
+    token_server_socket: impl AsRef<Path>,
+    mut output: impl Write,
+) -> Result<()> {
     color_eyre::install()?;
 
     unsafe {
@@ -62,7 +90,7 @@ pub fn main(dd_agent_uid: u32, token_server_socket: impl AsRef<Path>) -> Result<
         }
     });
 
-    println!("{response}");
+    writeln!(output, "{response}")?;
 
     Ok(())
 }

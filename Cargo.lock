@@ -7865,14 +7865,16 @@ dependencies = [
 name = "orb-monitoring-auth"
 version = "0.1.0"
 dependencies = [
+ "async-tempfile",
  "chrono",
  "clap",
  "color-eyre",
+ "dbus-launch",
  "faux",
  "nix 0.28.0",
  "orb-info",
  "orb-secure-storage-ca",
- "orb-security-utils",
+ "orb-security-utils 0.0.0",
  "prelude",
  "serde",
  "serde_json",
@@ -7880,6 +7882,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "wiremock",
  "zbus",
 ]
 

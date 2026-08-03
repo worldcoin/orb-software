@@ -1,3 +1,6 @@
+//! Runs the monitoring-auth server and coordinates token loading, refresh, and
+//! publication over its Unix socket.
+
 use crate::{server::secure_storage::SecureStorage, Token};
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
@@ -21,7 +24,8 @@ use tokio::signal::unix::{self, SignalKind};
 use tracing::{error, warn};
 
 mod refresh_token;
-mod secure_storage;
+/// Secure-storage access used by the monitoring-auth server.
+pub mod secure_storage;
 mod serve_token;
 
 pub const DEFAULT_SOCKET: &str = "/run/orb-monitoring-auth-server/socket";
@@ -57,7 +61,11 @@ impl Applet for OrbMonitoringAuthServer {
     }
 }
 
-async fn main(deps: Dependencies) -> Result<()> {
+/// Runs the monitoring-auth server with explicit dependencies.
+///
+/// The function loads initial token state, starts the token-serving and refresh
+/// tasks, waits for process termination, and then aborts its child tasks.
+pub async fn main(deps: Dependencies) -> Result<()> {
     let token: StoredToken = Default::default();
 
     get_token_from_secure_storage(&deps.secure_storage, &token).await?;
@@ -107,6 +115,7 @@ async fn main(deps: Dependencies) -> Result<()> {
 type StoredToken = Arc<RwLock<Option<Token>>>;
 
 #[cfg_attr(feature = "testing", faux::create)]
+#[derive(Default)]
 pub struct Clock;
 
 #[cfg_attr(feature = "testing", faux::methods)]
@@ -133,7 +142,7 @@ impl Dependencies {
             token_endpoint: "todo".into(),
             server_socket_path: DEFAULT_SOCKET.into(),
             dd_agent_uid: crate::DD_AGENT_UID,
-            clock: Clock,
+            clock: Clock::default(),
             dbus: zbus::Connection::session().await?,
             refresh_token_interval: Duration::from_hours(4),
             orb_id: OrbId::read().await?,

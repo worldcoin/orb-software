@@ -17,7 +17,7 @@ clap.workspace = true
 color-eyre.workspace = true
 faux = { workspace = true, optional = true }
 nix.workspace = true
-orb-info = { workspace = true, features = ["orb-id", "orb-token"] }
+orb-info = { workspace = true, features = ["async", "orb-id", "orb-token"] }
 orb-secure-storage-ca = { workspace = true, features = ["backend-optee"] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 prelude = { workspace = true, features = ["applet"] }
@@ -32,3 +32,12 @@ zbus.workspace = true
 [features]
 default = []
 testing = ["dep:faux"]
+
+[dev-dependencies]
+async-tempfile.workspace = true
+dbus-launch.workspace = true
+wiremock.workspace = true
+orb-security-utils = { workspace = true, features = [
+    "reqwest",
+    "dangerously-allow-http",
+] }
