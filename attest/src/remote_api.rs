@@ -184,6 +184,33 @@ fn powercycle_security_mcu() -> std::io::Result<()> {
     Ok(())
 }
 
+fn recover_se050_pub_key() -> std::io::Result<()> {
+    let writeable_temp_dir =
+        std::path::PathBuf::from(std::env::var("RUNTIME_DIRECTORY").map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("RUNTIME_DIRECTORY is not set or invalid: {e}"),
+            )
+        })?);
+    info!(
+        "recover_se050_pub_key: using RUNTIME_DIRECTORY={}",
+        writeable_temp_dir.display()
+    );
+
+    let output = Command::new("/usr/bin/06_save_eckey_user_pubkey")
+        .current_dir(writeable_temp_dir)
+        .output()?;
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(std::io::Error::other(format!(
+            "06_save_eckey_user_pubkey failed with code {:?}: stdout={stdout}, stderr={stderr}",
+            output.status.code()
+        )));
+    }
+    Ok(())
+}
+
 #[serde_as]
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
@@ -316,6 +343,15 @@ impl Challenge {
     pub fn sign(&self) -> Result<Signature, SignError> {
         let result = self.sign_with_binary("orb-sign-attestation");
         match &result {
+            Err(SignError::NotProvisioned) => {
+                info!("SE050 is not provisioned, retry to recover it");
+                if let Err(err) = recover_se050_pub_key() {
+                    error!("Failed to recover SE050 keys: {err}")
+                } else {
+                    info!("Recovered SE050 keys");
+                }
+            }
+
             Err(e) if e.requires_security_mcu_cooldown() => {
                 let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
                 *lock += 1;
@@ -692,15 +728,50 @@ pub enum ProofError {
 
 #[derive(serde::Deserialize)]
 struct KeysChallengeResponse {
-    server_nonce: String,
+    challenge: String,
+}
+
+/// Field declaration order must mirror `OrbKeyProofKeyInfoApi` on the backend
+/// so that `serde_json::to_vec` produces identical bytes on both sides.
+#[derive(serde::Serialize)]
+struct KeyInfoForSigning {
+    key: String,
+    signature: String,
+    #[serde(rename = "extraData")]
+    extra_data: String,
+}
+
+/// Field declaration order must mirror `OrbAttestedKeysApi` on the backend.
+#[derive(serde::Serialize)]
+struct AttestedKeysForSigning {
+    jetson_authkey: KeyInfoForSigning,
+    attestation_key: KeyInfoForSigning,
+    iris_code_key: KeyInfoForSigning,
 }
 
 #[derive(serde::Serialize)]
 struct ProofPayload {
     orb_id: String,
     server_nonce: String,
-    attested_keys: serde_json::Value,
+    attested_keys: AttestedKeysForSigning,
     signature: String,
+}
+
+fn sign_with_migrated_key(challenge: &Challenge) -> Result<Signature, SignError> {
+    match challenge.sign_with_binary("orb-sign-attestation-migrated") {
+        Err(SignError::NotProvisioned) => {
+            info!("SE050 is not provisioned, attempting recovery");
+
+            if let Err(err) = recover_se050_pub_key() {
+                error!("Failed to recover SE050 keys: {err}");
+                return Err(SignError::NotProvisioned);
+            }
+
+            info!("Recovered SE050 keys, retrying signing");
+            challenge.sign_with_binary("orb-sign-attestation-migrated")
+        }
+        result => result,
+    }
 }
 
 /// Verify that the **backend** accepts the migrated SE050 key set for token
@@ -742,7 +813,7 @@ pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
 
     let challenge_clone = challenge.clone();
     let sig = match tokio::task::spawn_blocking(move || {
-        challenge_clone.sign_with_binary("orb-sign-attestation-migrated")
+        sign_with_migrated_key(&challenge_clone)
     })
     .await
     {
@@ -764,6 +835,30 @@ pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
             false
         }
     }
+}
+
+fn extract_key_info(
+    raw: &serde_json::Value,
+    slot: &str,
+) -> Result<KeyInfoForSigning, ProofError> {
+    let obj = raw[slot].as_object().ok_or_else(|| {
+        ProofError::ReadKeysFailed(format!("missing slot '{slot}' in CLI output"))
+    })?;
+    let get = |field: &str| -> Result<String, ProofError> {
+        obj.get(field)
+            .and_then(|v| v.as_str())
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                ProofError::ReadKeysFailed(format!(
+                    "slot '{slot}' missing field '{field}'"
+                ))
+            })
+    };
+    Ok(KeyInfoForSigning {
+        key: get("key")?,
+        signature: get("signature")?,
+        extra_data: get("extraData")?,
+    })
 }
 
 /// Submit an NXP-attested key proof to the backend, proving the SE050 holds
@@ -802,11 +897,11 @@ pub async fn submit_proof(
         .map_err(ProofError::ChallengeJsonParseFailed)?;
 
     let nonce_bytes = BASE64
-        .decode(challenge.server_nonce.as_bytes())
+        .decode(challenge.challenge.as_bytes())
         .map_err(ProofError::InvalidNonce)?;
 
     // 2. Run read-keys-with-attest with nonce on stdin
-    let server_nonce = challenge.server_nonce.clone();
+    let server_nonce = challenge.challenge.clone();
     let attested_keys_json =
         tokio::task::spawn_blocking(move || -> Result<String, ProofError> {
             let command = Command::new("read-keys-with-attest")
@@ -842,9 +937,16 @@ pub async fn submit_proof(
         .await
         .map_err(|e| ProofError::ReadKeysFailed(format!("task panic: {e}")))??;
 
-    // Parse and re-serialize to compact JSON for deterministic signature input
-    let attested_keys: serde_json::Value = serde_json::from_str(&attested_keys_json)
+    // Parse CLI output and extract only the fields the backend expects, in
+    // struct declaration order, so serde_json::to_vec produces identical bytes
+    // on both sides (backend re-serializes OrbAttestedKeysApi for verification).
+    let raw: serde_json::Value = serde_json::from_str(&attested_keys_json)
         .map_err(|e| ProofError::ReadKeysFailed(format!("JSON parse failed: {e}")))?;
+    let attested_keys = AttestedKeysForSigning {
+        jetson_authkey: extract_key_info(&raw, "jetson_authkey")?,
+        attestation_key: extract_key_info(&raw, "attestation_key")?,
+        iris_code_key: extract_key_info(&raw, "iris_code_key")?,
+    };
     let attested_keys_compact =
         serde_json::to_string(&attested_keys).map_err(ProofError::SerializeFailed)?;
 
@@ -916,7 +1018,8 @@ mod test {
     use crate::client;
 
     use super::{
-        ChallengeError, RefreshTokenError, SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
+        AttestedKeysForSigning, ChallengeError, KeyInfoForSigning, RefreshTokenError,
+        SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
     };
     use data_encoding::BASE64;
     use reqwest::StatusCode;
@@ -1059,5 +1162,43 @@ printf dmFsaWRzaWduYXR1cmU=
 
         assert_eq!(error.retry_delay(current_delay), MIN_TOKEN_DELAY);
         assert_eq!(error.next_retry_delay(current_delay), MIN_TOKEN_DELAY);
+    }
+
+    #[test]
+    fn key_info_for_signing_serialization_matches_backend_contract() {
+        let key_info = KeyInfoForSigning {
+            key: "k".to_string(),
+            signature: "s".to_string(),
+            extra_data: "e".to_string(),
+        };
+
+        let json = serde_json::to_string(&key_info).unwrap();
+
+        assert_eq!(json, r#"{"key":"k","signature":"s","extraData":"e"}"#);
+    }
+
+    #[test]
+    fn attested_keys_for_signing_field_order_matches_backend_contract() {
+        let key_info = |key: &str| KeyInfoForSigning {
+            key: key.to_string(),
+            signature: format!("{key}-signature"),
+            extra_data: format!("{key}-extra-data"),
+        };
+        let attested_keys = AttestedKeysForSigning {
+            jetson_authkey: key_info("jetson"),
+            attestation_key: key_info("attestation"),
+            iris_code_key: key_info("iris"),
+        };
+
+        let json = serde_json::to_string(&attested_keys).unwrap();
+
+        assert_eq!(
+            json,
+            concat!(
+                r#"{"jetson_authkey":{"key":"jetson","signature":"jetson-signature","extraData":"jetson-extra-data"},"#,
+                r#""attestation_key":{"key":"attestation","signature":"attestation-signature","extraData":"attestation-extra-data"},"#,
+                r#""iris_code_key":{"key":"iris","signature":"iris-signature","extraData":"iris-extra-data"}}"#,
+            )
+        );
     }
 }
