@@ -9,3 +9,6 @@ pub mod logging;
 
 #[cfg(feature = "connectivity")]
 pub mod connectivity;
+
+#[cfg(feature = "applet")]
+pub mod applet;

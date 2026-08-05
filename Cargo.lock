@@ -7499,6 +7499,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-bin"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "orb-build-info",
+ "orb-monitoring-auth",
+ "orb-telemetry",
+ "prelude",
+]
+
+[[package]]
 name = "orb-build-info"
 version = "0.0.0"
 dependencies = [
@@ -7851,6 +7862,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-monitoring-auth"
+version = "0.1.0"
+dependencies = [
+ "async-tempfile",
+ "chrono",
+ "clap",
+ "color-eyre",
+ "dbus-launch",
+ "faux",
+ "nix 0.28.0",
+ "orb-attest-dbus",
+ "orb-info",
+ "orb-secure-storage-ca",
+ "orb-security-utils 0.0.0",
+ "prelude",
+ "serde",
+ "serde_json",
+ "speare",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "wiremock",
+ "zbus",
+]
+
+[[package]]
 name = "orb-ota-backend"
 version = "0.0.0"
 dependencies = [
@@ -8060,6 +8097,7 @@ dependencies = [
  "color-eyre",
  "dashmap",
  "eyre",
+ "faux",
  "optee-teec",
  "orb-secure-storage-proto",
  "rand 0.8.7",
@@ -9286,6 +9324,7 @@ dependencies = [
 name = "prelude"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "color-eyre",
  "tokio",
  "tracing",
