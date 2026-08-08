@@ -53,6 +53,7 @@ in
       qdl-rs
       pkgs.android-tools
       pkgs.dejavu_fonts
+      pkgs.udev
     ];
 
     systemd.tmpfiles.rules = [
