@@ -3,7 +3,7 @@ use color_eyre::eyre::Result;
 use orb_build_info::{make_build_info, BuildInfo};
 use tracing::info;
 
-use orbd::{Component, Program};
+use orb_health::run;
 
 const BUILD_INFO: BuildInfo = make_build_info!();
 const SYSLOG_IDENTIFIER: &str = "worldcoin-orbd";
@@ -22,21 +22,10 @@ async fn main() -> Result<()> {
 
     Args::parse();
 
-    let result = run().await;
+    info!("Running file-sizes check");
+    run().await;
 
     tel_flusher.flush_blocking();
 
-    result
-}
-
-async fn run() -> Result<()> {
-    info!(version = BUILD_INFO.version, "orbd starting");
-
-    let mut program = Program::new();
-
-    program.component(Component::new("orb-health", |_ctx| async {
-        orb_health::run().await;
-    }));
-
-    program.run().await
+    Ok(())
 }

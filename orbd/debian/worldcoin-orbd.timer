@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Worldcoin Orb Daemon every 3 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target
