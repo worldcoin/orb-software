@@ -128,6 +128,7 @@ in
         awscli2
         bacon # better cargo-watch
         black # Python autoformatter
+        buf # Protobuf workflow
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os
         cargo-expand # Useful for inspecting macros
@@ -168,6 +169,11 @@ in
         p.native.libiconv
       ]
       ++ p.native.lib.lists.optionals p.native.stdenv.isLinux [
+        p.native.cpio
+        p.native.cryptsetup
+        p.native.dosfstools
+        p.native.mtools
+        p.native.util-linux
         # For OP-TEE TA cross compilation. See
         # https://github.com/rust-cross/cargo-zigbuild/issues/378
         p.native.pkgsCross.aarch64-multiplatform.stdenv.cc

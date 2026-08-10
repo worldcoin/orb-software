@@ -4,14 +4,19 @@
   pkgs,
   lib,
   hostname,
+  inputs,
+  system,
   ...
 }:
 let
   username = "worldcoin";
   ghRunnerUser = "gh-runner-user";
   unitPattern = "^github-runner-.*\\.service$";
+  udevLibraryPath = lib.makeLibraryPath [ pkgs.systemd ];
   orb-hil = pkgs.callPackage ../packages/orb-hil.nix { };
   zorb = pkgs.callPackage ../packages/zorb.nix { };
+  # HIL orchestrator client binaries built from the orb-internal flake.
+  hilOrchestrator = inputs.orb-internal.packages.${system};
   mkRcmConnection = (
     number:
     let
@@ -64,6 +69,11 @@ let
   );
 in
 {
+  imports = [
+    # Makes `worldcoin.jenkinsAgent` available to every HIL (disabled by default).
+    ./jenkins-agent.nix
+  ];
+
   options.worldcoin.orbId = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
@@ -82,10 +92,30 @@ in
     description = "URL of the orb-hil-orchestrator server.";
   };
 
+  options.worldcoin.githubRunner.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = "Whether this HIL registers as a GitHub Actions self-hosted runner. Disable for machines that only act as Jenkins agents.";
+  };
+
+  options.worldcoin.extraPythonPackages = lib.mkOption {
+    type = lib.types.listOf lib.types.package;
+    default = [ ];
+    description = "Extra Python packages to add on top of this HIL's default python312 toolset.";
+  };
+
   config = {
+    nix.extraOptions = ''
+      netrc-file = /etc/worldcoin/secrets/nix-github-netrc
+    '';
+
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
+      # HIL orchestrator clients: orb-hil-agent, hiltop, hil
+      hilOrchestrator.hil-agent
+      hilOrchestrator.hiltop
+      hilOrchestrator.hil-cli
       zorb
       zenoh
       tcpdump
@@ -110,7 +140,9 @@ in
       lsof
       uv
       (python312.withPackages (
-        ps: with ps; [
+        ps:
+        with ps;
+        [
           pyyaml
           pyserial
           pyftdi
@@ -118,6 +150,7 @@ in
           cmsis-pack-manager
           cffi
         ]
+        ++ config.worldcoin.extraPythonPackages
       ))
     ];
 
@@ -159,7 +192,10 @@ in
 
       # Allow plugdev group to access USB relay hidraw devices
       KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
+
     '';
+
+    environment.variables.LD_LIBRARY_PATH = udevLibraryPath;
 
     environment.variables.NIXPKGS_ALLOW_UNFREE = "1";
 
@@ -222,6 +258,7 @@ in
     systemd.tmpfiles.rules = [
       "d /opt/worldcoin 0755 root root - -"
       "d /opt/worldcoin/rts 0777 root root - -"
+      "d /run/hil-agent 0777 root root - -"
     ];
     users.groups = {
       "${ghRunnerUser}" = {
@@ -301,7 +338,7 @@ in
         User = username;
         Environment = "ORCHESTRATOR_URL=${config.worldcoin.hilOrchestratorUrl}";
         ExecStart = ''
-          /home/${username}/orb-hil-agent \
+          ${lib.getExe hilOrchestrator.hil-agent} \
             --results-dir /var/lib/hil-agent/results \
             --orb-config-path /etc/worldcoin/orb.yaml
         '';
@@ -322,14 +359,14 @@ in
       });
     '';
 
-    systemd.services."github-runner-${hostname}" = {
+    systemd.services."github-runner-${hostname}" = lib.mkIf config.worldcoin.githubRunner.enable {
       serviceConfig = {
         InaccessiblePaths = lib.mkForce [ ];
       };
       restartIfChanged = false;
       stopIfChanged = false;
     };
-    services.github-runners = {
+    services.github-runners = lib.mkIf config.worldcoin.githubRunner.enable {
       "${hostname}" = {
         enable = true;
         name = "${hostname}";
@@ -351,6 +388,7 @@ in
           Environment = [
             "PATH=/run/wrappers/bin:/run/current-system/sw/bin" # fixes missing sudo
             "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+            "LD_LIBRARY_PATH=${udevLibraryPath}"
           ];
           # Override the NixOS github-runner module's UMask=0066 so artifacts
           # downloaded into /opt/worldcoin/rts are readable by the worldcoin user.

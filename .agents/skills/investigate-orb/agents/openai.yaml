@@ -1,0 +1,4 @@
+interface:
+  display_name: "Investigate Orb"
+  short_description: "Investigate field Orb incidents in Datadog"
+  default_prompt: "Use $investigate-orb to investigate orb_id:<orb_id> and explain what happened."

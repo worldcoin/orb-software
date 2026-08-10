@@ -5,6 +5,8 @@ use crate::{concat_urls, Backend, OrbId};
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct Endpoints {
     pub status: Url,
+    pub keys_challenge: Url,
+    pub keys_proof: Url,
 }
 
 impl Endpoints {
@@ -12,16 +14,16 @@ impl Endpoints {
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            Backend::Analysis => unimplemented!(),
+            // legacy analysis.ml.worldcoin.org domain is no longer used.
+            Backend::Analysis => "stage.orb",
             Backend::Local => todo!(),
         };
 
+        let base = format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/");
         Self {
-            status: concat_urls(
-                &format!("https://fleet.{subdomain}.worldcoin.org/api/v2/orbs/"),
-                orb_id,
-                "status",
-            ),
+            status: concat_urls(&base, orb_id, "status"),
+            keys_challenge: concat_urls(&base, orb_id, "keys/challenge"),
+            keys_proof: concat_urls(&base, orb_id, "keys/proof"),
         }
     }
 }
@@ -44,13 +46,25 @@ mod test {
             prod.status.as_str(),
             "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
         );
+        assert_eq!(
+            stage.keys_challenge.as_str(),
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/keys/challenge"
+        );
+        assert_eq!(
+            prod.keys_proof.as_str(),
+            "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/keys/proof"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "not implemented")]
-    fn test_analysis_backend_unimplemented() {
+    fn test_analysis_backend_resolves_to_stage() {
         let orb_id = "ea2ea744".parse().unwrap();
-        let _analysis = Endpoints::new(Backend::Analysis, &orb_id);
+        let analysis = Endpoints::new(Backend::Analysis, &orb_id);
+
+        assert_eq!(
+            analysis.status.as_str(),
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
+        );
     }
 
     #[test]

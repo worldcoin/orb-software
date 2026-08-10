@@ -15,6 +15,8 @@ pub struct Harness {
 }
 
 impl<S: hb::State> HarnessBuilder<S> {
+    // local_backend uses http://localhost — plain reqwest client is intentional here.
+    #[allow(clippy::disallowed_methods)]
     pub fn build(self) -> (Harness, orb_se050_reprovision::Config)
     where
         S: hb::IsComplete,

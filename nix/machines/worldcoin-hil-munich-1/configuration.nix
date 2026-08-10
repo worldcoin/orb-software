@@ -14,5 +14,26 @@
     ./hardware-configuration.nix
     ../nixos-common.nix
     ../hil-common.nix
+    ../orb-mini-runner.nix
   ];
+
+  worldcoin.orbId = "muc1mini";
+  worldcoin.orbPlatform = "mini";
+
+  environment.etc."worldcoin/orb.yaml" = {
+    text = ''
+      orb_id: ${config.worldcoin.orbId}
+      platform: ${config.worldcoin.orbPlatform}
+    '';
+    mode = "0644";
+  };
+
+  worldcoin.jenkinsAgent = {
+    enable = true;
+    url = "https://jenkins.worldcoin.dev";
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-id
+    #   /etc/worldcoin/secrets/jenkins-cf-access-client-secret
+    cloudflareAccess.enable = true;
+  };
+
 }

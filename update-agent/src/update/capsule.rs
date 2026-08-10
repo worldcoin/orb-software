@@ -86,6 +86,7 @@ where
         .create_file(CAPSULE_INSTALL_NAME)
         .map_err(|e| Error::CreateFile(e, CAPSULE_INSTALL_NAME.into()))?;
     io::copy(&mut src, &mut capsule).map_err(Error::CopyCapsule)?;
+    capsule.sync_all().map_err(Error::CopyCapsule)?;
     Ok(())
 }
 

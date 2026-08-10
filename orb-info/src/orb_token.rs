@@ -100,6 +100,10 @@ mod tests {
         fn force_token_refresh(&mut self, _ctxt: zbus::SignalContext<'_>) {
             // no-op
         }
+
+        fn new_keys_active(&self) -> zbus::fdo::Result<bool> {
+            Ok(false)
+        }
     }
 
     // using `dbus_launch` ensures that all tests use their own isolated dbus, and that they can't influence each other.

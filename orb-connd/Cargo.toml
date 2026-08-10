@@ -7,9 +7,12 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 authors = [
-	"Philipp Poppov <pophilpo@users.noreply.github.com>",
+	"Philipp Popov <pophilpo@users.noreply.github.com>",
 	"Victor Ferreira Menge <vmenge@users.noreply.github.com>",
 ]
+
+[features]
+testing = ["dep:faux"]
 
 [dependencies]
 async-trait.workspace = true
@@ -20,8 +23,10 @@ chrono.workspace = true
 ciborium.workspace = true
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
+crabwire.workspace = true
 dashmap.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["display"] }
+faux = { workspace = true, optional = true }
 flume.workspace = true
 futures.workspace = true
 hex.workspace = true
@@ -31,6 +36,7 @@ num-traits.workspace = true
 oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
+orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-connd-dbus.workspace = true
 orb-dogd.workspace = true
 orb-info = { workspace = true, features = ["orb-os-release", "async"] }
@@ -40,7 +46,6 @@ orb-secure-storage-ca = { workspace = true, default-features = false, features =
 ] }
 orb-telemetry.workspace = true
 p256.workspace = true
-prelude.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
@@ -66,14 +71,18 @@ zenorb.workspace = true
 
 [dev-dependencies]
 async-tempfile.workspace = true
+crabwire = { workspace = true, features = ["testing"] }
 escargot.workspace = true
+faux.workspace = true
 test-utils.workspace = true
+orb-dogd = { workspace = true, features = ["testing"] }
 nix = { workspace = true, features = ["socket"] }
 test-with.workspace = true
 mockall.workspace = true
 tokio-stream = { workspace = true, features = ["fs"] }
 proptest.workspace = true
 portpicker = "0.1.1"
+prelude = { workspace = true, features = ["future"] }
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }

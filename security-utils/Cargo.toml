@@ -13,6 +13,9 @@ rust-version.workspace = true
 [features]
 blocking = ["reqwest/blocking"]
 reqwest = ["dep:reqwest"]
+# Disables https_only enforcement. Only intended for use in dev-dependencies
+# of crates that spin up local HTTP test servers.
+dangerously-allow-http = []
 
 [dependencies]
 eyre = "0.6"

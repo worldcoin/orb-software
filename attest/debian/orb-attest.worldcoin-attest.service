@@ -8,6 +8,9 @@ Requires=worldcoin-dbus.service
 After=worldcoin-dbus.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
+# Soft dependency to not limit in case zenohd fails
+After=zenohd.service
+Wants=zenohd.service
 
 [Service]
 Type=simple
@@ -18,6 +21,9 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-attest
 Restart=on-failure
+# In case /usr/persistent/se was manually re-proved under root
+ExecStartPre=+/bin/chmod -R +rX /usr/persistent/se
+ExecStartPre=+/bin/chown -R worldcoin:worldcoin /usr/persistent/se
 # TODO: use the orb-info crate
 ExecStart=/bin/bash -c 'export ORB_ID="$("/usr/local/bin/orb-id")"; exec /usr/local/bin/orb-attest'
 IPAccounting=yes
@@ -25,6 +31,9 @@ IPAccounting=yes
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
+
+# For key recovery we need some folder with write access, use $RUNTIME_DIRECTORY to get it name
+RuntimeDirectory=orb-attest
 
 # If at some point this service will need write access make sure to change this
 ReadOnlyPaths=/
@@ -35,6 +44,8 @@ DevicePolicy=closed
 # orb-sign-attestation accesses SE050 via /dev/i2c-* and OP-TEE via /dev/tee0
 DeviceAllow=/dev/i2c-* rw
 DeviceAllow=/dev/tee0 rw
+# Legacy Pearl orb-id reads the public UID partition through this by-partlabel symlink
+DeviceAllow=/dev/disk/by-partlabel/UID-PUB r
 PrivateNetwork=no
 # AF_CAN is required: orb-mcu-util opens a raw CAN-FD socket to reboot the security MCU
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_CAN
@@ -81,4 +92,3 @@ SystemCallFilter=~@cpu-emulation @debug @module @mount @obsolete @raw-io @reboot
 [Install]
 # Start this service when reaching the normal multi-user boot target
 WantedBy=multi-user.target
-

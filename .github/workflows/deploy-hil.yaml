@@ -7,11 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: 'Target machine to deploy, or "all"'
+        description: 'Target machine to deploy, "orbs" (pearl/diamond HILs), "mini" (orb-mini HILs), or "all"'
         required: true
 
 env:
-  ALL_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-3","worldcoin-hil-munich-4","worldcoin-hil-munich-5", "worldcoin-hil-munich-6","worldcoin-hil-munich-8","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
+  ORBS_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-3","worldcoin-hil-munich-4","worldcoin-hil-munich-5", "worldcoin-hil-munich-6","worldcoin-hil-munich-8","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
+  MINI_TARGETS: '["worldcoin-hil-munich-1","worldcoin-hil-sf-1"]'
 
 jobs:
   prepare:
@@ -23,11 +24,21 @@ jobs:
       - name: Determine targets
         id: targets
         run: |
-          if [ "${{ inputs.target }}" = "all" ]; then
-            echo "targets=$ALL_TARGETS" >> "$GITHUB_OUTPUT"
-          else
-            echo "targets=[\"${{ inputs.target }}\"]" >> "$GITHUB_OUTPUT"
-          fi
+          case "${{ inputs.target }}" in
+            all)
+              targets="$(jq -c -n --argjson a "$ORBS_TARGETS" --argjson b "$MINI_TARGETS" '$a + $b')"
+              ;;
+            orbs)
+              targets="$ORBS_TARGETS"
+              ;;
+            mini)
+              targets="$MINI_TARGETS"
+              ;;
+            *)
+              targets="[\"${{ inputs.target }}\"]"
+              ;;
+          esac
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy ${{ matrix.target }}
@@ -42,11 +53,49 @@ jobs:
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
 
+      - name: Configure Nix GitHub auth
+        env:
+          NIX_GITHUB_ACCESS_TOKEN: ${{ secrets.ORB_GIT_HUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${NIX_GITHUB_ACCESS_TOKEN}" ]; then
+            echo "::error::ORB_GIT_HUB_TOKEN is required for Nix to fetch private GitHub flake inputs"
+            exit 1
+          fi
+
+          auth_conf="${RUNNER_TEMP}/nix-github-access.conf"
+          install -m 600 /dev/null "${auth_conf}"
+          printf 'access-tokens = github.com=%s\n' "${NIX_GITHUB_ACCESS_TOKEN}" > "${auth_conf}"
+
+          if [ -n "${NIX_USER_CONF_FILES:-}" ]; then
+            echo "NIX_USER_CONF_FILES=${auth_conf}:${NIX_USER_CONF_FILES}" >> "${GITHUB_ENV}"
+          else
+            echo "NIX_USER_CONF_FILES=${auth_conf}" >> "${GITHUB_ENV}"
+          fi
+          echo "NIX_GITHUB_AUTH_CONF=${auth_conf}" >> "${GITHUB_ENV}"
+
       - name: Update nixpkgs-unstable
         run: nix flake update nixpkgs-unstable
 
       - name: Deploy
-        run: sudo nixos-rebuild switch --flake .
+        run: sudo env "NIX_USER_CONF_FILES=${NIX_USER_CONF_FILES}" nixos-rebuild switch --flake .
+
+      - name: Clean up Nix GitHub auth
+        if: always()
+        run: |
+          set -Eeuo pipefail
+
+          if [ -n "${NIX_GITHUB_AUTH_CONF:-}" ]; then
+            rm -f "${NIX_GITHUB_AUTH_CONF}"
+          fi
+
+      - name: Write orb-software commit file
+        run: |
+          sudo install -d -m 755 /etc/worldcoin
+          printf '%s\n' "${{ github.sha }}" | sudo tee /etc/worldcoin/orb-software.commit > /dev/null
+          sudo chmod 644 /etc/worldcoin/orb-software.commit
+          echo "orb-software commit: ${{ github.sha }}"
 
       - name: Restart orb-hil-agent
         run: sudo systemctl restart orb-hil-agent.service

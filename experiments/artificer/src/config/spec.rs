@@ -47,7 +47,7 @@ pub struct CustomExtractor {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub enum Hash {
-    Hash(cacache::Integrity),
+    Hash(ssri::Integrity),
     /// Dummy hash value that will never correct. Specified by an empty string.
     Dummy,
     False,
@@ -105,8 +105,7 @@ impl<'de> Deserialize<'de> for Hash {
                 if v.is_empty() {
                     Ok(Hash::Dummy)
                 } else {
-                    let integrity =
-                        cacache::Integrity::from_str(v).map_err(E::custom)?;
+                    let integrity = ssri::Integrity::from_str(v).map_err(E::custom)?;
                     Ok(Hash::Hash(integrity))
                 }
             }

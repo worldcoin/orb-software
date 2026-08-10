@@ -1,26 +1,69 @@
-use color_eyre::Result;
+use color_eyre::{
+    eyre::{bail, Context},
+    Result,
+};
+use futures::StreamExt;
+use std::{sync::Arc, time::Duration};
 use zbus_systemd::systemd1::{ManagerProxy, ServiceProxy};
 
+#[cfg_attr(feature = "testing", faux::create)]
 #[derive(Clone)]
 pub struct Systemd {
     system_bus: zbus::Connection,
+    subscribed: Arc<tokio::sync::OnceCell<()>>,
 }
 
+#[cfg_attr(feature = "testing", faux::methods)]
 impl Systemd {
     pub fn new(system_bus: zbus::Connection) -> Self {
-        Self { system_bus }
+        Self {
+            system_bus,
+            subscribed: Arc::new(tokio::sync::OnceCell::new()),
+        }
     }
 
-    pub async fn restart_service(&self, unit: &str) -> Result<()> {
+    pub async fn restart_service(&self, unit: &str, timeout: Duration) -> Result<()> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
-        let _ = manager
+
+        self.subscribed
+            .get_or_try_init(|| manager.subscribe())
+            .await
+            .wrap_err("subscribe to systemd manager signals")?;
+
+        let mut job_removed = manager.receive_job_removed().await?;
+
+        let job_path = manager
             .restart_unit(unit.to_string(), "replace".to_string())
             .await?;
+
+        let job_result = tokio::time::timeout(timeout, async {
+            while let Some(signal) = job_removed.next().await {
+                let args = signal.args()?;
+
+                if args.job == job_path {
+                    return Ok(args.result);
+                }
+            }
+
+            bail!("systemd JobRemoved stream ended before restart job {job_path} completed")
+        })
+        .await
+        .with_context(|| {
+            format!("timed out waiting for systemd restart job {job_path} for {unit}")
+        })??;
+
+        if job_result != "done" {
+            bail!(
+                "systemd restart job {job_path} for {unit} finished with result {job_result:?}"
+            );
+        }
 
         Ok(())
     }
 
-    pub async fn loaded_services(&self) -> Result<Vec<(String, ServiceProxy<'_>)>> {
+    pub async fn loaded_services<'a>(
+        &'a self,
+    ) -> Result<Vec<(String, ServiceProxy<'a>)>> {
         let manager = ManagerProxy::new(&self.system_bus).await?;
 
         let units = manager

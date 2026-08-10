@@ -10,18 +10,16 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use color_eyre::eyre::eyre;
+use crabwire::inject;
 use orb_connd_dbus::{ConndT, ConnectionState};
-use orb_dogd::MetricEmitter;
+use orb_dogd::{DogstatsdClient, MetricEmitter};
 use orb_info::orb_os_release::OrbRelease;
 use rusty_network_manager::dbus_interface_types::NMConnectivityState;
 use tracing::{error, info, warn};
 use zbus::fdo::{Error as ZErr, Result as ZResult};
 
 #[async_trait]
-impl<M> ConndT for ConndService<M>
-where
-    M: MetricEmitter,
-{
+impl ConndT for ConndService {
     /// d-bus impl
     async fn netconfig_set(
         &self,
@@ -98,6 +96,7 @@ where
     }
 
     /// d-bus impl
+    #[inject(metrics: &DogstatsdClient)]
     async fn apply_wifi_qr(&self, contents: String) -> ZResult<()> {
         let started = Instant::now();
 
@@ -158,18 +157,19 @@ where
             ["success:false"]
         };
 
-        let _ = self.metrics.dist(
+        let _ = metrics.dist(
             "orb.platform.connd.wifi_qr_duration",
             started.elapsed().as_millis() as f64,
             tags,
         );
 
-        let _ = self.metrics.count("orb.platform.connd.wifi_qr", 1, tags);
+        let _ = metrics.count("orb.platform.connd.wifi_qr", 1, tags);
 
         result
     }
 
     /// d-bus impl
+    #[inject(metrics: &DogstatsdClient)]
     async fn apply_netconfig_qr(
         &self,
         contents: String,
@@ -252,15 +252,13 @@ where
             ["success:false"]
         };
 
-        let _ = self.metrics.dist(
+        let _ = metrics.dist(
             "orb.platform.connd.netconfig_qr_duration",
             started.elapsed().as_millis() as f64,
             tags,
         );
 
-        let _ = self
-            .metrics
-            .count("orb.platform.connd.netconfig_qr", 1, tags);
+        let _ = metrics.count("orb.platform.connd.netconfig_qr", 1, tags);
 
         result
     }

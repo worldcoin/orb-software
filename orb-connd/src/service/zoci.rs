@@ -3,7 +3,6 @@ use crate::{
     service::ConndService,
 };
 use color_eyre::{eyre::eyre, Result};
-use orb_dogd::MetricEmitter;
 use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -21,10 +20,7 @@ struct WifiAdd {
     join_now: bool,
 }
 
-pub async fn wifi_add(
-    connd: ConndService<impl MetricEmitter>,
-    query: Query,
-) -> Result<()> {
+pub async fn wifi_add(connd: ConndService, query: Query) -> Result<()> {
     let response = async {
         let WifiAdd {
             ssid,
@@ -92,10 +88,7 @@ pub async fn wifi_add(
     Ok(())
 }
 
-pub async fn wifi_connect(
-    connd: ConndService<impl MetricEmitter>,
-    query: Query,
-) -> Result<()> {
+pub async fn wifi_connect(connd: ConndService, query: Query) -> Result<()> {
     let response = async {
         let ssid = query.payload_str()?;
         connd
@@ -111,10 +104,7 @@ pub async fn wifi_connect(
     Ok(())
 }
 
-pub async fn wifi_list(
-    connd: ConndService<impl MetricEmitter>,
-    query: Query,
-) -> Result<()> {
+pub async fn wifi_list(connd: ConndService, query: Query) -> Result<()> {
     info!("listing wifi profiles");
 
     let active_conns = connd
@@ -146,10 +136,7 @@ pub async fn wifi_list(
     Ok(())
 }
 
-pub async fn wifi_scan(
-    connd: ConndService<impl MetricEmitter>,
-    query: Query,
-) -> Result<()> {
+pub async fn wifi_scan(connd: ConndService, query: Query) -> Result<()> {
     info!("scanning for wifi access points");
     let response = connd
         .wifi_scan()
@@ -168,10 +155,7 @@ pub async fn wifi_scan(
     Ok(())
 }
 
-pub async fn wifi_remove(
-    connd: ConndService<impl MetricEmitter>,
-    query: Query,
-) -> Result<()> {
+pub async fn wifi_remove(connd: ConndService, query: Query) -> Result<()> {
     let response = async {
         let ssid = query.payload_str()?;
         connd.remove_wifi_profile(&ssid).await?;

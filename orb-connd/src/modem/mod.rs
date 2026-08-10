@@ -9,16 +9,20 @@ use color_eyre::{
     eyre::{eyre, Context, ContextCompat},
     Result,
 };
-use orb_dogd::{MetricEmitter, NO_TAGS};
+use crabwire::inject;
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
-use std::{sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use tokio::{
     fs,
     time::{self, timeout},
 };
 use tracing::{error, info, warn};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Snapshot {
     pub id: ModemId,
     pub fw_revision: Option<String>,
@@ -31,23 +35,38 @@ pub struct Snapshot {
     pub location: Location,
 }
 
-pub struct Args<M: MetricEmitter> {
+#[derive(Clone)]
+pub struct ModemConfig {
+    pub device_path: PathBuf,
+    /// How often we poll the modem for its `Snapshot`
     pub poll_interval: Duration,
-    pub modem_manager: Arc<dyn ModemManager>,
-    pub mcu_util: Arc<dyn McuUtil>,
-    pub systemd: Systemd,
-    pub metrics: Arc<M>,
+    /// Grace period for the modem powercycle by the MCU (it is not immediate)
+    pub powercycle_grace_period: Duration,
 }
 
-pub async fn supervisor<M>(ctx: mini::Ctx<Args<M>>) -> Result<()>
-where
-    M: MetricEmitter,
-{
+impl Default for ModemConfig {
+    fn default() -> Self {
+        Self {
+            device_path: PathBuf::from("/dev/cdc-wdm0"),
+            poll_interval: Duration::from_secs(30),
+            powercycle_grace_period: Duration::from_secs(5),
+        }
+    }
+}
+
+#[inject(
+    systemd: &Systemd,
+    mcu_util: &McuUtil,
+    modem_manager: &ModemManager,
+    metrics: &DogstatsdClient,
+    config: &ModemConfig
+)]
+pub async fn supervisor(ctx: mini::Ctx<()>) -> Result<()> {
     info!("starting modem supervisor");
 
     let mut snapshot: Option<Snapshot> = None;
     let mut refresh_snapshot = async || -> Result<()> {
-        let new_snapshot = take_snapshot(ctx.modem_manager.as_ref()).await?;
+        let new_snapshot = take_snapshot(modem_manager).await?;
 
         let modem_id_changed_msg = match &snapshot {
             None => Some(format!(
@@ -67,10 +86,9 @@ where
         if let Some(msg) = modem_id_changed_msg {
             warn!(msg);
 
-            let _ =
-                setup_signal_and_bands(ctx.modem_manager.as_ref(), &new_snapshot.id)
-                    .await
-                    .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
+            let _ = setup_signal_and_bands(modem_manager, &new_snapshot.id)
+                .await
+                .inspect_err(|e| warn!("failed to setup signal and bands: {e:?}"));
         }
 
         let _ = ctx.publish("modem-snapshot", new_snapshot.clone());
@@ -80,18 +98,16 @@ where
         Ok(())
     };
 
-    let mut update_interval = time::interval(ctx.poll_interval);
+    let mut update_interval = time::interval(config.poll_interval);
 
     loop {
         if let Err(e) = refresh_snapshot().await {
             error!("failed to refresh modem snapshot with err: {e}");
             error!("powercycling modem");
 
-            let _ =
-                ctx.metrics
-                    .count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
+            let _ = metrics.count("orb.platform.connd.modem_powercycle", 1, NO_TAGS);
 
-            let _ = powercycle_modem(ctx.mcu_util.as_ref(), &ctx.systemd)
+            let _ = powercycle_modem(mcu_util, systemd, &config.device_path, config)
                 .await
                 .inspect_err(|e| {
                     error!("failed to to powercycle modem with err: {e:?}");
@@ -104,7 +120,7 @@ where
     }
 }
 
-async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
+async fn take_snapshot(mm: &ModemManager) -> Result<Snapshot> {
     let modem = mm
         .list_modems()
         .await?
@@ -148,7 +164,7 @@ async fn take_snapshot(mm: &dyn ModemManager) -> Result<Snapshot> {
     })
 }
 
-async fn setup_signal_and_bands(mm: &dyn ModemManager, id: &ModemId) -> Result<()> {
+async fn setup_signal_and_bands(mm: &ModemManager, id: &ModemId) -> Result<()> {
     mm.signal_setup(id, std::time::Duration::from_secs(10))
         .await
         .map_err(|e| eyre!("could not update modem signal refresh rate: {e}"))?;
@@ -190,17 +206,23 @@ static ALLOWED_BANDS: [&str; 27] = [
     "eutran-28",
 ];
 
-async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<()> {
+async fn powercycle_modem(
+    mcu_util: &McuUtil,
+    systemd: &Systemd,
+    device_path: &Path,
+    cfg: &ModemConfig,
+) -> Result<()> {
     mcu_util
         .powercycle(Module::Modem)
         .await
         .wrap_err("mcu-util power-cycle")?;
 
-    time::sleep(Duration::from_secs(5)).await;
+    // MCU powercycle is not immediate, give it time
+    time::sleep(cfg.powercycle_grace_period).await;
 
     let device_exists = async {
         loop {
-            if fs::try_exists("/dev/cdc-wdm0").await.is_ok_and(|x| x) {
+            if fs::try_exists(device_path).await.is_ok_and(|x| x) {
                 break;
             }
 
@@ -212,12 +234,23 @@ async fn powercycle_modem(mcu_util: &dyn McuUtil, systemd: &Systemd) -> Result<(
         .await
         .wrap_err("timed out after 30s waiting for modem device to pop back up")?;
 
-    info!("modem detected at /dev/cdc-wdm0");
+    info!(
+        "modem detected at {}, restarting ModemManager",
+        device_path.display()
+    );
 
-    systemd
-        .restart_service("ModemManager.service")
-        .await
-        .wrap_err("restart ModemManager systemd service")?;
+    // systemd's default start/stop timeout is 90s; leave a small margin for the D-Bus round trip.
+    let restart = async || {
+        systemd
+            .restart_service("ModemManager.service", Duration::from_secs(100))
+            .await
+            .wrap_err("restart ModemManager systemd service")
+    };
+
+    if let Err(e) = restart().await {
+        warn!("failed first ModemManager restart attempt, trying once more. err: {e}");
+        restart().await?;
+    }
 
     info!("ModemManager restarted!");
 

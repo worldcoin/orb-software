@@ -14,7 +14,7 @@ If there are any differences between this file and AGENTS.override.md, the latte
   - One-off: `nix develop -c cargo --version`
 - Build (host): `cargo build -p <crate>`; quick checks: `cargo check -p <crate>`.
 - Cross-build for Orb: `cargo zigbuild --target aarch64-unknown-linux-gnu --release -p <crate>`.
-- Test (workspace): `cargo test --all --all-targets` or per-crate: `cargo test -p <crate>`. This will not work sometimes on macos, in which case narrow the set of crates via `-p`.
+- Test (workspace): `cargo x t --workspace --all-targets` or per-crate: `cargo x t -p <crate>`. Use `cargo x tw` to watch and rerun tests. Both aliases run nextest with all features enabled. Some crates do not work natively on macOS, in which case narrow the set of crates via `-p` or use the Docker runners documented in `docs/src/development.md`.
 - Lint: `cargo clippy --all --all-features --all-targets -- -D warnings`.
 - Format: `cargo fmt --all` (CI enforces `--check`).
 - Licenses/advisories: `cargo deny check licenses` and `cargo deny check advisories`.
@@ -47,7 +47,7 @@ If there are any differences between this file and AGENTS.override.md, the latte
 
 ## Testing Guidelines
 - Use standard Rust tests: unit tests in modules, integration tests under `tests/`.
-- Run locally with `cargo test`; some crates are Linux-only, test per-crate when on macOS.
+- Run locally with `cargo x t`, or use `cargo x tw` to watch and rerun tests. Both aliases run nextest with all features enabled. Some crates are Linux-only; test per-crate or use the documented Docker runners on macOS.
 - Leverage rust's testcontainers library and things like minio or aws localstack if minio doesn't work.
 - Containers and cross-test options are documented in `docs/src/development.md`.
 

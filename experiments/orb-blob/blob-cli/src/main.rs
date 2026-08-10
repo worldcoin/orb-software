@@ -1,3 +1,5 @@
+// Allow regular reqwest builder without HTTPS enforsement
+#![allow(clippy::disallowed_methods)]
 mod http_handler;
 use color_eyre::eyre::{Context, Result};
 use http_handler::{download, info, upload};

@@ -23,6 +23,7 @@ pub type AuthTokenManagerIface = orb_attest_dbus::AuthTokenManager<AuthTokenMana
 pub struct AuthTokenManager {
     token: Option<String>,
     refresh_token_event: Arc<Notify>,
+    new_keys_active: bool,
 }
 
 impl AuthTokenManager {
@@ -31,11 +32,16 @@ impl AuthTokenManager {
         AuthTokenManager {
             token: None,
             refresh_token_event,
+            new_keys_active: false,
         }
     }
 
     pub fn update_token(&mut self, token: &str) {
         self.token = Some(token.to_string());
+    }
+
+    pub fn set_new_keys_active(&mut self, value: bool) {
+        self.new_keys_active = value;
     }
 }
 
@@ -56,6 +62,10 @@ impl AuthTokenManagerT for AuthTokenManager {
     #[instrument(skip_all)]
     fn force_token_refresh(&mut self, _ctxt: zbus::SignalContext<'_>) {
         self.refresh_token_event.notify_one();
+    }
+
+    fn new_keys_active(&self) -> zbus::fdo::Result<bool> {
+        Ok(self.new_keys_active)
     }
 }
 

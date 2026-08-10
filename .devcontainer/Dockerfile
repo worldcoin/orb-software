@@ -38,9 +38,14 @@ EOF
 RUN nix profile add \
     nixpkgs#awscli2 \
     nixpkgs#direnv \
+    nixpkgs#fd \
+    nixpkgs#gh \
     nixpkgs#neovim \
+    nixpkgs#pnpm \
+    nixpkgs#ripgrep \
     nixpkgs#starship \
-    nixpkgs#vim
+    nixpkgs#tree-sitter \
+    nixpkgs#vim-full
 
 # Configure shell
 RUN cat >> ${HOME}/.bashrc <<'EOF'

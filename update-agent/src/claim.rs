@@ -8,12 +8,15 @@ use std::{
 };
 
 use eyre::{ensure, WrapErr as _};
+use orb_dogd::{DogstatsdClient, MetricEmitter};
+use orb_info::orb_os_release::OrbOsPlatform;
 use orb_update_agent_core::{
     reexports::ed25519_dalek::VerifyingKey, Claim, ClaimVerificationContext,
     LocalOrRemote, Slot, Source, VersionMap,
 };
+use prelude::connectivity::tracker::ConnectivityTracker;
 use reqwest::{StatusCode, Url};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     settings::{Backend, Settings},
@@ -58,6 +61,8 @@ pub enum Error {
     MissingSlotVersion { slot: Slot },
     #[error("no new version available - system is up to date")]
     NoNewVersion,
+    #[error("failed validating update claim against on disk versions: {0}")]
+    Validation(eyre::Report),
 }
 
 impl Error {
@@ -111,33 +116,50 @@ fn from_path(
 }
 
 fn from_remote(
-    id: &str,
-    slot: Slot,
+    settings: &Settings,
     url: &Url,
     version_map: &VersionMap,
-    verify_manifest_signature_against: Backend,
+    platform: OrbOsPlatform,
+    conn_tracker: &ConnectivityTracker,
+    metrics: &DogstatsdClient,
 ) -> Result<Option<(String, Claim)>, Error> {
+    let slot = settings.active_slot;
     let current_version = version_map
         .get_slot_version(slot)
         .ok_or_else(|| Error::MissingSlotVersion { slot })?;
 
     let mut api_url = url.clone();
-    api_url.set_path(&format!("/api/v2/orbs/{}/claim", id));
+    api_url.set_path(&format!("/api/v2/orbs/{}/claim", settings.id));
     api_url
         .query_pairs_mut()
         .clear()
-        .append_pair("currentVersion", current_version);
+        .append_pair("currentVersion", current_version)
+        .append_pair("platform", &platform.to_string());
 
     debug!(
         "sending check request to: {} with currentVersion: {}",
         api_url, current_version
     );
 
+    let conn_stability = conn_tracker.track_stability();
     let client = crate::client::normal()?;
+    // attempt starts here
+    // ignore if we dont have internet
     let resp = client
         .get(api_url.clone())
         .send()
-        .map_err(Error::SendCheckUpdateRequest)?;
+        .map_err(Error::SendCheckUpdateRequest)
+        .inspect_err(|e| {
+            if conn_stability.is_stable() {
+                error!("claim request err when having internet! err: {e}");
+
+                let _ = metrics.count(
+                    "orb.platform.update-agent.claim-request",
+                    1,
+                    ["ok:false"],
+                );
+            }
+        })?; // early exit here
 
     let status = resp.status();
     if status.is_client_error() || status.is_server_error() {
@@ -155,29 +177,49 @@ fn from_remote(
         if status == StatusCode::NOT_FOUND && !msg.is_empty() {
             Err(Error::NoNewVersion)
         } else {
+            if conn_stability.is_stable() {
+                let _ = metrics.count(
+                    "orb.platform.update-agent.claim-request",
+                    1,
+                    ["ok:false"],
+                );
+            }
+
             Err(Error::status_code(status, msg))
         }
     } else {
-        let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
-        debug!("server sent raw claim: {resp_txt}");
+        let result = (|| {
+            let resp_txt = resp.text().map_err(Error::ResponseAsText)?;
+            debug!("server sent raw claim: {resp_txt}");
 
-        if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt)
-            && let Some(status) = response.get("status").and_then(|s| s.as_str())
-            && status == "up_to_date"
-        {
-            debug!("system is up to date - no update available");
-            return Ok(None);
-        }
+            if let Ok(response) = serde_json::from_str::<serde_json::Value>(&resp_txt)
+                && let Some(status) = response.get("status").and_then(|s| s.as_str())
+                && status == "up_to_date"
+            {
+                debug!("system is up to date - no update available");
+                return Ok(None);
+            }
 
-        let claim_verification_context = ClaimVerificationContext(
-            pubkey_from_backend_type(verify_manifest_signature_against),
-        );
-        let claim = crate::json::deserialize_seed(
-            claim_verification_context,
-            resp_txt.as_bytes(),
-        )
-        .map_err(Error::ReadJson)?;
-        Ok(Some((resp_txt, claim)))
+            let claim_verification_context = ClaimVerificationContext(
+                pubkey_from_backend_type(settings.verify_manifest_signature_against),
+            );
+            let claim = crate::json::deserialize_seed(
+                claim_verification_context,
+                resp_txt.as_bytes(),
+            )
+            .map_err(Error::ReadJson)?;
+            Ok(Some((resp_txt, claim)))
+        })();
+
+        let tag = if result.is_ok() {
+            "ok:true"
+        } else {
+            "ok:false"
+        };
+
+        let _ = metrics.count("orb.platform.update-agent.claim-request", 1, [tag]);
+
+        result
     }
 }
 
@@ -253,7 +295,13 @@ fn ensure_sources_match_claim(
     Ok(claim)
 }
 
-pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error> {
+pub fn get(
+    settings: &Settings,
+    version_map: &VersionMap,
+    platform: OrbOsPlatform,
+    conn_tracker: &ConnectivityTracker,
+    metrics: &DogstatsdClient,
+) -> Result<Claim, Error> {
     match &settings.update_location {
         LocalOrRemote::Remote(url) => {
             let path = make_claim_destination(settings);
@@ -265,11 +313,12 @@ pub fn get(settings: &Settings, version_map: &VersionMap) -> Result<Claim, Error
             }
             info!("checking remote update at {url}, for orb {}", &settings.id);
             let result = from_remote(
-                &settings.id,
-                settings.active_slot,
+                settings,
                 url,
                 version_map,
-                settings.verify_manifest_signature_against,
+                platform,
+                conn_tracker,
+                metrics,
             )
             .map_err(|e| Error::remote(url, e))?;
 
@@ -338,11 +387,12 @@ mod tests {
         api_url
             .query_pairs_mut()
             .clear()
-            .append_pair("currentVersion", current_version);
+            .append_pair("currentVersion", current_version)
+            .append_pair("platform", "pearl");
 
         assert_eq!(
             api_url.to_string(),
-            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/3d8af1da/claim?currentVersion=test-version"
+            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/3d8af1da/claim?currentVersion=test-version&platform=pearl"
         );
     }
 
@@ -437,7 +487,7 @@ mod tests {
         let malformed_json3 = r#"{
             "releases": {
                 "slot_a": null,
-                "slot_b": "some-version"  
+                "slot_b": "some-version"
             },
             "slot_a": {},
             "slot_b": {},

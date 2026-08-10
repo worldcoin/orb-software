@@ -11,11 +11,16 @@ rust-version.workspace = true
 publish = false
 
 [features]
-testing = []
+testing = ["dep:tokio"]
 
 [dependencies]
 dogstatsd.workspace = true
 eyre.workspace = true
 flume.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["fs", "net", "rt"], optional = true }
 tracing.workspace = true
+
+[dev-dependencies]
+async-tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "time"] }

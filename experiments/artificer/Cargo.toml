@@ -11,7 +11,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-cacache = "13"
 clap.workspace = true
 color-eyre.workspace = true
 derive_more.workspace = true
@@ -22,6 +21,7 @@ orb-build-info.workspace = true
 reqwest.workspace = true
 semver = { version = "1", features = ["serde"] }
 serde.workspace = true
+ssri = "9"
 tokio.workspace = true
 tokio-util = { version = "0.7", default-features = false, features = ["compat"] }
 toml = "0.8.8"

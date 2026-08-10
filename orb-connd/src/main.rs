@@ -3,8 +3,9 @@ use color_eyre::eyre::{Context, Result};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_connd::{
     connectivity_daemon,
-    mcu_util::cli::McuUtilCli,
-    modem_manager::cli::ModemManagerCli,
+    mcu_util::McuUtil,
+    modem::ModemConfig,
+    modem_manager::ModemManager,
     network_manager::NetworkManager,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
@@ -18,6 +19,7 @@ use orb_info::{
     OrbId,
 };
 use orb_secure_storage_ca::{in_memory::InMemoryBackend, optee::OpteeBackend};
+use std::default::Default;
 use std::time::Duration;
 use tokio::{
     io,
@@ -105,6 +107,15 @@ fn connectivity_daemon() -> Result<()> {
             .with_name("connd")
             .await?;
 
+        let registry = crabwire::Registry::new()
+            .insert(systemd)
+            .insert(McuUtil)
+            .insert(ModemManager)
+            .insert(ModemConfig::default())
+            .insert(DogstatsdClient::default());
+
+        crabwire::register!(registry);
+
         let speare = connectivity_daemon::program()
             .sysfs("/sys")
             .procfs("/proc")
@@ -113,13 +124,9 @@ fn connectivity_daemon() -> Result<()> {
             .resolved(resolved)
             .session_bus(zbus::Connection::session().await?)
             .os_release(os_release)
-            .statsd_client(DogstatsdClient::new())
-            .modem_manager(ModemManagerCli)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
             .zenoh(&zenoh)
-            .mcu_util(McuUtilCli)
-            .systemd(systemd)
             .run()
             .await?;
 

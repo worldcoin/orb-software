@@ -37,7 +37,9 @@ ProtectSystem=strict
 # If at some point this service will need write access make sure to change this
 ReadOnlyPaths=/
 PrivateTmp=no
-PrivateDevices=yes
+DevicePolicy=closed
+# Legacy Pearl orb-id reads the public UID partition through this by-partlabel symlink
+DeviceAllow=/dev/disk/by-partlabel/UID-PUB r
 PrivateNetwork=no
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 

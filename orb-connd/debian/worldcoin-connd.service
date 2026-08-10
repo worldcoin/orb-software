@@ -55,6 +55,8 @@ PrivateTmp=no
 # Pearl doesn't use the OP-TEE path but the setting must be the same service file.
 PrivateDevices=no
 DeviceAllow=/dev/tee0 rw
+# Legacy Pearl orb-id reads the public UID partition through this by-partlabel symlink
+DeviceAllow=/dev/disk/by-partlabel/UID-PUB r
 # Needs outbound TCP (zenoh :7447), UDP (StatsD/dogstatsd), HTTPS (connectivity checks),
 # AF_UNIX (D-Bus system/session buses, wpa_supplicant control socket), and AF_CAN
 # (modem power-cycle via orb-mcu-util which calls socket(AF_CAN, ...))

@@ -17,9 +17,9 @@ impl ConnHttpCheck {
     /// iface will default to default route if `None` is passed as arg
     pub async fn run(connectivity_uri: &str, iface: Option<&str>) -> Result<Self> {
         let client = if let Some(iface) = iface {
-            reqwest::Client::builder().interface(iface)
+            orb_security_utils::reqwest::client_builder().interface(iface)
         } else {
-            reqwest::Client::builder()
+            orb_security_utils::reqwest::client_builder()
         }
         .timeout(Duration::from_secs(5))
         .build()?;

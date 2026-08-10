@@ -41,7 +41,7 @@ where
     }
 
     pub fn default_reqwest_client(self) -> Result<ClientBuilder<SetClient<S>>> {
-        let client = orb_security_utils::reqwest::http_client_builder()
+        let client = orb_security_utils::reqwest::client_builder()
             .user_agent(USER_AGENT)
             .build()
             .wrap_err("failed to create http client")?;
@@ -58,7 +58,8 @@ where
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            Backend::Analysis => "analysis.ml",
+            // legacy analysis.ml.worldcoin.org domain is no longer used.
+            Backend::Analysis => "stage.orb",
             Backend::Local => panic!("use `local_backend()` instead"),
         };
         let base_url = format!("https://auth.{subdomain}.worldcoin.org");

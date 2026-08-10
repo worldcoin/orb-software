@@ -1,16 +1,14 @@
 use crate::modem;
 use color_eyre::Result;
+use crabwire::inject;
 use flume::Receiver;
-use orb_dogd::{MetricEmitter, NO_TAGS};
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use tracing::{info, warn};
 
-pub struct Args<M: MetricEmitter> {
-    pub statsd: Arc<M>,
-}
-
-pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
+#[inject(statsd: &DogstatsdClient)]
+pub async fn report(ctx: mini::Ctx<()>) -> Result<()> {
     info!("starting datadog reporter");
 
     async {
@@ -23,7 +21,7 @@ pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
         loop {
             tokio::select! {
                 Ok(snapshot) = modem_snapshot_rx.recv_async() => {
-                    report_modem(ctx.statsd.as_ref(), snapshot).await?;
+                    report_modem(statsd, snapshot).await?;
                 }
 
                 Ok(all_netstats) = netstats_rx.recv_async() => {
@@ -31,7 +29,7 @@ pub async fn report(ctx: mini::Ctx<Args<impl MetricEmitter>>) -> Result<()> {
                         let old_netstats = netstats_map.remove(&new_netstats.iface)
                             .unwrap_or_else(|| new_netstats.clone());
 
-                        report_netstats(ctx.statsd.as_ref(), &old_netstats, &new_netstats).await?;
+                        report_netstats(statsd, &old_netstats, &new_netstats).await?;
 
                         netstats_map.insert(new_netstats.iface.clone(), new_netstats);
                     }

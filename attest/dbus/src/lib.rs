@@ -14,6 +14,7 @@ use zbus::interface;
 pub trait AuthTokenManagerT: Send + Sync + 'static {
     fn token(&self) -> zbus::fdo::Result<String>;
     fn force_token_refresh(&mut self, ctxt: zbus::SignalContext<'_>);
+    fn new_keys_active(&self) -> zbus::fdo::Result<bool>;
 }
 
 #[derive(Debug, derive_more::From)]
@@ -37,5 +38,10 @@ impl<T: AuthTokenManagerT> AuthTokenManagerT for AuthTokenManager<T> {
         #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
     ) {
         self.0.force_token_refresh(ctxt)
+    }
+
+    #[zbus(property)]
+    fn new_keys_active(&self) -> zbus::fdo::Result<bool> {
+        self.0.new_keys_active()
     }
 }

@@ -1,5 +1,3 @@
-use std::{sync::Arc, time::Duration};
-
 use crate::{
     receiver,
     sender::{self},
@@ -8,8 +6,9 @@ use bon::bon;
 use color_eyre::{eyre::eyre, Result};
 use orb_info::OrbId;
 use serde::Serialize;
+use std::{sync::Arc, time::Duration};
 use tokio::time;
-use tracing::warn;
+use tracing::{info, warn};
 use zenoh::{
     bytes::ZBytes,
     handlers::DefaultHandler,
@@ -62,6 +61,8 @@ impl Zenorb {
         };
 
         let name = name.into();
+
+        info!("opened zenoh session with name {name}");
 
         let liveliness = if liveliness {
             let token = session

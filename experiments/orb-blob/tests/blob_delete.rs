@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 use async_tempfile::TempFile;
 use fixture::Fixture;
 use iroh_blobs::{
