@@ -109,15 +109,13 @@ use nix::{
     unistd::ftruncate,
 };
 use rkyv::{
-    de::deserializers::SharedDeserializeMap,
+    api::high::{HighDeserializer, HighSerializer},
+    rancor::Error as RkyvError,
     ser::{
-        serializers::{
-            AllocScratch, BufferSerializer, CompositeSerializer, FallbackScratch,
-            HeapScratch, SharedSerializeMap,
-        },
-        Serializer,
+        allocator::ArenaHandle,
+        writer::{Buffer, Positional},
     },
-    Archive, Deserialize, Infallible, Serialize,
+    Archive, Deserialize, Serialize,
 };
 use std::{
     cmp::max,
@@ -135,8 +133,6 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task;
-
-const SCRATCH_SIZE: usize = 1024;
 
 /// Error occured during shared memory creation.
 #[derive(Error, Debug)]
@@ -203,21 +199,20 @@ pub trait Port: 'static {
     const OUTPUT_CAPACITY: usize;
 }
 
+/// Shared memory deserializer.
+pub type SharedDeserializer = HighDeserializer<RkyvError>;
+
 /// Shared memory serializer.
-pub type SharedSerializer<'a> = CompositeSerializer<
-    BufferSerializer<&'a mut [u8]>,
-    FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>,
-    SharedSerializeMap,
->;
+pub type SharedSerializer<'w, 'a> =
+    HighSerializer<Buffer<'w>, ArenaHandle<'a>, RkyvError>;
 
 /// Bi-directional channel description in shared memory.
 #[allow(clippy::module_name_repetitions)]
 pub trait SharedPort: Port
 where
-    Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self::Output as Archive>::Archived:
-        Deserialize<Self::Output, SharedDeserializeMap>,
+    Self::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    Self::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <Self::Output as Archive>::Archived: Deserialize<Self::Output, SharedDeserializer>,
 {
     /// Buffer size for input messages. Must be at least `size_of::<usize>()`
     /// for a zero-sized input.
@@ -285,14 +280,13 @@ pub struct Inner<T: Port> {
 /// unit, which is located in another process.
 pub struct RemoteInner<T>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     shared_memory: *mut SharedMemory<T>,
-    scratch: Option<FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>>,
 }
 
 /// Sender channel for the computation unit input.
@@ -551,11 +545,11 @@ impl<T: Port> Sink<Output<T>> for Inner<T> {
 // 3. Output buffer
 struct SharedMemory<T>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     input_ts: [Instant; 2],
     input_tx: sem_t,
@@ -570,11 +564,11 @@ where
 
 impl<T> SharedMemory<T>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     fn size_of() -> NonZeroUsize {
         let size = mem::size_of::<Self>()
@@ -694,11 +688,11 @@ where
 
 impl<T> Inner<T>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     /// Sets up shared memory for this channel.
     #[expect(clippy::type_complexity)]
@@ -750,17 +744,16 @@ where
 
 impl<T> RemoteInner<T>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     /// Creates a channel from the shared memory.
     pub fn from_shared_memory(shmem_fd: OwnedFd) -> Result<Self, Errno> {
         Ok(RemoteInner {
             shared_memory: unsafe { SharedMemory::<T>::from_fd(shmem_fd)? },
-            scratch: Some(FallbackScratch::default()),
         })
     }
 
@@ -811,11 +804,7 @@ where
     pub fn send(&mut self, output: &Output<T>) {
         unsafe {
             sem_wait(&mut (*self.shared_memory).output_tx).expect("semaphore failure");
-            serialize_message(
-                (*self.shared_memory).output(),
-                &mut self.scratch,
-                &output.value,
-            );
+            serialize_message((*self.shared_memory).output(), &output.value);
             (*self.shared_memory).output_ts = output.source_ts;
             sem_post(&mut (*self.shared_memory).output_rx).expect("semaphore failure");
         }
@@ -839,48 +828,39 @@ where
     }
 }
 
-fn serialize_message<T>(
-    buf: &mut [u8],
-    scratch: &mut Option<FallbackScratch<HeapScratch<SCRATCH_SIZE>, AllocScratch>>,
-    value: &T,
-) where
-    T: Archive + for<'a> Serialize<SharedSerializer<'a>> + Debug,
+fn serialize_message<T>(buf: &mut [u8], value: &T)
+where
+    T: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>> + Debug,
 {
-    let mut serializer = CompositeSerializer::new(
-        BufferSerializer::new(&mut buf[mem::size_of::<usize>()..]),
-        scratch.take().unwrap(),
-        SharedSerializeMap::new(), // reuse of this map doesn't work
-    );
-    serializer
-        .serialize_value(value)
-        .expect("failed to serialize an IPC message");
-    let size = serializer.pos();
-    let (_, c, _) = serializer.into_components();
+    let writer = rkyv::api::high::to_bytes_in::<_, RkyvError>(
+        value,
+        Buffer::from(&mut buf[mem::size_of::<usize>()..]),
+    )
+    .expect("failed to serialize an IPC message");
+    let size = writer.pos();
     buf[..mem::size_of::<usize>()].copy_from_slice(&size.to_ne_bytes());
-    *scratch = Some(c);
 }
 
 unsafe fn deserialize_message<T>(buf: &[u8]) -> &T::Archived
 where
-    T: Archive + for<'a> Serialize<SharedSerializer<'a>>,
+    T: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
 {
     let size = usize::from_ne_bytes(buf[..mem::size_of::<usize>()].try_into().unwrap());
     let bytes = &buf[mem::size_of::<usize>()..mem::size_of::<usize>() + size];
-    unsafe { rkyv::archived_root::<T>(bytes) }
+    unsafe { rkyv::access_unchecked::<<T as Archive>::Archived>(bytes) }
 }
 
 fn set_init_state<T>(addr: usize, init_state: &T)
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
-    let mut scratch = Some(FallbackScratch::default());
     unsafe {
         let shared_memory = addr as *mut SharedMemory<T>;
-        serialize_message((*shared_memory).init_state(), &mut scratch, init_state);
+        serialize_message((*shared_memory).init_state(), init_state);
     }
 }
 
@@ -890,11 +870,11 @@ fn spawn_shared_tx_task<T>(
     mut stop_tx_rx: oneshot::Receiver<()>,
 ) -> task::JoinHandle<InnerTx<T>>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     task::spawn_local(async move {
         let spawn_sem_wait = || {
@@ -919,10 +899,8 @@ where
                 let shared_memory = addr as *mut SharedMemory<T>;
                 let archived =
                     deserialize_message::<T::Output>((*shared_memory).output());
-                // Reuse of `SharedDeserializeMap` doesn't work
-                let value = archived
-                    .deserialize(&mut SharedDeserializeMap::new())
-                    .unwrap();
+                let value =
+                    rkyv::deserialize::<T::Output, RkyvError>(archived).unwrap();
                 let source_ts = (*shared_memory).output_ts;
                 sem_post(&mut (*shared_memory).output_tx).expect("semaphore failure");
                 (value, source_ts)
@@ -945,11 +923,11 @@ fn spawn_shared_rx_task<T>(
     mut initial_inputs: InitialInputs,
 ) -> task::JoinHandle<(InnerRx<T>, InitialInputs)>
 where
-    T: SharedPort + Debug + Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    T: SharedPort + Debug + Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     task::spawn_local(async move {
         let spawn_sem_wait = || {
@@ -959,7 +937,6 @@ where
             })
         };
         let mut sem_wait = spawn_sem_wait();
-        let mut scratch = Some(FallbackScratch::default());
         loop {
             if let Either::Left((_, sem_wait)) = select(&mut stop_rx_rx, sem_wait).await
             {
@@ -997,7 +974,6 @@ where
                     Either::Right(input) => {
                         serialize_message(
                             (*shared_memory).input(input_index),
-                            &mut scratch,
                             &input.value,
                         );
                         (*shared_memory).input_ts[input_index] = input.source_ts;

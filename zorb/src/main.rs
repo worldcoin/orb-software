@@ -117,12 +117,12 @@ async fn main() -> Result<()> {
         Cmd::Pub { keyexpr, payload } => {
             let (payload, encoding) = match keyexpr.as_str() {
                 "examplefoo" => {
-                    let bytes = rkyv::to_bytes::<_, 64>(&Example::Foo)?;
+                    let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&Example::Foo)?;
                     (bytes.to_vec(), Encoding::ZENOH_BYTES)
                 }
 
                 "examplebar" => {
-                    let bytes = rkyv::to_bytes::<_, 64>(&Example::Bar)?;
+                    let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&Example::Bar)?;
                     (bytes.to_vec(), Encoding::ZENOH_BYTES)
                 }
 

@@ -52,7 +52,6 @@ reqwest.workspace = true
 nix = { workspace = true, features = ["net"] }
 rustix = { workspace = true, features = ["process"] }
 rusty_network_manager = "0.6.0"
-rkyv = { workspace = true, features = ["validation"] }
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
