@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Worldcoin Orb Daemon every 3 minutes
+Description=Run Worldcoin Orb Daemon every 15 minutes
 
 [Timer]
 OnBootSec=3min
