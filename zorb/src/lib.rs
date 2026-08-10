@@ -1,4 +1,4 @@
-use rkyv::{bytecheck, Archive, CheckBytes, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize};
 
 pub mod color;
 
@@ -10,16 +10,13 @@ macro_rules! register_rkyv_types {
         let mut m: std::collections::HashMap<&'static str, $crate::Handler> = std::collections::HashMap::new();
         $({
             fn wrapper(bytes: &[u8]) -> color_eyre::Result<String> {
-                let mut aligned = rkyv::AlignedVec::with_capacity(bytes.len());
+                let mut aligned = rkyv::util::AlignedVec::<16>::with_capacity(bytes.len());
                 aligned.extend_from_slice(bytes);
 
                 let archived: &rkyv::Archived<$ty> =
-                    rkyv::check_archived_root::<$ty>(&aligned).map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
+                    rkyv::access::<rkyv::Archived<$ty>, rkyv::rancor::Error>(&aligned).map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
-                let owned: $ty = rkyv::Deserialize::<$ty, rkyv::Infallible>::deserialize(
-                    archived,
-                    &mut rkyv::Infallible,
-                ).map_err(|e|color_eyre::eyre::eyre!("{e}"))?;
+                let owned: $ty = rkyv::deserialize::<$ty, rkyv::rancor::Error>(archived).map_err(|e|color_eyre::eyre::eyre!("{e}"))?;
 
                 Ok(format!("{owned:?}"))
             }
@@ -31,8 +28,21 @@ macro_rules! register_rkyv_types {
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq)]
-#[archive_attr(derive(CheckBytes, Debug, PartialEq))]
+#[rkyv(derive(Debug, PartialEq))]
 pub enum Example {
     Foo,
     Bar,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Example;
+
+    #[test]
+    fn registered_handler_deserializes() {
+        let handlers = crate::register_rkyv_types!(Example);
+        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&Example::Foo).unwrap();
+
+        assert_eq!(handlers["Example"](&bytes).unwrap(), "Foo");
+    }
 }

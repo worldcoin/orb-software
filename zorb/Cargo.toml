@@ -13,7 +13,7 @@ clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
 orb-build-info.workspace = true
 orb-info = { workspace = true, features = ["orb-id"] }
-rkyv = { workspace = true, features = ["bytecheck", "validation"] }
+rkyv.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 zenorb.workspace = true
