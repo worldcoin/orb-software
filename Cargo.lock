@@ -8511,6 +8511,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "orbd"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "orb-build-info",
+ "orb-health",
+ "orb-telemetry",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ordered-float"
 version = "2.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
