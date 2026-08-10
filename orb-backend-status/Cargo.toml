@@ -39,7 +39,6 @@ reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { version = "0.4.1", features = ["json"] }
 reqwest-tracing = { version = "0.5.6", features = ["opentelemetry_0_27"] }
 reqwest-retry = "0.7.0"
-rkyv = { workspace = true, features = ["validation"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with = { version = "3.11.0" }
