@@ -1,0 +1,20 @@
+[Unit]
+Description=Worldcoin Orb Daemon
+After=zenohd.service
+Wants=zenohd.service
+
+[Service]
+Type=oneshot
+User=worldcoin
+Environment=RUST_BACKTRACE=1
+SyslogIdentifier=worldcoin-orbd
+WorkingDirectory=/home/worldcoin
+ExecStart=/usr/local/bin/orbd
+Restart=on-failure
+RestartSec=3
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
