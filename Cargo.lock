@@ -7669,6 +7669,8 @@ name = "orb-health"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "rustix 0.38.44",
+ "tempfile",
  "tokio",
  "tracing",
  "walkdir",
