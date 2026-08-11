@@ -9,6 +9,10 @@ rust-version.workspace = true
 
 [dependencies]
 color-eyre.workspace = true
+rustix = { workspace = true, features = ["fs"] }
 tokio.workspace = true
 tracing.workspace = true
 walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
