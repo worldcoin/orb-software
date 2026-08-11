@@ -14,6 +14,10 @@ ignore = [
 	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0118", reason = "no upgrade available, is merely DoS" },
 	{ id = "RUSTSEC-2026-0119", reason = "no upgrade available, is merely DoS" },
+	# lru 0.12 and 0.13 are pulled in by aws-sdk-s3 and iroh. The fix is only
+	# available in lru 0.18.2, outside their semver constraints. Exploitation also
+	# requires a cache key with a panicking Drop implementation and catching that panic.
+	{ id = "RUSTSEC-2026-0253", reason = "transitive dep via aws-sdk-s3 and iroh; no compatible upgrade available and exploit requires a panicking key destructor" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
