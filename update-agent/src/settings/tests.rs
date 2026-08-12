@@ -14,28 +14,24 @@ use orb_update_agent_core::{file_location::LocalOrRemote, Slot};
 use crate::settings::{Backend, Settings};
 
 const CFG_FILE_CONTENTS_TRUTHY: &str = r#"
-    versions = "/config/versions"
     verify_manifest_signature_against = "stage"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
     id = "/config/id"
     update_location = "/config/update_location"
     nodbus = true
-    skip_version_asserts = true
     noupdate = true
     download_delay = 3000
     recovery = true
 "#;
 
 const CFG_FILE_CONTENTS_FALSY: &str = r#"
-    versions = "/config/versions"
     verify_manifest_signature_against = "stage"
     workspace = "/config/workspace"
     downloads = "/config/downloads"
     id = "/config/id"
     update_location = "/config/update_location"
     nodbus = false
-    skip_version_asserts = false
     noupdate = false
     download_delay = 3000
     recovery = false
@@ -55,9 +51,7 @@ fn set_env(jail: &mut Jail, set_bools_to: bool) {
     jail.set_env("update_agent_id", "/env/id");
     jail.set_env("update_agent_verify_manifest_signature_against", "prod");
     jail.set_env("update_agent_update_location", "/env/update_location");
-    jail.set_env("update_agent_versions", "/env/versions");
     jail.set_env("update_agent_nodbus", bool_str);
-    jail.set_env("update_agent_skip_version_asserts", bool_str);
     jail.set_env("update_agent_noupdate", bool_str);
     jail.set_env("update_agent_recovery", bool_str);
     jail.set_env("update_agent_download_delay", "4000");
@@ -72,9 +66,7 @@ fn test_cli_args_override_config_file_and_env_vars() {
         --id /args/id
         --verify-manifest-signature-against prod
         --update-location /args/update_location
-        --versions /args/versions
         --nodbus
-        --skip-version-asserts
         --noupdate
         --download-delay 5000
         --recovery
@@ -87,7 +79,6 @@ fn test_cli_args_override_config_file_and_env_vars() {
         let args = make_args(CLI_ARGS).unwrap();
         let current_slot = Slot::A;
         let crate::Settings {
-            versions,
             verify_manifest_signature_against,
             active_slot,
             workspace,
@@ -95,7 +86,6 @@ fn test_cli_args_override_config_file_and_env_vars() {
             id,
             update_location,
             nodbus,
-            skip_version_asserts,
             noupdate,
             recovery,
             download_delay,
@@ -114,9 +104,7 @@ fn test_cli_args_override_config_file_and_env_vars() {
             update_location,
             LocalOrRemote::parse(&args.update_location.unwrap()).unwrap()
         );
-        assert_eq!(versions.as_os_str(), args.versions.unwrap().as_str());
         assert_eq!(nodbus, args.nodbus);
-        assert_eq!(skip_version_asserts, args.skip_version_asserts);
         assert_eq!(noupdate, args.noupdate);
         assert_eq!(recovery, args.recovery);
         assert_eq!(
@@ -137,9 +125,7 @@ fn test_cli_args_override_config_file() {
         --id /args/id
         --verify-manifest-signature-against prod
         --update-location /args/update_location
-        --versions /args/versions
         --nodbus
-        --skip-version-asserts
         --noupdate
         --download-delay 5000
         --recovery
@@ -151,7 +137,6 @@ fn test_cli_args_override_config_file() {
         let args = make_args(CLI_ARGS).unwrap();
         let current_slot = Slot::A;
         let crate::Settings {
-            versions,
             verify_manifest_signature_against,
             active_slot,
             workspace,
@@ -159,7 +144,6 @@ fn test_cli_args_override_config_file() {
             id,
             update_location,
             nodbus,
-            skip_version_asserts,
             noupdate,
             recovery,
             download_delay,
@@ -178,9 +162,7 @@ fn test_cli_args_override_config_file() {
             update_location,
             LocalOrRemote::parse(&args.update_location.unwrap()).unwrap()
         );
-        assert_eq!(versions.as_os_str(), args.versions.unwrap().as_str());
         assert_eq!(nodbus, args.nodbus);
-        assert_eq!(skip_version_asserts, args.skip_version_asserts);
         assert_eq!(noupdate, args.noupdate);
         assert_eq!(recovery, args.recovery);
         assert_eq!(
@@ -198,7 +180,6 @@ fn test_only_setting_config_file_works() {
         jail.create_file("config.toml", CFG_FILE_CONTENTS_TRUTHY)?;
         let args = make_args("update-agent").unwrap();
         let crate::Settings {
-            versions,
             verify_manifest_signature_against,
             active_slot,
             workspace,
@@ -206,7 +187,6 @@ fn test_only_setting_config_file_works() {
             id,
             update_location,
             nodbus,
-            skip_version_asserts,
             noupdate,
             recovery,
             download_delay,
@@ -222,9 +202,7 @@ fn test_only_setting_config_file_works() {
             update_location,
             LocalOrRemote::parse("/config/update_location").unwrap()
         );
-        assert_eq!(versions, Path::new("/config/versions"));
         assert!(nodbus);
-        assert!(skip_version_asserts);
         assert!(noupdate);
         assert!(recovery);
         assert_eq!(download_delay, Duration::from_millis(3000));
@@ -241,7 +219,6 @@ fn test_env_override_config_file() {
         set_env(jail, true);
         let current_slot = Slot::A;
         let crate::Settings {
-            versions,
             verify_manifest_signature_against,
             active_slot,
             workspace,
@@ -249,7 +226,6 @@ fn test_env_override_config_file() {
             id,
             update_location,
             nodbus,
-            skip_version_asserts,
             noupdate,
             recovery,
             download_delay,
@@ -265,9 +241,7 @@ fn test_env_override_config_file() {
             update_location,
             LocalOrRemote::parse("/env/update_location").unwrap()
         );
-        assert_eq!(versions, Path::new("/env/versions"));
         assert!(nodbus);
-        assert!(skip_version_asserts);
         assert!(noupdate);
         assert!(recovery);
         assert_eq!(download_delay, Duration::from_millis(4000));
@@ -277,8 +251,6 @@ fn test_env_override_config_file() {
 }
 
 const PROD_CFG_FILE_CONTENTS: &str = r#"
-    versions = "/config/versions"
-    components = "/config/components"
     verify_manifest_signature_against = "prod"
     update_location = "/config/update_location"
     workspace = "/config/workspace"
@@ -287,7 +259,6 @@ const PROD_CFG_FILE_CONTENTS: &str = r#"
     recovery = false
     nodbus = false
     noupdate = false
-    skip_version_asserts = false
 "#;
 
 const PROD_CLI_ARGS: &str = r#"
@@ -302,7 +273,6 @@ fn production_config() {
         jail.create_file("config.toml", cfg_file_contents)?;
         let args = make_args(PROD_CLI_ARGS).unwrap();
         let crate::Settings {
-            versions,
             verify_manifest_signature_against,
             active_slot,
             workspace,
@@ -310,7 +280,6 @@ fn production_config() {
             id,
             update_location,
             nodbus,
-            skip_version_asserts,
             noupdate,
             recovery,
             download_delay,
@@ -326,9 +295,7 @@ fn production_config() {
             update_location,
             LocalOrRemote::parse("/config/update_location").unwrap()
         );
-        assert_eq!(versions, Path::new("/config/versions"));
         assert!(!nodbus);
-        assert!(!skip_version_asserts);
         assert!(!noupdate);
         assert!(!recovery);
         assert_eq!(download_delay, Duration::from_millis(36000));

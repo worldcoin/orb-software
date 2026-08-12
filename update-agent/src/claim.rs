@@ -12,7 +12,7 @@ use orb_dogd::{DogstatsdClient, MetricEmitter};
 use orb_info::orb_os_release::OrbOsPlatform;
 use orb_update_agent_core::{
     reexports::ed25519_dalek::VerifyingKey, Claim, ClaimVerificationContext,
-    LocalOrRemote, Slot, Source, VersionMap,
+    LocalOrRemote, Source,
 };
 use prelude::connectivity::tracker::ConnectivityTracker;
 use reqwest::{StatusCode, Url};
@@ -57,12 +57,8 @@ pub enum Error {
         status_code: StatusCode,
         msg: String,
     },
-    #[error("Unable to determine current version for slot {slot:?} - release version not set in version map")]
-    MissingSlotVersion { slot: Slot },
     #[error("no new version available - system is up to date")]
     NoNewVersion,
-    #[error("failed validating update claim against on disk versions: {0}")]
-    Validation(eyre::Report),
 }
 
 impl Error {
@@ -118,16 +114,11 @@ fn from_path(
 fn from_remote(
     settings: &Settings,
     url: &Url,
-    version_map: &VersionMap,
+    current_version: &str,
     platform: OrbOsPlatform,
     conn_tracker: &ConnectivityTracker,
     metrics: &DogstatsdClient,
 ) -> Result<Option<(String, Claim)>, Error> {
-    let slot = settings.active_slot;
-    let current_version = version_map
-        .get_slot_version(slot)
-        .ok_or_else(|| Error::MissingSlotVersion { slot })?;
-
     let mut api_url = url.clone();
     api_url.set_path(&format!("/api/v2/orbs/{}/claim", settings.id));
     api_url
@@ -297,7 +288,7 @@ fn ensure_sources_match_claim(
 
 pub fn get(
     settings: &Settings,
-    version_map: &VersionMap,
+    current_version: &str,
     platform: OrbOsPlatform,
     conn_tracker: &ConnectivityTracker,
     metrics: &DogstatsdClient,
@@ -315,7 +306,7 @@ pub fn get(
             let result = from_remote(
                 settings,
                 url,
-                version_map,
+                current_version,
                 platform,
                 conn_tracker,
                 metrics,
@@ -359,29 +350,12 @@ fn pubkey_from_backend_type(backend: Backend) -> &'static VerifyingKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orb_update_agent_core::{Slot, VersionMap};
 
     #[test]
     fn test_url_construction() {
         let base_url = Url::parse("https://fleet.stage.orb.worldcoin.org").unwrap();
         let id = "3d8af1da";
-        let slot = Slot::A;
-
-        let versions_json = r#"{
-            "releases": {
-                "slot_a": "test-version",
-                "slot_b": "other-version"
-            },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let versions: orb_update_agent_core::versions::VersionsLegacy =
-            serde_json::from_str(versions_json).unwrap();
-        let version_map = VersionMap::from_legacy(&versions);
-
-        let current_version = version_map.get_slot_version(slot).unwrap_or("unknown");
+        let current_version = "test-version";
         let mut api_url = base_url.clone();
         api_url.set_path(&format!("/api/v2/orbs/{}/claim", id));
         api_url
@@ -422,80 +396,5 @@ mod tests {
             assert_eq!(version, "dupa");
             assert_eq!(message, "No update available");
         }
-    }
-
-    #[test]
-    fn test_incomplete_versions_json_behavior() {
-        let versions_with_empty_json = r#"{
-            "releases": {
-                "slot_a": "",
-                "slot_b": "valid-version"
-            },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let versions_with_empty: orb_update_agent_core::versions::VersionsLegacy =
-            serde_json::from_str(versions_with_empty_json).unwrap();
-        let version_map = VersionMap::from_legacy(&versions_with_empty);
-        assert_eq!(version_map.get_slot_version(Slot::A), Some(""));
-        assert_eq!(version_map.get_slot_version(Slot::B), Some("valid-version"));
-
-        let versions_complete_json = r#"{
-            "releases": {
-                "slot_a": "version-a",
-                "slot_b": "version-b"
-            },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let versions_complete: orb_update_agent_core::versions::VersionsLegacy =
-            serde_json::from_str(versions_complete_json).unwrap();
-        let version_map = VersionMap::from_legacy(&versions_complete);
-        assert_eq!(version_map.get_slot_version(Slot::A), Some("version-a"));
-        assert_eq!(version_map.get_slot_version(Slot::B), Some("version-b"));
-    }
-
-    #[test]
-    fn test_malformed_versions_json_parsing() {
-        let malformed_json = r#"{
-            "releases": {
-                "slot_b": "some-version"
-            },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let result: Result<orb_update_agent_core::versions::Versions, _> =
-            serde_json::from_str(malformed_json);
-        assert!(result.is_err());
-
-        let malformed_json2 = r#"{
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let result2: Result<orb_update_agent_core::versions::Versions, _> =
-            serde_json::from_str(malformed_json2);
-        assert!(result2.is_err());
-
-        let malformed_json3 = r#"{
-            "releases": {
-                "slot_a": null,
-                "slot_b": "some-version"
-            },
-            "slot_a": {},
-            "slot_b": {},
-            "singles": {}
-        }"#;
-
-        let result3: Result<orb_update_agent_core::versions::Versions, _> =
-            serde_json::from_str(malformed_json3);
-        assert!(result3.is_err());
     }
 }
