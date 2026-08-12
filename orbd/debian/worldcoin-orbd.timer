@@ -1,8 +1,8 @@
 [Unit]
-Description=Run Worldcoin Orb Daemon 15 minutes after boot
+Description=Run Worldcoin Orb Daemon 5 minutes after boot
 
 [Timer]
-OnBootSec=15min
+OnBootSec=5min
 
 [Install]
 WantedBy=timers.target
