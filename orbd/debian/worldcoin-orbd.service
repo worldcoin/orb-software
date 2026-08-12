@@ -15,6 +15,3 @@ RestartSec=3
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 AmbientCapabilities=CAP_DAC_READ_SEARCH
 NoNewPrivileges=yes
-
-[Install]
-WantedBy=multi-user.target
