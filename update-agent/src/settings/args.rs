@@ -21,10 +21,6 @@ pub struct Args {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<String>,
-    /// The path to the `versions.json` file
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub versions: Option<String>,
     #[arg(long, value_enum)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verify_manifest_signature_against: Option<crate::settings::Backend>,
@@ -56,14 +52,6 @@ pub struct Args {
     // impossible to set this config option outside of cli args.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nodbus: bool,
-    /// Skips verification of versions asserted in the claim if the update manifest contains
-    /// updated components for all components on the orb.
-    #[arg(long)]
-    // Serialization is skipped if not set because command line args always take
-    // precedence over env vars and a config file. This would otherwise make it
-    // impossible to set this config option outside of cli args.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub skip_version_asserts: bool,
     /// Downloads all components, but does not execute the actual update step, copying components
     /// to their destinations, etc.
     #[arg(long)]

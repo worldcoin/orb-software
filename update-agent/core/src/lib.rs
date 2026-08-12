@@ -8,16 +8,12 @@ pub mod manifest;
 pub mod pubkeys;
 mod signatures;
 mod slot;
-pub mod version_map;
-pub mod versions;
 
 pub use claim::{Claim, ClaimVerificationContext, MimeType, Source, UncheckedClaim};
 pub use components::{Component, Components};
 pub use file_location::LocalOrRemote;
 pub use manifest::{Manifest, ManifestComponent};
 pub use slot::Slot;
-pub use version_map::VersionMap;
-pub use versions::{Versions, VersionsLegacy};
 
 /// Crates reexported for use
 pub mod reexports {

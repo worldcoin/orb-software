@@ -30,7 +30,6 @@ pub enum Backend {
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Settings {
-    pub versions: PathBuf,
     /// Pub keys are in [`orb_update_agent_core::pubkeys`]
     pub verify_manifest_signature_against: Backend,
     pub active_slot: Slot,
@@ -39,7 +38,6 @@ pub struct Settings {
     pub id: String,
     pub update_location: LocalOrRemote,
     pub nodbus: bool,
-    pub skip_version_asserts: bool,
     pub noupdate: bool,
     pub recovery: bool,
     #[serde_as(as = "DurationMilliSeconds")]
