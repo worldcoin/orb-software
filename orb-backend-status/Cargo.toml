@@ -29,6 +29,7 @@ orb-info = { workspace = true, features = [
 	"orb-id",
 	"orb-jabil-id",
 	"orb-name",
+	"orb-os-release",
 	"orb-token",
 ] }
 orb-dogd.workspace = true
