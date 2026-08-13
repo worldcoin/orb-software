@@ -1,7 +1,6 @@
 use std::{
     fs::File,
     io::{self, Seek, SeekFrom, Write},
-    path::Path,
 };
 
 use eyre::{ensure, WrapErr as _};
@@ -9,14 +8,14 @@ use orb_dogd::MetricEmitter;
 use orb_io_utils::ClampedSeek;
 use orb_update_agent_core::{
     components::{self, Gpt},
-    Claim, Component, Components, Slot, VersionMap,
+    Claim, Component, Components, Slot,
 };
 use tracing::{debug, warn};
 
 use super::Update;
 use crate::{
     component::Component as RuntimeComponent, confirm_read_works_at_bounds,
-    mount::unmount_partition_by_label, write_json_and_sync,
+    mount::unmount_partition_by_label,
 };
 
 const METRIC_NAME: &str = "orb.platform.update.component.gpt";
@@ -47,8 +46,6 @@ pub fn copy_not_updated_redundant_components<M: MetricEmitter>(
     claim: &Claim,
     update_components: &[RuntimeComponent],
     active_slot: Slot,
-    version_map: &mut VersionMap,
-    version_map_dst: &Path,
     metrics: &M,
 ) -> eyre::Result<()> {
     let target_slot = active_slot.opposite();
@@ -78,12 +75,7 @@ pub fn copy_not_updated_redundant_components<M: MetricEmitter>(
         };
 
         gpt_component.update(target_slot, &mut disk_partition_reader, metrics)?;
-        if !version_map.mirror_redundant_component_version(name, target_slot.opposite())
-        {
-            warn!("gpt_component `{name}` is either missing from source group or not redundant");
-        }
-
-        write_json_and_sync(version_map_dst, &version_map)?;
+        debug!("copied redundant GPT component `{name}` to {target_slot}");
     }
     Ok(())
 }

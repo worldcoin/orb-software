@@ -9,16 +9,12 @@ pub mod settings;
 pub mod update;
 pub mod util;
 
-use component::Component;
 use eyre::{ensure, WrapErr as _};
 use orb_build_info::{make_build_info, BuildInfo};
-use orb_update_agent_core::{Slot, VersionMap};
 pub use settings::{Args, Settings};
 use std::{
     borrow::Cow,
-    fs::File,
     io::{Read, Seek, SeekFrom},
-    path::Path,
     process::ExitCode,
 };
 
@@ -36,8 +32,6 @@ pub enum Error {
     SlotControl(#[from] orb_slot_ctrl::Error),
     #[error("Settings: {0}")]
     Settings(#[from] figment::Error),
-    #[error("ReadingVersions: {0}")]
-    ReadingVersions(eyre::Report),
     #[error("Claim: {0}")]
     Claim(#[from] claim::Error),
     #[error("Component: {0}")]
@@ -48,8 +42,6 @@ pub enum Error {
     Supervisor(eyre::Report),
     #[error("RunUpdate: {0}")]
     RunUpdate(eyre::Report),
-    #[error("UpdateComponentVersionsOnDisk: {0}")]
-    UpdateComponentVersionOnDisk(eyre::Report),
     #[error("CopyRedundantComponents: {0}")]
     CopyRedundantComponents(eyre::Report),
     #[error("Finalize: {0}")]
@@ -81,14 +73,10 @@ impl Error {
             Error::OrbOsRelease(_) => "orb-info-os-release".into(),
             Error::SlotControl(_) => "slot-control".into(),
             Error::Settings(_) => "settings".into(),
-            Error::ReadingVersions(_) => "reading-versions".into(),
             Error::Other(_) => "other".into(),
             Error::Manifest(_) => "manifest".into(),
             Error::Supervisor(_) => "supervisor".into(),
             Error::RunUpdate(_) => "run-update".into(),
-            Error::UpdateComponentVersionOnDisk(_) => {
-                "update-component-version-on-disk".into()
-            }
             Error::CopyRedundantComponents(_) => "copy-redundant-components".into(),
             Error::Finalize(_) => "finalize".into(),
             Error::Claim(error) => error.to_dd_tag(),
@@ -122,9 +110,7 @@ impl claim::Error {
             DbusRequest(_) => "claim-dbus-request".into(),
             DownloadNotAllowed { .. } => "claim-download-not-allowed".into(),
             StatusCode { .. } => "claim-status-code".into(),
-            MissingSlotVersion { .. } => "claim-missing-slot-version".into(),
             NoNewVersion => "claim-no-new-version".into(),
-            Validation(_) => "claim-validation".into(),
         }
     }
 }
@@ -155,39 +141,6 @@ impl component::Error {
             Process(..) => "component-process",
         }
     }
-}
-
-/// Writes a serializable value as JSON to the given path and syncs to disk.
-pub fn write_json_and_sync(
-    path: &Path,
-    value: &impl serde::Serialize,
-) -> eyre::Result<()> {
-    let file = File::options()
-        .write(true)
-        .read(true)
-        .create(true)
-        .truncate(true)
-        .open(path)
-        .wrap_err_with(|| format!("failed to open `{}`", path.display()))?;
-    serde_json::to_writer(&file, value)
-        .wrap_err_with(|| format!("failed to write JSON to `{}`", path.display()))?;
-    file.sync_all()
-        .wrap_err_with(|| format!("failed to sync `{}` to disk", path.display()))?;
-    Ok(())
-}
-
-pub fn update_component_version_on_disk(
-    target_slot: Slot,
-    component: &Component,
-    version_map: &mut VersionMap,
-    path: &Path,
-) -> eyre::Result<()> {
-    version_map.set_component(
-        target_slot,
-        component.manifest_component(),
-        component.system_component(),
-    );
-    write_json_and_sync(path, &version_map)
 }
 
 /// After confirming reads work at the extremeties of the given range, this function

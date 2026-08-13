@@ -8366,7 +8366,6 @@ dependencies = [
  "hex-literal 0.4.1",
  "jose-jwk",
  "orb-slot-ctrl",
- "rustix 0.38.44",
  "serde",
  "serde_json",
  "sha2",
