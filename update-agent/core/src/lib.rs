@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(unreachable_pub)]
 
+pub mod blockdev;
 mod claim;
 pub mod components;
 pub mod file_location;

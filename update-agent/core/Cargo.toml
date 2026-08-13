@@ -23,7 +23,6 @@ gpt.workspace = true
 hex-literal.workspace = true
 jose-jwk = { workspace = true, default-features = false }
 orb-slot-ctrl.workspace = true
-rustix = { workspace = true, features = ["fs"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 sha2.workspace = true

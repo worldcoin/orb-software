@@ -5,10 +5,10 @@ use serde::de::Visitor;
 use serde::Deserializer;
 
 use gpt::{disk::LogicalBlockSize, partition::Partition, DiskDevice, GptDisk};
-use rustix::fs::{major, minor};
 use serde::{Deserialize, Serialize};
 
 use super::Slot;
+use crate::blockdev;
 
 pub type Components = HashMap<String, Component>;
 
@@ -70,66 +70,11 @@ impl<'de> Deserialize<'de> for Device {
     }
 }
 
-/// Finds the block device where the given mountpoint is mounted.
-///
-/// This function uses stat to get the device major and minor numbers of the mountpoint,
-/// then determines the parent block device.
-///
-/// That function is an eqivalent of this bash script
-///
-/// dev=$(stat -c '%d' <mountpoint>)
-/// major=$((dev / 256))
-/// minor=$((dev % 256))
-/// sysfs_path="/sys/dev/block/$major:$minor"
-/// link_target=$(readlink -f $sysfs_path)
-/// device_name=$(basename $(dirname $link_target))
-/// echo "/dev/$device_name"
-#[cfg(target_os = "linux")]
-fn find_block_device_by_mountpoint(
-    mountpoint: &std::path::Path,
-) -> std::io::Result<PathBuf> {
-    use std::os::linux::fs::MetadataExt;
-
-    // 'stat' the mountpoint. (see man 2 stat)
-    let metadata = std::fs::metadata(mountpoint)?;
-
-    // Get major & minor of the underlying device
-    let dev = metadata.st_dev();
-    let major = major(dev);
-    let minor = minor(dev);
-
-    // Construct the path in sysfs to find device information
-    // (see man 5 sysfs, section on '/sys/dev/')
-    let sysfs_path = format!("/sys/dev/block/{major}:{minor}");
-
-    // Read the symlink to get the actual device path
-    let link_target = std::fs::read_link(&sysfs_path)?;
-    // The link target looks like: ../../devices/.../block/nvme0n1/nvme0n1p1
-    // We want to get the parent directory name (nvme0n1 in this case)
-    let device_name = link_target.parent().and_then(|x| x.file_name()).unwrap();
-    // Construct the full device path
-    let mut ret = PathBuf::from("/dev/");
-    ret.push(device_name);
-    Ok(ret)
-}
-
-#[cfg(not(target_os = "linux"))]
-fn find_block_device_by_mountpoint(
-    mountpoint: &std::path::Path,
-) -> std::io::Result<PathBuf> {
-    panic!("finding block device only works on Linux")
-}
-
-pub fn find_root_blockdevice() -> std::io::Result<PathBuf> {
-    find_block_device_by_mountpoint(std::path::Path::new("/usr/persistent"))
-}
-
 impl Device {
     fn to_path(&self) -> PathBuf {
         match self {
-            Device::Ssd => {
-                find_root_blockdevice().expect("Failed to guess root block device")
-            }
+            Device::Ssd => blockdev::find_root_blockdevice()
+                .expect("Failed to guess root block device"),
             Device::Qspi => PathBuf::from("/dev/mtdblock0"),
         }
     }
