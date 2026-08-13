@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
         .dbus(zbus::Connection::session().await?)
         .zsession(&zsession)
         .endpoint(endpoint)
-        .orb_os_version(OrbOsRelease::read().await?.orb_os_version)
+        .orb_os_version(OrbOsRelease::read().await?.platform_version())
         .orb_id(orb_id)
         .orb_name(orb_name)
         .orb_jabil_id(orb_jabil_id)
