@@ -248,6 +248,20 @@ sound_enum! {
         PleaseDontShutDown,
         #[sound_enum(file = "voice_iris_open")]
         OpenEyes,
+        #[sound_enum(file = "voice_occlusion_glasses")]
+        OcclusionGlasses,
+        #[sound_enum(file = "voice_occlusion_mask")]
+        OcclusionMask,
+        #[sound_enum(file = "voice_occlusion_hair")]
+        OcclusionHair,
+        #[sound_enum(file = "voice_occlusion_sunglasses")]
+        OcclusionSunglasses,
+        #[sound_enum(file = "voice_occlusion_segmentation")]
+        OcclusionSegmentation,
+        #[sound_enum(file = "voice_occlusion_other")]
+        OcclusionOther,
+        #[sound_enum(file = "voice_occlusion_eye")]
+        OcclusionEye,
     }
 }
 
