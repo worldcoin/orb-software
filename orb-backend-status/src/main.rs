@@ -1,8 +1,7 @@
 use color_eyre::eyre::Result;
-use orb_backend_status::backend::os_version::orb_os_version;
 use orb_dogd::DogstatsdClient;
 use orb_endpoints::{v2::Endpoints, Backend};
-use orb_info::{OrbId, OrbJabilId, OrbName};
+use orb_info::{orb_os_release::OrbOsRelease, OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::default::Default;
 use std::time::Duration;
@@ -58,7 +57,7 @@ async fn main() -> Result<()> {
         .dbus(zbus::Connection::session().await?)
         .zsession(&zsession)
         .endpoint(endpoint)
-        .orb_os_version(orb_os_version()?)
+        .orb_os_version(OrbOsRelease::read().await?.platform_version())
         .orb_id(orb_id)
         .orb_name(orb_name)
         .orb_jabil_id(orb_jabil_id)
