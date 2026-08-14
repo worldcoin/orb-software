@@ -97,7 +97,10 @@ class OrbRegistration:
                 self.channel = "dev_diamond_channel"
         elif args.backend == "prod":
             self.domain = "https://management.internal.orb.worldcoin.dev"
-            self.channel = args.channel
+            if args.platform == "diamond" and args.channel == "general":
+                self.channel = "diamond-tier-ga"
+            else:
+                self.channel = args.channel
         else:
             raise ValueError(f"Invalid backend: {args.backend}")
 
