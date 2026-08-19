@@ -249,6 +249,14 @@ git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
 # [profile.dev.package."*"]
 # opt-level = 2
 
+# glibc's _FORTIFY_SOURCE requires -O, so the shim's C code (built by cc-rs in
+# its build.rs) must not compile at opt-level 0, even in dev builds.
+[profile.dev.package.orb-bidiff-squashfs-shim]
+opt-level = 2
+
+[profile.test.package.orb-bidiff-squashfs-shim]
+opt-level = 2
+
 # What we use when producing artifacts to distribute
 [profile.artifact]
 debug = false
