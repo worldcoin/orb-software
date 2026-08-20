@@ -117,6 +117,19 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
         let bin_out = pkg_out.join("bin");
         fs::create_dir_all(&bin_out)?;
 
+        // We author every path in this payload ourselves below, so we can
+        // emit its canned_fs_config directly instead of re-deriving it by
+        // walking the tree afterward (see gen-canned-fs-config.nix, which
+        // this replaces for crate-authored payloads). uid/gid 1000
+        // (Android's `system`) is a placeholder default, same status as
+        // the TODO_USER/TODO_SELINUX_DOMAIN placeholders below - it should
+        // be revisited together with the real init.rc user/group.
+        let mut fs_config = vec![
+            "/ 1000 1000 0755".to_string(),
+            "/apex_manifest.pb 1000 1000 0644".to_string(),
+            "/bin 1000 1000 0755".to_string(),
+        ];
+
         for bin in &binaries {
             let src = PathBuf::from("target")
                 .join(TARGET)
@@ -126,6 +139,7 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
             fs::copy(&src, &dst).map_err(|e| {
                 eyre!("failed to copy {} -> {}: {e}", src.display(), dst.display())
             })?;
+            fs_config.push(format!("/bin/{bin} 1000 1000 0755"));
         }
 
         // TODO: "com.worldcoin.orb.*" is a placeholder reverse-DNS
@@ -141,6 +155,8 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
 
         let init_dir = pkg_out.join("etc/init");
         fs::create_dir_all(&init_dir)?;
+        fs_config.push("/etc 1000 1000 0755".to_string());
+        fs_config.push("/etc/init 1000 1000 0755".to_string());
         for bin in &binaries {
             fs::write(
                 init_dir.join(format!("{bin}.rc")),
@@ -155,7 +171,14 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
                     pkg = pkg.name,
                 ),
             )?;
+            fs_config.push(format!("/etc/init/{bin}.rc 1000 1000 0644"));
         }
+
+        fs_config.sort();
+        fs::write(
+            pkg_out.join("canned_fs_config"),
+            fs_config.join("\n") + "\n",
+        )?;
 
         println!("staged payload for `{}` at {}", pkg.name, pkg_out.display());
     }
