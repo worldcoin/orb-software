@@ -5,6 +5,62 @@ use color_eyre::Result;
 
 const TARGET: &str = "aarch64-linux-android";
 
+/// Names of workspace packages whose `[package.metadata.orb]
+/// unsupported_targets` lists `aarch64-linux-android` - the same mechanism
+/// `ci/rust_ci_helper.py` already uses to exclude Darwin-incompatible
+/// crates from `cargo nextest run --workspace`.
+fn unsupported_packages() -> Result<Vec<String>> {
+    let md = MetadataCommand::new().no_deps().exec()?;
+    let mut names: Vec<String> = md
+        .workspace_packages()
+        .into_iter()
+        .filter(|pkg| {
+            pkg.metadata
+                .get("orb")
+                .and_then(|orb| orb.get("unsupported_targets"))
+                .and_then(|targets| targets.as_array())
+                .is_some_and(|targets| {
+                    targets.iter().any(|t| t.as_str() == Some(TARGET))
+                })
+        })
+        .map(|pkg| pkg.name.as_str().to_owned())
+        .collect();
+    names.sort();
+
+    Ok(names)
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct BuildArgs {
+    /// Build in release mode.
+    #[arg(long)]
+    pub release: bool,
+}
+
+/// Builds the whole workspace for Android, skipping crates marked
+/// unsupported via `[package.metadata.orb] unsupported_targets`. Meant for
+/// CI: unlike `android-sweep`, a build failure here is an error.
+pub fn run_build(args: BuildArgs) -> Result<()> {
+    let BuildArgs { release } = args;
+    let excludes = unsupported_packages()?;
+
+    println!(
+        "skipping (unsupported on {TARGET}): {}",
+        excludes.join(", ")
+    );
+
+    let mut cmd_args = vec!["cargo", "build", "--workspace", "--target", TARGET];
+    if release {
+        cmd_args.push("--release");
+    }
+    for pkg in &excludes {
+        cmd_args.push("--exclude");
+        cmd_args.push(pkg);
+    }
+
+    cmd(&cmd_args)
+}
+
 #[derive(ClapArgs, Debug)]
 pub struct Args {
     /// Build in release mode.

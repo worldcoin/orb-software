@@ -14,3 +14,6 @@ rust-version.workspace = true
 [dependencies]
 color-eyre.workspace = true
 libc.workspace = true
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]
