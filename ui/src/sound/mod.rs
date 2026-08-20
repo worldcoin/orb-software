@@ -445,7 +445,7 @@ async fn load_sound_file(
             reader.spec().bits_per_sample,
             16,
             "Only 16-bit sounds are supported: {:?}",
-            &file
+            file
         );
     }
 

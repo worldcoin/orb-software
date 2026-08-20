@@ -17,7 +17,7 @@ use crate::{
 
 /// The duration of time since the last "start signup" event that has to have passed
 /// before the update agent is permitted to start a download.
-pub const DEFAULT_DURATION_TO_ALLOW_DOWNLOADS: Duration = Duration::from_secs(20 * 60);
+pub const DEFAULT_DURATION_TO_ALLOW_DOWNLOADS: Duration = Duration::from_mins(20);
 
 pub const BACKGROUND_DOWNLOADS_ALLOWED_PROPERTY_NAME: &str =
     "BackgroundDownloadsAllowed";

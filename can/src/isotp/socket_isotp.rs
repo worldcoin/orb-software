@@ -27,7 +27,7 @@ pub(crate) mod imp {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
                 context: Some(
-                    format!("setting CAN_ISOTP_OPTS ({:#?})", &opts.into()).to_string(),
+                    format!("setting CAN_ISOTP_OPTS ({:#?})", opts.into()).to_string(),
                 ),
                 source: io::Error::last_os_error(),
             });
@@ -55,7 +55,7 @@ pub(crate) mod imp {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
                 context: Some(
-                    format!("setting CAN_ISOTP_RECV_FC ({:#?})", &opts.into())
+                    format!("setting CAN_ISOTP_RECV_FC ({:#?})", opts.into())
                         .to_string(),
                 ),
                 source: io::Error::last_os_error(),
@@ -84,7 +84,7 @@ pub(crate) mod imp {
             return Err(Error::Syscall {
                 syscall: "setsockopt(2)".to_string(),
                 context: Some(
-                    format!("setting CAN_ISOTP_LL_OPTS ({:#?})", &opts.into())
+                    format!("setting CAN_ISOTP_LL_OPTS ({:#?})", opts.into())
                         .to_string(),
                 ),
                 source: io::Error::last_os_error(),

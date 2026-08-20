@@ -237,7 +237,7 @@ impl NetworkProxyExtractedProps {
 
     /// Note: We return false if the ssid was given to us by dbus as unquoted
     pub fn matches(&self, creds: &Credentials) -> bool {
-        let quoted_creds_ssid = format!("\"{}\"", &creds.ssid);
+        let quoted_creds_ssid = format!("\"{}\"", creds.ssid);
         if self.ssid != quoted_creds_ssid {
             return false;
         }

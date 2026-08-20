@@ -272,8 +272,7 @@ impl Animation for SignupPhase {
                     .iter()
                     .enumerate()
                     .rev()
-                    .filter(|(_, c)| !c.is_off())
-                    .next_back()
+                    .rfind(|(_, c)| !c.is_off())
                 {
                     let color = match self.orb_type {
                         engine::OrbType::Pearl => Argb::PEARL_OPERATOR_AMBER,

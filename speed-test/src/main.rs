@@ -49,10 +49,7 @@ async fn run(args: &Args) -> Result<()> {
             zbus::ConnectionBuilder::address(args.dbus_addr.as_str())?
                 .build()
                 .await
-                .context(format!(
-                    "Failed to connect to D-Bus at {}",
-                    &args.dbus_addr
-                ))?;
+                .context(format!("Failed to connect to D-Bus at {}", args.dbus_addr))?;
 
         println!("Starting PCP upload speed: {} Mb (uncompressed)", size_mb);
 
