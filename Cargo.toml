@@ -88,9 +88,14 @@ rust-version = "1.91.1" # See rust-toolchain.toml
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 async-trait = "0.1.88"
-aws-config = "=1.5.5"
+aws-config = "=1.8.13"
 aws-credential-types = "1.2.14"
-aws-sdk-s3 = "=1.46.0"
+aws-sdk-s3 = { version = "=1.130.0", default-features = false, features = [
+	"default-https-client",
+	"http-1x",
+	"rt-tokio",
+	"sigv4a",
+] }
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
