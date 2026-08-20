@@ -26,6 +26,7 @@ let
     includeSystemImages = false;
     includeSources = false;
     includeExtras = [ ];
+    abiVersions = [ "arm64-v8a" ];
     platformVersions = [ ];
     buildToolsVersions = [ ];
   };

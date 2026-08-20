@@ -17,6 +17,10 @@ enum Cmd {
     /// in the workspace (or the given crates), reporting which succeed. Not
     /// every crate is expected to work.
     AndroidSweep(android::Args),
+    /// Builds the whole workspace for `aarch64-linux-android`, skipping
+    /// crates marked unsupported via `[package.metadata.orb]
+    /// unsupported_targets`. Used by CI as the Android build gate.
+    AndroidBuild(android::BuildArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -45,6 +49,7 @@ fn main() -> Result<()> {
     match cmd {
         Cmd::Build(args) => build::run(args),
         Cmd::AndroidSweep(args) => android::run(args),
+        Cmd::AndroidBuild(args) => android::run_build(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
