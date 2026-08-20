@@ -1,3 +1,4 @@
+pub mod android;
 pub mod build;
 pub mod deb;
 pub mod deploy;
