@@ -390,8 +390,8 @@ async fn find_or_add_network<'a>(
     let network_properties = {
         let mut map = HashMap::<&str, zbus::zvariant::Value<'_>>::new();
         map.insert("ssid", credentials.ssid.as_str().into());
-        if credentials.password.is_some() {
-            let psk: &str = &credentials.password.as_ref().unwrap().0;
+        if let Some(password) = &credentials.password {
+            let psk: &str = &password.0;
             map.insert("psk", psk.into());
         }
         match credentials.auth_type {

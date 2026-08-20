@@ -68,6 +68,8 @@ async fn main() -> ExitCode {
         .inspect_err(|e| error!("failed to setup zenoh: {e}"));
 
     let metrics_clone = metrics.clone();
+    #[allow(clippy::result_large_err)]
+    // `Error` shape is dictated by `run`'s error type
     let result =
         task::spawn_blocking(move || run(&args, metrics_clone, conn_tracker)).await;
 
