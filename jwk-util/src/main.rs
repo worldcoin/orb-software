@@ -4,7 +4,7 @@ use std::io::{Read as _, Write as _};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
-    command, Parser,
+    Parser,
 };
 use color_eyre::eyre::{ensure, WrapErr as _};
 use ed25519_dalek::pkcs8::DecodePrivateKey as _;

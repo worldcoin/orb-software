@@ -169,7 +169,7 @@ pub async fn join(iface_name: &str, credentials: Credentials) -> Result<()> {
         .ok();
 
         if check_for_matching_ssid().await? {
-            return Err(eyre!("Failed to find matching SSID even after active scan"))?;
+            Err(eyre!("Failed to find matching SSID even after active scan"))?;
         }
     }
 

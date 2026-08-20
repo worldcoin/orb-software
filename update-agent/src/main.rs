@@ -629,8 +629,8 @@ fn cleanup_old_updates(dst: &Path, claim: &Claim) -> eyre::Result<()> {
 
     let claim_entries: HashSet<_> = claim
         .sources()
-        .iter()
-        .flat_map(|(_, s)| {
+        .values()
+        .flat_map(|s| {
             vec![
                 s.unique_name(),
                 // TODO(andronat): I would like to have a "safer" way to create this names. What if
@@ -698,8 +698,8 @@ fn check_for_available_space<P: AsRef<Path>>(
         .collect();
     let claim_entries: HashSet<_> = claim
         .sources()
-        .iter()
-        .flat_map(|(_, s)| {
+        .values()
+        .flat_map(|s| {
             vec![
                 s.unique_name(),
                 // TODO(andronat): I would like to have a "safer" way to create this names. What if

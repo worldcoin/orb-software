@@ -4,7 +4,6 @@ use std::{
 };
 
 use agentwire::port;
-use bon::builder;
 use eyre::{Result, WrapErr as _};
 use iroh::{endpoint::Connection, Endpoint};
 use n0_future::FutureExt as _;

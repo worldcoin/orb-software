@@ -1,4 +1,4 @@
-use clap::{arg, Args, ValueEnum};
+use clap::{Args, ValueEnum};
 use color_eyre::Result;
 use serde::Deserialize;
 use std::fmt;
