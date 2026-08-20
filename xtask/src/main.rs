@@ -21,6 +21,10 @@ enum Cmd {
     /// crates marked unsupported via `[package.metadata.orb]
     /// unsupported_targets`. Used by CI as the Android build gate.
     AndroidBuild(android::BuildArgs),
+    /// Stages one APEX payload directory per Android-supported binary
+    /// crate (bin/, apex_manifest.json, a placeholder init.rc). Does not
+    /// invoke `apexer` - see the command's doc comment for why.
+    AndroidApexPayload(android::PayloadArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -50,6 +54,7 @@ fn main() -> Result<()> {
         Cmd::Build(args) => build::run(args),
         Cmd::AndroidSweep(args) => android::run(args),
         Cmd::AndroidBuild(args) => android::run_build(args),
+        Cmd::AndroidApexPayload(args) => android::run_payload(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
