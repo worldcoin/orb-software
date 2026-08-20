@@ -18,6 +18,19 @@ ignore = [
 	# available in lru 0.18.2, outside their semver constraints. Exploitation also
 	# requires a cache key with a panicking Drop implementation and catching that panic.
 	{ id = "RUSTSEC-2026-0253", reason = "transitive dep via aws-sdk-s3 and iroh; no compatible upgrade available and exploit requires a panicking key destructor" },
+	# h2 0.3.27 (unbounded empty DATA frames, low severity) is pulled in by
+	# aws-sdk-s3's default "rustls" feature, which uses aws-smithy-runtime's
+	# legacy hyper 0.14 connector. That connector's h2 0.3.x line was never
+	# patched (the fix only shipped in h2 0.4.16); the only way to drop it is
+	# aws-sdk-s3's "default-https-client" feature (hyper 1.x, patched h2).
+	# We tried that: it hardcodes the aws-lc-rs rustls crypto backend, which
+	# conflicts with "ring" and causes a hard "ambiguous CryptoProvider" panic
+	# at runtime, since ring is *also* hardcoded (with no aws-lc-rs option) by
+	# several unrelated transitive deps we don't control: quinn/iroh-quinn
+	# (via iroh), wtransport, tokio-websockets, hyper-rustls, tokio-rustls,
+	# and rcgen. Reconciling all of those is out of proportion to this
+	# advisory's severity, so we accept it instead.
+	{ id = "RUSTSEC-2026-0258", reason = "aws-sdk-s3's legacy hyper 0.14 connector pulls unpatched h2 0.3.x; the fix (switching to the hyper-1.x connector) hardcodes a crypto backend that conflicts with several unrelated deps (quinn/iroh, wtransport, tokio-websockets, hyper-rustls, rcgen) that hardcode a different one, causing a runtime panic; low severity (DoS only), reconciling the backends is out of proportion" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
