@@ -8,10 +8,15 @@ let
   lib = inputs.nixpkgs.lib;
   tegraBashFHS = import ./tegra-bash.nix { pkgs = instantiatedPkgs.x86_64-linux; };
   nfsboot = import ./nfsboot.nix { pkgs = instantiatedPkgs.x86_64-linux; };
+  androidApex = import ../packages/android-apex.nix { pkgs = instantiatedPkgs.x86_64-linux; };
 
   a = {
     # Used like a dev shell, but only for flashing.
     packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
+    # Packages a staged Android APEX payload dir (see `cargo x
+    # android-apex-payload`) into a signed `.apex` - see
+    # nix/packages/android-apex.nix. Used by `cargo x android-apex`.
+    packages."x86_64-linux"."build-apex" = androidApex.buildApex;
     devShells.x86_64-linux.nfsboot = nfsboot;
   };
   b = flake-utils.lib.eachDefaultSystem (

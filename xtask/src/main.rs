@@ -25,6 +25,9 @@ enum Cmd {
     /// crate (bin/, apex_manifest.json, a placeholder init.rc). Does not
     /// invoke `apexer` - see the command's doc comment for why.
     AndroidApexPayload(android::PayloadArgs),
+    /// Stages Android payloads and packages each into a signed
+    /// `<crate>.apex`, via the `build-apex` flake package (requires `nix`).
+    AndroidApex(android::ApexArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -54,7 +57,8 @@ fn main() -> Result<()> {
         Cmd::Build(args) => build::run(args),
         Cmd::AndroidSweep(args) => android::run(args),
         Cmd::AndroidBuild(args) => android::run_build(args),
-        Cmd::AndroidApexPayload(args) => android::run_payload(args),
+        Cmd::AndroidApexPayload(args) => android::run_payload(args).map(|_| ()),
+        Cmd::AndroidApex(args) => android::run_apex(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
