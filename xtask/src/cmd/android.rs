@@ -94,6 +94,9 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
     let md = MetadataCommand::new().no_deps().exec()?;
     let excluded = unsupported_packages()?;
     let profile_dir = if release { "release" } else { "debug" };
+    // Absolute, so staged binaries resolve correctly regardless of which
+    // directory `cargo x android-apex-payload` is invoked from.
+    let target_dir = md.target_directory.as_std_path();
 
     fs::create_dir_all(&out_dir)?;
 
@@ -145,10 +148,7 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
         ];
 
         for bin in &binaries {
-            let src = PathBuf::from("target")
-                .join(TARGET)
-                .join(profile_dir)
-                .join(bin);
+            let src = target_dir.join(TARGET).join(profile_dir).join(bin);
             let dst = bin_out.join(bin);
             fs::copy(&src, &dst).map_err(|e| {
                 eyre!("failed to copy {} -> {}: {e}", src.display(), dst.display())
@@ -239,6 +239,11 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     let ApexArgs { out_dir, release } = args;
 
+    // Absolute, so this resolves correctly regardless of which directory
+    // `cargo x android-apex` is invoked from.
+    let workspace_root = MetadataCommand::new().no_deps().exec()?.workspace_root;
+    let flake_ref = format!("{workspace_root}#build-apex");
+
     let payload_out_dir = PathBuf::from("target/android-apex-payloads");
     let packages = run_payload(PayloadArgs {
         out_dir: payload_out_dir.clone(),
@@ -262,7 +267,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         "build",
         "--extra-experimental-features",
         "nix-command flakes",
-        ".#build-apex",
+        &flake_ref,
         "--out-link",
         build_apex_link,
     ])?;
