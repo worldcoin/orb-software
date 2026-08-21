@@ -143,9 +143,11 @@ let
   '';
 
   # Packages one already-staged payload dir (as produced by `cargo x
-  # android-apex-payload`) into `<name>.apex`, signing it with a throwaway
-  # key generated on first use. Real device deployment needs a real,
-  # securely-managed signing key instead - this is for local testing.
+  # android-apex-payload`) into `<name>.apex`, signing it with the key at
+  # $APEX_SIGNING_KEY if set (CI wires this to a real, securely-managed key
+  # from a GitHub Environment secret), or otherwise a throwaway key
+  # generated fresh for this invocation - fine for local testing, but never
+  # persisted or reused across runs.
   buildApex = pkgs.writeShellApplication {
     name = "build-apex";
     runtimeInputs = [
@@ -164,8 +166,10 @@ let
       work=$(mktemp -d)
       trap 'rm -rf "$work"' EXIT
 
-      if [ ! -f "$work/key.pem" ]; then
-        openssl genrsa -out "$work/key.pem" 4096 2>/dev/null
+      key="''${APEX_SIGNING_KEY:-}"
+      if [ -z "$key" ]; then
+        key="$work/key.pem"
+        openssl genrsa -out "$key" 4096 2>/dev/null
       fi
 
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
@@ -174,7 +178,7 @@ let
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
         --canned_fs_config "$payload/canned_fs_config" \
-        --key "$work/key.pem" \
+        --key "$key" \
         --payload_type image \
         --payload_fs_type erofs \
         --android_jar_path "${androidJar}" \

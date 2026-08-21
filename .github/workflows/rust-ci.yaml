@@ -230,6 +230,12 @@ jobs:
   android-build:
     name: Android Build
     runs-on: public-ubuntu-24.04-8core
+    # Scopes the real APEX signing key to a reviewable, separately-protected
+    # GitHub Environment instead of a plain repo/org secret. Configure the
+    # APEX_SIGNING_KEY secret (PEM-encoded RSA key) on this environment; if
+    # unset, build-apex falls back to a throwaway key (see
+    # nix/packages/android-apex.nix).
+    environment: android-apex-signing
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -254,7 +260,15 @@ jobs:
           nix develop -c env
 
       - name: Build and package Android APEXes
+        env:
+          APEX_SIGNING_KEY_PEM: ${{ secrets.APEX_SIGNING_KEY }}
         run: |
+          set -euo pipefail
+          if [ -n "$APEX_SIGNING_KEY_PEM" ]; then
+            key_file="$RUNNER_TEMP/apex-signing-key.pem"
+            (umask 077 && printf '%s' "$APEX_SIGNING_KEY_PEM" > "$key_file")
+            export APEX_SIGNING_KEY="$key_file"
+          fi
           nix develop -c \
             cargo x android-apex
 
