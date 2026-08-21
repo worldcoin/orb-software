@@ -3,7 +3,7 @@ use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const TARGET: &str = "aarch64-linux-android";
 
@@ -120,6 +120,13 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
         // or apexer's e2fsdroid scans them as if they were payload files
         // and fails looking them up in canned_fs_config.
         let pkg_out = out_dir.join(pkg.name.as_str());
+        // Recreate from scratch each run: otherwise a binary/init script
+        // removed since the last run (or a crate that just became
+        // unsupported) would linger here and get bundled into the next
+        // APEX alongside canned_fs_config entries that no longer match it.
+        if pkg_out.exists() {
+            fs::remove_dir_all(&pkg_out)?;
+        }
         let content_dir = pkg_out.join("content");
         let bin_out = content_dir.join("bin");
         fs::create_dir_all(&bin_out)?;
@@ -229,7 +236,18 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         release,
     })?;
 
+    fs::create_dir_all(&out_dir)?;
+
+    // `nix build --out-link` needs its parent directory to already exist;
+    // on a clean checkout target/android-apex/ doesn't. That's not
+    // necessarily `out_dir` (it's configurable via --out-dir, this path
+    // isn't), so create it explicitly rather than relying on the above.
     let build_apex_link = "target/android-apex/build-apex";
+    fs::create_dir_all(
+        Path::new(build_apex_link)
+            .parent()
+            .expect("hardcoded path always has a parent"),
+    )?;
     cmd(&[
         "nix",
         "build",
@@ -240,8 +258,6 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         build_apex_link,
     ])?;
     let build_apex_bin = format!("{build_apex_link}/bin/build-apex");
-
-    fs::create_dir_all(&out_dir)?;
 
     for pkg in &packages {
         let payload_dir = payload_out_dir.join(pkg);
