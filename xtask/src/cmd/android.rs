@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const TARGET: &str = "aarch64-linux-android";
+const DEFAULT_PAYLOAD_OUT_DIR: &str = "target/android-apex-payloads";
 
 /// Names of workspace packages whose `[package.metadata.orb]
 /// unsupported_targets` lists `aarch64-linux-android` - the same mechanism
@@ -66,7 +67,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 #[derive(ClapArgs, Debug)]
 pub struct PayloadArgs {
     /// Directory to stage per-crate APEX payloads into.
-    #[arg(long, default_value = "target/android-apex-payloads")]
+    #[arg(long, default_value = DEFAULT_PAYLOAD_OUT_DIR)]
     pub out_dir: PathBuf,
     /// Use binaries from a release build.
     #[arg(long)]
@@ -244,7 +245,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let workspace_root = MetadataCommand::new().no_deps().exec()?.workspace_root;
     let flake_ref = format!("{workspace_root}#build-apex");
 
-    let payload_out_dir = PathBuf::from("target/android-apex-payloads");
+    let payload_out_dir = PathBuf::from(DEFAULT_PAYLOAD_OUT_DIR);
     let packages = run_payload(PayloadArgs {
         out_dir: payload_out_dir.clone(),
         release,
