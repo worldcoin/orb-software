@@ -3,7 +3,7 @@ use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const TARGET: &str = "aarch64-linux-android";
 
@@ -252,16 +252,18 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     fs::create_dir_all(&out_dir)?;
 
-    // `nix build --out-link` needs its parent directory to already exist;
-    // on a clean checkout target/android-apex/ doesn't. That's not
-    // necessarily `out_dir` (it's configurable via --out-dir, this path
-    // isn't), so create it explicitly rather than relying on the above.
-    let build_apex_link = "target/android-apex/build-apex";
-    fs::create_dir_all(
-        Path::new(build_apex_link)
-            .parent()
-            .expect("hardcoded path always has a parent"),
-    )?;
+    // A fresh, unique directory per invocation rather than a fixed path
+    // under target/: `nix build --out-link` atomically replaces whatever
+    // symlink is at that path, so two overlapping invocations sharing a
+    // checkout (e.g. a local run against a machine also running CI) would
+    // otherwise race on the same out-link.
+    let build_apex_link_dir = tempfile::Builder::new()
+        .prefix("android-apex-build-apex-")
+        .tempdir()?;
+    let build_apex_link = build_apex_link_dir.path().join("build-apex");
+    let build_apex_link_str = build_apex_link
+        .to_str()
+        .ok_or_else(|| eyre!("non-utf8 path: {}", build_apex_link.display()))?;
     cmd(&[
         "nix",
         "build",
@@ -269,9 +271,12 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         "nix-command flakes",
         &flake_ref,
         "--out-link",
-        build_apex_link,
+        build_apex_link_str,
     ])?;
-    let build_apex_bin = format!("{build_apex_link}/bin/build-apex");
+    let build_apex_bin = build_apex_link.join("bin/build-apex");
+    let build_apex_bin = build_apex_bin
+        .to_str()
+        .ok_or_else(|| eyre!("non-utf8 path: {}", build_apex_bin.display()))?;
 
     // Package every crate's payload even if one fails to build/sign, so a
     // single bad crate doesn't block CI from producing (and this command
@@ -290,7 +295,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
                 .to_str()
                 .ok_or_else(|| eyre!("non-utf8 path: {}", apex_out.display()))?;
 
-            cmd(&[build_apex_bin.as_str(), payload_dir_str, apex_out_str])
+            cmd(&[build_apex_bin, payload_dir_str, apex_out_str])
         })();
 
         match result {
