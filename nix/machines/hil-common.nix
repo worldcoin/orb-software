@@ -136,6 +136,7 @@ in
       libguestfs-with-appliance
       abootimg
       gnupg
+      cryptsetup
       arp-scan
       lsof
       uv
