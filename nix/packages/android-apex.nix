@@ -5,14 +5,17 @@
 # schemas for apex_manifest/apex_build_info only exist in AOSP source, so we
 # fetch just the `system/apex` repo and build the host tool from it,
 # substituting nixpkgs packages for the rest of its usual (normally
-# AOSP-build-only) toolchain: android-tools for mke2fs.android/e2fsdroid
-# (ext4 payload) and avbtool, e2fsprogs for resize2fs, aapt for aapt2.
+# AOSP-build-only) toolchain: android-tools for avbtool, aapt for aapt2.
 #
-# Payload filesystem is ext4, not erofs: getting --canned_fs_config support
-# out of mkfs.erofs requires it to be built with -DWITH_ANDROID, which
-# transitively needs AOSP's libcutils/libbase/liblog (system/core) - a much
-# bigger and less certain undertaking than reusing android-tools' already
-# AOSP-built, working e2fsdroid/mke2fs.android binaries for ext4.
+# Payload filesystem is erofs. nixpkgs' erofs-utils can't produce a
+# canned_fs_config-capable mkfs.erofs (that needs a -DWITH_ANDROID build
+# plus AOSP's libcutils from system/core, which isn't buildable outside a
+# full AOSP tree - see git history for the ext4-based approach we used
+# before finding this). Instead we fetch Google's own prebuilt mkfs.erofs
+# host binary directly from kernel/prebuilts/build-tools (verified: it has
+# both --file-contexts and --fs-config-file, and produces smaller images
+# than ext4 thanks to lz4hc compression) and patch it to run under nixpkgs'
+# glibc via autoPatchelfHook.
 { pkgs }:
 let
   # Pinned for reproducibility - bump deliberately, and re-verify the hash
@@ -37,13 +40,36 @@ let
     hash = "sha256-MG7PUB2ZeNexpNgnKunBQl0gzFJA+BLfpTdhcvRnnlc=";
   };
 
-  # apexer.py's ext4 path loads this via `pkgutil.get_data('apexer',
-  # 'mke2fs.conf')` - expects it alongside apexer.py in the same package
-  # dir. Same single-file-fetch approach as manifest.py above, rather than
-  # cloning all of system/extras for it.
-  mke2fsConfBase64 = pkgs.fetchurl {
-    url = "https://android.googlesource.com/platform/system/extras/+/refs/tags/${aospRev}/ext4_utils/mke2fs.conf?format=TEXT";
-    hash = "sha256-AhGACInsNDQ9dd5PUictSo+SBt8MKSFh+EpywjFY5Og=";
+  # Google's own prebuilt mkfs.erofs host binary, built with -DWITH_ANDROID
+  # (confirmed via --help: has both --file-contexts and --fs-config-file).
+  # Pinned to a specific prebuilts revision - independent of aospRev, but
+  # keep them reasonably in sync when bumping either.
+  erofsPrebuiltRev = "android-16.0.0_r0.4";
+  mkfsErofsBinBase64 = pkgs.fetchurl {
+    url = "https://android.googlesource.com/kernel/prebuilts/build-tools/+/refs/tags/${erofsPrebuiltRev}/linux-x86/bin/mkfs.erofs?format=TEXT";
+    hash = "sha256-RH7THhG6cld3SDL9vaZxl7u1E1x3P8ClmMIveU7lT4c=";
+  };
+  # mkfs.erofs dynamically links libc++.so; everything else it needs
+  # (libc, libm, libpthread, librt, libdl, libgcc_s) comes from nixpkgs'
+  # glibc via autoPatchelfHook. Using AOSP's own libc++.so rather than
+  # nixpkgs' to avoid any ABI mismatch with a binary Google built and
+  # tested against this exact one.
+  mkfsErofsLibcxxBase64 = pkgs.fetchurl {
+    url = "https://android.googlesource.com/kernel/prebuilts/build-tools/+/refs/tags/${erofsPrebuiltRev}/linux-x86/lib64/libc%2B%2B.so?format=TEXT";
+    hash = "sha256-msZUtf10GxcJ+uNPN5cV0aynTIXPZy/dYVaocfM8lXY=";
+  };
+  mkfsErofs = pkgs.stdenv.mkDerivation {
+    pname = "mkfs-erofs-aosp-prebuilt";
+    version = erofsPrebuiltRev;
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+    buildInputs = [ pkgs.stdenv.cc.cc.lib ];
+    installPhase = ''
+      mkdir -p $out/bin $out/lib
+      base64 -d ${mkfsErofsBinBase64} > $out/bin/mkfs.erofs
+      chmod +x $out/bin/mkfs.erofs
+      base64 -d ${mkfsErofsLibcxxBase64} > $out/lib/libc++.so
+    '';
   };
 
   # apexer unconditionally shells out to `aapt2 link -I <android_jar_path>`
@@ -66,20 +92,9 @@ let
 
   apexerToolchain = pkgs.runCommand "apexer-toolchain" { } ''
     mkdir -p $out/bin
-    ln -s ${pkgs.android-tools}/bin/mke2fs.android $out/bin/mke2fs
-    ln -s ${pkgs.android-tools}/bin/e2fsdroid $out/bin/
-    ln -s ${pkgs.e2fsprogs}/bin/resize2fs $out/bin/
+    ln -s ${mkfsErofs}/bin/mkfs.erofs $out/bin/
     ln -s ${pkgs.aapt}/bin/aapt2 $out/bin/
     ln -s ${pkgs.android-tools}/bin/avbtool $out/bin/
-
-    # apexer calls `sefcontext_compile -o <out> <in>` to compile
-    # file_contexts into binary form, but android-tools' e2fsdroid expects
-    # the plain-text format instead - so "compiling" here is just a copy.
-    cat <<'EOF' > $out/bin/sefcontext_compile
-    #!${pkgs.runtimeShell}
-    cp -- "$3" "$2"
-    EOF
-    chmod +x $out/bin/sefcontext_compile
   '';
 
   apexer = pkgs.stdenv.mkDerivation {
@@ -96,7 +111,6 @@ let
       cp apexer/*.py $out/lib/apexer/
       cp build/proto/*.py $out/lib/apexer/
       base64 -d ${manifestPyBase64} > $out/lib/apexer/manifest.py
-      base64 -d ${mke2fsConfBase64} > $out/lib/apexer/mke2fs.conf
       cat <<EOF > $out/bin/apexer
       #!${pkgs.runtimeShell}
       export PYTHONPATH="\$PYTHONPATH:$out/lib/apexer"
@@ -162,7 +176,7 @@ let
         --canned_fs_config "$payload/canned_fs_config" \
         --key "$work/key.pem" \
         --payload_type image \
-        --payload_fs_type ext4 \
+        --payload_fs_type erofs \
         --android_jar_path "${androidJar}" \
         --do_not_check_keyname \
         --force \
