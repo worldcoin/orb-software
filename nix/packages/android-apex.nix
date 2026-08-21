@@ -18,6 +18,13 @@
 # glibc via autoPatchelfHook.
 { pkgs }:
 let
+  # googlesource's raw-content endpoint only serves files base64-encoded
+  # (`?format=TEXT`); this fetches and decodes in one step.
+  fetchGoogleSourceFile = { url, hash }:
+    pkgs.runCommand "google-source-file" { } ''
+      base64 -d ${pkgs.fetchurl { inherit url hash; }} > $out
+    '';
+
   # Pinned for reproducibility - bump deliberately, and re-verify the hash
   # below (and that platformVersion still matches an available SDK
   # platform) when you do.
@@ -29,44 +36,31 @@ let
     hash = "sha256-cKJfpbQR42ozKLaqSICeN5GLJtlDxAbeuCTEz1vXVpg=";
   };
 
-  # apexer.py imports several helpers from AOSP's build/soong/scripts/
-  # manifest.py (android_ns, find_child_with_attribute,
-  # get_children_with_tag, get_indent, parse_manifest, write_xml). Not
-  # worth cloning that entire (much larger) repo for one file, so we fetch
-  # it directly via googlesource's raw-content endpoint (base64-encoded)
-  # and decode it at build time.
-  manifestPyBase64 = pkgs.fetchurl {
+  # apexer.py imports helpers from AOSP's build/soong/scripts/manifest.py -
+  # not worth cloning that whole (much larger) repo for one file.
+  manifestPy = fetchGoogleSourceFile {
     url = "https://android.googlesource.com/platform/build/soong/+/refs/tags/${aospRev}/scripts/manifest.py?format=TEXT";
     hash = "sha256-MG7PUB2ZeNexpNgnKunBQl0gzFJA+BLfpTdhcvRnnlc=";
   };
 
-  # AOSP's own well-known AVB test key (a real, unencrypted 4096-bit RSA
-  # key, publicly published for exactly this purpose): used to sign every
-  # APEX this builds, instead of a throwaway key generated fresh every
-  # invocation. Deterministic across runs/machines, and matches apexer's
-  # avbtool invocation (SHA256_RSA4096) exactly - never use it for
-  # anything but local testing; there is no path to a real signing key
-  # here.
-  testKeyBase64 = pkgs.fetchurl {
+  # AOSP's published AVB test key (external/avb/test/data) - test-only,
+  # matches apexer's SHA256_RSA4096 signing. Never a real key.
+  testKey = fetchGoogleSourceFile {
     url = "https://android.googlesource.com/platform/external/avb/+/refs/tags/${aospRev}/test/data/testkey_rsa4096.pem?format=TEXT";
     hash = "sha256-5qt2JnvmWaLN1QclfuLxm4oKynyxPAjnBp2tiirUaiA=";
   };
 
-  # Google's own prebuilt mkfs.erofs host binary, built with -DWITH_ANDROID
-  # (confirmed via --help: has both --file-contexts and --fs-config-file).
-  # Pinned to a specific prebuilts revision - independent of aospRev, but
-  # keep them reasonably in sync when bumping either.
+  # Google's own prebuilt mkfs.erofs (nixpkgs' erofs-utils lacks the
+  # -DWITH_ANDROID build canned_fs_config needs). Pinned separately from
+  # aospRev: this repo's tags use a different numbering scheme.
   erofsPrebuiltRev = "android-16.0.0_r0.4";
-  mkfsErofsBinBase64 = pkgs.fetchurl {
+  mkfsErofsBin = fetchGoogleSourceFile {
     url = "https://android.googlesource.com/kernel/prebuilts/build-tools/+/refs/tags/${erofsPrebuiltRev}/linux-x86/bin/mkfs.erofs?format=TEXT";
     hash = "sha256-RH7THhG6cld3SDL9vaZxl7u1E1x3P8ClmMIveU7lT4c=";
   };
-  # mkfs.erofs dynamically links libc++.so; everything else it needs
-  # (libc, libm, libpthread, librt, libdl, libgcc_s) comes from nixpkgs'
-  # glibc via autoPatchelfHook. Using AOSP's own libc++.so rather than
-  # nixpkgs' to avoid any ABI mismatch with a binary Google built and
-  # tested against this exact one.
-  mkfsErofsLibcxxBase64 = pkgs.fetchurl {
+  # AOSP's own libc++.so, to avoid an ABI mismatch with nixpkgs' - the
+  # rest of mkfs.erofs's deps come from nixpkgs' glibc via autoPatchelfHook.
+  mkfsErofsLibcxx = fetchGoogleSourceFile {
     url = "https://android.googlesource.com/kernel/prebuilts/build-tools/+/refs/tags/${erofsPrebuiltRev}/linux-x86/lib64/libc%2B%2B.so?format=TEXT";
     hash = "sha256-msZUtf10GxcJ+uNPN5cV0aynTIXPZy/dYVaocfM8lXY=";
   };
@@ -78,9 +72,8 @@ let
     buildInputs = [ pkgs.stdenv.cc.cc.lib ];
     installPhase = ''
       mkdir -p $out/bin $out/lib
-      base64 -d ${mkfsErofsBinBase64} > $out/bin/mkfs.erofs
-      chmod +x $out/bin/mkfs.erofs
-      base64 -d ${mkfsErofsLibcxxBase64} > $out/lib/libc++.so
+      install -m755 ${mkfsErofsBin} $out/bin/mkfs.erofs
+      cp ${mkfsErofsLibcxx} $out/lib/libc++.so
     '';
   };
 
@@ -122,7 +115,7 @@ let
       mkdir -p $out/lib/apexer $out/bin
       cp apexer/*.py $out/lib/apexer/
       cp build/proto/*.py $out/lib/apexer/
-      base64 -d ${manifestPyBase64} > $out/lib/apexer/manifest.py
+      cp ${manifestPy} $out/lib/apexer/manifest.py
       cat <<EOF > $out/bin/apexer
       #!${pkgs.runtimeShell}
       export PYTHONPATH="\$PYTHONPATH:$out/lib/apexer"
@@ -155,10 +148,8 @@ let
   '';
 
   # Packages one already-staged payload dir (as produced by `cargo x
-  # android-apex-payload`) into `<name>.apex`, always signed with AOSP's
-  # well-known AVB test key - deterministic, recognizable as test-signed,
-  # and never meant to back a real release. There is no real signing key
-  # wired in anywhere: don't point this at production deployment.
+  # android-apex-payload`) into `<name>.apex`, always signed with the AOSP
+  # test key above - never use this for a real release.
   buildApex = pkgs.writeShellApplication {
     name = "build-apex";
     runtimeInputs = [
@@ -176,14 +167,13 @@ let
       work=$(mktemp -d)
       trap 'rm -rf "$work"' EXIT
 
-      base64 -d ${testKeyBase64} > "$work/key.pem"
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
 
       apexer -v \
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
         --canned_fs_config "$payload/canned_fs_config" \
-        --key "$work/key.pem" \
+        --key "${testKey}" \
         --payload_type image \
         --payload_fs_type erofs \
         --android_jar_path "${androidJar}" \

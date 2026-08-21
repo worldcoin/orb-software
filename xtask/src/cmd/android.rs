@@ -100,8 +100,7 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
     let md = MetadataCommand::new().no_deps().exec()?;
     let excluded = unsupported_packages()?;
     let profile_dir = if release { "release" } else { "debug" };
-    // Absolute, so staged binaries resolve correctly regardless of which
-    // directory `cargo x android-apex-payload` is invoked from.
+    // Absolute, so this works regardless of the invoking cwd.
     let target_dir = md.target_directory.as_std_path();
 
     fs::create_dir_all(&out_dir)?;
@@ -245,8 +244,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     let ApexArgs { out_dir, release } = args;
 
-    // Absolute, so this resolves correctly regardless of which directory
-    // `cargo x android-apex` is invoked from.
+    // Absolute, so this works regardless of the invoking cwd.
     let workspace_root = MetadataCommand::new().no_deps().exec()?.workspace_root;
     let flake_ref = format!("{workspace_root}#build-apex");
 
@@ -258,11 +256,8 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     fs::create_dir_all(&out_dir)?;
 
-    // A fresh, unique directory per invocation rather than a fixed path
-    // under target/: `nix build --out-link` atomically replaces whatever
-    // symlink is at that path, so two overlapping invocations sharing a
-    // checkout (e.g. a local run against a machine also running CI) would
-    // otherwise race on the same out-link.
+    // A unique dir per invocation: `nix build --out-link` replaces
+    // whatever's at that path, so a fixed path would race across runs.
     let build_apex_link_dir = tempfile::tempdir()?;
     let build_apex_link = build_apex_link_dir.path().join("build-apex");
     cmd(&[
@@ -277,9 +272,8 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let build_apex_bin = build_apex_link.join("bin/build-apex");
     let build_apex_bin = utf8(&build_apex_bin)?;
 
-    // Package every crate's payload even if one fails to build/sign, so a
-    // single bad crate doesn't block CI from producing (and this command
-    // from reporting) every other APEX that's otherwise ready.
+    // Keep going on failure, so one bad crate doesn't block every other
+    // APEX that's otherwise ready.
     let mut succeeded = Vec::new();
     let mut failed = Vec::new();
 
