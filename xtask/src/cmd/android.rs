@@ -248,12 +248,23 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let workspace_root = MetadataCommand::new().no_deps().exec()?.workspace_root;
     let flake_ref = format!("{workspace_root}#build-apex");
 
-    let payload_out_dir = PathBuf::from(DEFAULT_PAYLOAD_OUT_DIR);
+    // A unique dir per invocation: `run_payload` tears down and recreates
+    // each package's subdirectory on every call, so a fixed shared path
+    // would race across concurrent `android-apex` invocations.
+    let payload_out_dir_handle = tempfile::tempdir()?;
+    let payload_out_dir = payload_out_dir_handle.path().to_path_buf();
     let packages = run_payload(PayloadArgs {
         out_dir: payload_out_dir.clone(),
         release,
     })?;
 
+    // Recreate from scratch each run: otherwise a crate that produced a
+    // `.apex` in a previous run but is now unsupported/removed would leave
+    // that stale artifact here to be picked up by CI alongside this run's
+    // genuinely fresh outputs.
+    if out_dir.exists() {
+        fs::remove_dir_all(&out_dir)?;
+    }
     fs::create_dir_all(&out_dir)?;
 
     // A unique dir per invocation: `nix build --out-link` replaces
