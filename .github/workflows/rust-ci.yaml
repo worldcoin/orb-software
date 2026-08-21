@@ -253,10 +253,18 @@ jobs:
           uname -a
           nix develop -c env
 
-      - name: Build for Android
+      - name: Build and package Android APEXes
         run: |
           nix develop -c \
-            cargo x android-build
+            cargo x android-apex
+
+      - name: Upload APEX artifacts
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
+        with:
+          name: android-apex
+          path: target/android-apex/*.apex
+          if-no-files-found: error
+          retention-days: 14
 
   cargo-deny:
     name: Cargo Deny
