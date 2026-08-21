@@ -81,6 +81,19 @@ jobs:
       - name: Deploy
         run: sudo env "NIX_USER_CONF_FILES=${NIX_USER_CONF_FILES}" nixos-rebuild switch --flake .
 
+      - name: Garbage collect old Nix generations
+        if: always()
+        continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+          echo "Disk usage before GC:"
+          df -h /
+          # nix-collect-garbage never removes the currently active generation, so this is safe
+          # to run even if the Deploy step above failed partway through.
+          sudo nix-collect-garbage --delete-older-than 14d
+          echo "Disk usage after GC:"
+          df -h /
+
       - name: Clean up Nix GitHub auth
         if: always()
         run: |
