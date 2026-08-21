@@ -13877,6 +13877,7 @@ dependencies = [
  "orb-x-optee",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]
