@@ -50,6 +50,18 @@ let
     hash = "sha256-5qt2JnvmWaLN1QclfuLxm4oKynyxPAjnBp2tiirUaiA=";
   };
 
+  # AOSP's published test cert/key pair (build/target/product/security) -
+  # test-only, standard AOSP "testkey" used to APK-sign the outer container
+  # (see buildApex below). Never a real key.
+  testCertX509 = fetchGoogleSourceFile {
+    url = "https://android.googlesource.com/platform/build/+/refs/tags/${aospRev}/target/product/security/testkey.x509.pem?format=TEXT";
+    hash = "sha256-vjogVTJxUkt/DdXLQcPC+iyqQfxeGPo/OAbUl92CDtM=";
+  };
+  testCertPk8 = fetchGoogleSourceFile {
+    url = "https://android.googlesource.com/platform/build/+/refs/tags/${aospRev}/target/product/security/testkey.pk8?format=TEXT";
+    hash = "sha256-kdco/lAWlHmJdQeAAvj6mqfdI7RZEBVAG2O30GrFKOk=";
+  };
+
   # Google's own prebuilt mkfs.erofs (nixpkgs' erofs-utils lacks the
   # -DWITH_ANDROID build canned_fs_config needs). Pinned separately from
   # aospRev: this repo's tags use a different numbering scheme.
@@ -81,7 +93,12 @@ let
   # to build the outer APK-style container, so we need an android.jar for
   # some platform version - not tied to aospRev, just needs to be recent
   # enough to understand whatever AndroidManifest.xml apexer generates.
+  # build-tools is pulled in too, for `apksigner` - apexer's outer container
+  # (apex.apk merged with the payload zip) comes out of apexer completely
+  # APK-unsigned; only the inner payload image gets AVB-signed via --key.
+  # apksigner closes that gap (see buildApex below).
   platformVersion = "36";
+  buildToolsVersion = "36.0.0";
   androidPlatform = pkgs.androidenv.composeAndroidPackages {
     platformVersions = [ platformVersion ];
     includeNDK = false;
@@ -89,9 +106,10 @@ let
     includeSystemImages = false;
     includeSources = false;
     includeExtras = [ ];
-    buildToolsVersions = [ ];
+    buildToolsVersions = [ buildToolsVersion ];
   };
   androidJar = "${androidPlatform.androidsdk}/libexec/android-sdk/platforms/android-${platformVersion}/android.jar";
+  apksigner = "${androidPlatform.androidsdk}/libexec/android-sdk/build-tools/${buildToolsVersion}/apksigner";
 
   pythonWithProtobuf = pkgs.python3.withPackages (ps: [ ps.protobuf ]);
 
@@ -149,12 +167,13 @@ let
 
   # Packages one already-staged payload dir (as produced by `cargo x
   # android-apex-payload`) into `<name>.apex`, always signed with the AOSP
-  # test key above - never use this for a real release.
+  # test key/cert above - never use this for a real release.
   buildApex = pkgs.writeShellApplication {
     name = "build-apex";
     runtimeInputs = [
       compileApexManifest
       apexer
+      pkgs.jdk21_headless
     ];
     text = ''
       set -euo pipefail
@@ -169,6 +188,11 @@ let
 
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
 
+      # apexer only AVB-signs the inner payload image (via --key below);
+      # the outer APK-style container it builds (apex.apk merged with the
+      # payload zip) comes out completely APK-unsigned. Sign that container
+      # in a second step so both apexd (checks the inner AVB signature) and
+      # PackageManager (checks the outer APK v2/v3 signature) accept it.
       apexer -v \
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
@@ -179,7 +203,13 @@ let
         --android_jar_path "${androidJar}" \
         --do_not_check_keyname \
         --force \
-        "$payload/content" "$out"
+        "$payload/content" "$work/unsigned.apex"
+
+      "${apksigner}" sign \
+        --cert "${testCertX509}" \
+        --key "${testCertPk8}" \
+        --in "$work/unsigned.apex" \
+        --out "$out"
     '';
   };
 in
