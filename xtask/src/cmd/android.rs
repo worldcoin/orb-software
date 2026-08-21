@@ -228,6 +228,15 @@ pub struct ApexArgs {
 /// `nix/packages/android-apex.nix` (exposed as the `build-apex` flake
 /// package). Requires `nix` on PATH.
 pub fn run_apex(args: ApexArgs) -> Result<()> {
+    if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        return Err(eyre!(
+            "android-apex packaging requires an x86_64-linux host: the \
+             `build-apex` flake package (see nix/packages/android-apex.nix) \
+             only ships a Linux/x86_64 prebuilt mkfs.erofs and is only \
+             exposed for that system in nix/shells/flake-outputs.nix"
+        ));
+    }
+
     let ApexArgs { out_dir, release } = args;
 
     let payload_out_dir = PathBuf::from("target/android-apex-payloads");
