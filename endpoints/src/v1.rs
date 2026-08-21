@@ -23,8 +23,6 @@ impl Endpoints {
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            // legacy analysis.ml.worldcoin.org domain is no longer used.
-            Backend::Analysis => "stage.orb",
             Backend::Local => todo!(),
         };
 
@@ -57,7 +55,6 @@ mod test {
     fn test_config() {
         let stage = Endpoints::new(Backend::Staging, &"ea2ea744".parse().unwrap());
         let prod = Endpoints::new(Backend::Prod, &"ea2ea744".parse().unwrap());
-        let analysis = Endpoints::new(Backend::Analysis, &"ea2ea744".parse().unwrap());
 
         assert_eq!(
             stage.ai_volume.as_str(),
@@ -67,20 +64,12 @@ mod test {
             prod.ai_volume.as_str(),
             "https://management.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
         );
-        assert_eq!(
-            analysis.ai_volume.as_str(),
-            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/keys/aivolume"
-        );
 
         assert_eq!(
             stage.auth.as_str(),
             "https://auth.stage.orb.worldcoin.org/api/v1/"
         );
         assert_eq!(prod.auth.as_str(), "https://auth.orb.worldcoin.org/api/v1/");
-        assert_eq!(
-            analysis.auth.as_str(),
-            "https://auth.stage.orb.worldcoin.org/api/v1/"
-        );
 
         assert_eq!(
             stage.ping.as_str(),
@@ -89,10 +78,6 @@ mod test {
         assert_eq!(
             prod.ping.as_str(),
             "https://management.orb.worldcoin.org/api/v1/orbs/ea2ea744/"
-        );
-        assert_eq!(
-            analysis.ping.as_str(),
-            "https://management.stage.orb.worldcoin.org/api/v1/orbs/ea2ea744/"
         );
     }
 }
