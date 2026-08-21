@@ -51,9 +51,6 @@ let
     url = "https://android.googlesource.com/platform/external/avb/+/refs/tags/${aospRev}/test/data/testkey_rsa4096.pem?format=TEXT";
     hash = "sha256-5qt2JnvmWaLN1QclfuLxm4oKynyxPAjnBp2tiirUaiA=";
   };
-  androidTestKey = pkgs.runCommand "android-test-key-rsa4096.pem" { } ''
-    base64 -d ${testKeyBase64} > $out
-  '';
 
   # Google's own prebuilt mkfs.erofs host binary, built with -DWITH_ANDROID
   # (confirmed via --help: has both --file-contexts and --fs-config-file).
@@ -179,13 +176,14 @@ let
       work=$(mktemp -d)
       trap 'rm -rf "$work"' EXIT
 
+      base64 -d ${testKeyBase64} > "$work/key.pem"
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
 
       apexer -v \
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
         --canned_fs_config "$payload/canned_fs_config" \
-        --key "${androidTestKey}" \
+        --key "$work/key.pem" \
         --payload_type image \
         --payload_fs_type erofs \
         --android_jar_path "${androidJar}" \

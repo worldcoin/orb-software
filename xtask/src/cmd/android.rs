@@ -3,10 +3,15 @@ use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const TARGET: &str = "aarch64-linux-android";
 const DEFAULT_PAYLOAD_OUT_DIR: &str = "target/android-apex-payloads";
+
+fn utf8(path: &Path) -> Result<&str> {
+    path.to_str()
+        .ok_or_else(|| eyre!("non-utf8 path: {}", path.display()))
+}
 
 /// Names of workspace packages whose `[package.metadata.orb]
 /// unsupported_targets` lists `aarch64-linux-android` - the same mechanism
@@ -258,13 +263,8 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // symlink is at that path, so two overlapping invocations sharing a
     // checkout (e.g. a local run against a machine also running CI) would
     // otherwise race on the same out-link.
-    let build_apex_link_dir = tempfile::Builder::new()
-        .prefix("android-apex-build-apex-")
-        .tempdir()?;
+    let build_apex_link_dir = tempfile::tempdir()?;
     let build_apex_link = build_apex_link_dir.path().join("build-apex");
-    let build_apex_link_str = build_apex_link
-        .to_str()
-        .ok_or_else(|| eyre!("non-utf8 path: {}", build_apex_link.display()))?;
     cmd(&[
         "nix",
         "build",
@@ -272,12 +272,10 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         "nix-command flakes",
         &flake_ref,
         "--out-link",
-        build_apex_link_str,
+        utf8(&build_apex_link)?,
     ])?;
     let build_apex_bin = build_apex_link.join("bin/build-apex");
-    let build_apex_bin = build_apex_bin
-        .to_str()
-        .ok_or_else(|| eyre!("non-utf8 path: {}", build_apex_bin.display()))?;
+    let build_apex_bin = utf8(&build_apex_bin)?;
 
     // Package every crate's payload even if one fails to build/sign, so a
     // single bad crate doesn't block CI from producing (and this command
@@ -289,14 +287,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
         let payload_dir = payload_out_dir.join(pkg);
         let apex_out = out_dir.join(format!("{pkg}.apex"));
         let result = (|| -> Result<()> {
-            let payload_dir_str = payload_dir
-                .to_str()
-                .ok_or_else(|| eyre!("non-utf8 path: {}", payload_dir.display()))?;
-            let apex_out_str = apex_out
-                .to_str()
-                .ok_or_else(|| eyre!("non-utf8 path: {}", apex_out.display()))?;
-
-            cmd(&[build_apex_bin, payload_dir_str, apex_out_str])
+            cmd(&[build_apex_bin, utf8(&payload_dir)?, utf8(&apex_out)?])
         })();
 
         match result {
