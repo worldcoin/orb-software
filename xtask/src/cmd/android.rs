@@ -85,7 +85,7 @@ pub struct PayloadArgs {
 /// `file_contexts` are placeholders (marked TODO) - they need real
 /// reverse-DNS naming and a real SELinux domain/service class before the
 /// resulting APEX is anything more than a structurally-valid placeholder.
-pub fn run_payload(args: PayloadArgs) -> Result<()> {
+pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
     let PayloadArgs { out_dir, release } = args;
 
     // Ensure the binaries staged below are actually up to date.
@@ -96,6 +96,8 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
     let profile_dir = if release { "release" } else { "debug" };
 
     fs::create_dir_all(&out_dir)?;
+
+    let mut staged = Vec::new();
 
     for pkg in md.workspace_packages() {
         if excluded.iter().any(|e| e == pkg.name.as_str()) {
@@ -150,12 +152,15 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
         // TODO: "com.worldcoin.orb.*" is a placeholder reverse-DNS
         // namespace and "version": 1 is a placeholder - confirm the real
         // APEX naming/versioning scheme before shipping any of this.
+        //
+        // Android package names are Java identifiers joined by dots, so
+        // `-` (common in crate names, e.g. orb-attest) isn't valid there -
+        // aapt2 rejects it outright. `_` is the closest equivalent.
+        let apex_name =
+            format!("com.worldcoin.orb.{}", pkg.name.as_str().replace('-', "_"));
         fs::write(
             pkg_out.join("apex_manifest.json"),
-            format!(
-                "{{\n  \"name\": \"com.worldcoin.orb.{}\",\n  \"version\": 1\n}}\n",
-                pkg.name
-            ),
+            format!("{{\n  \"name\": \"{apex_name}\",\n  \"version\": 1\n}}\n"),
         )?;
 
         let init_dir = content_dir.join("etc/init");
@@ -169,11 +174,10 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
                     "# TODO: placeholder, not a working init script. Needs a real \
                      SELinux domain (see external/sepolicy) plus a real decision on \
                      class/user/group/oneshot before this can boot the daemon.\n\
-                     service {bin} /apex/com.worldcoin.orb.{pkg}/bin/{bin}\n    \
+                     service {bin} /apex/{apex_name}/bin/{bin}\n    \
                      class TODO_CLASS\n    user TODO_USER\n    group TODO_GROUP\n    \
                      seclabel u:r:TODO_SELINUX_DOMAIN:s0\n",
                     bin = bin,
-                    pkg = pkg.name,
                 ),
             )?;
             fs_config.push(format!("/etc/init/{bin}.rc 1000 1000 0644"));
@@ -196,6 +200,61 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
         )?;
 
         println!("staged payload for `{}` at {}", pkg.name, pkg_out.display());
+        staged.push(pkg.name.as_str().to_owned());
+    }
+
+    Ok(staged)
+}
+
+#[derive(ClapArgs, Debug)]
+pub struct ApexArgs {
+    /// Directory to write the resulting `<crate>.apex` files into.
+    #[arg(long, default_value = "target/android-apex")]
+    pub out_dir: PathBuf,
+    /// Stage/build binaries in release mode.
+    #[arg(long)]
+    pub release: bool,
+}
+
+/// Stages Android payloads (like `android-apex-payload`) and packages each
+/// into a signed `<out_dir>/<crate>.apex`, using the `build-apex` tool from
+/// `nix/packages/android-apex.nix` (exposed as the `build-apex` flake
+/// package). Requires `nix` on PATH.
+pub fn run_apex(args: ApexArgs) -> Result<()> {
+    let ApexArgs { out_dir, release } = args;
+
+    let payload_out_dir = PathBuf::from("target/android-apex-payloads");
+    let packages = run_payload(PayloadArgs {
+        out_dir: payload_out_dir.clone(),
+        release,
+    })?;
+
+    let build_apex_link = "target/android-apex/build-apex";
+    cmd(&[
+        "nix",
+        "build",
+        "--extra-experimental-features",
+        "nix-command flakes",
+        ".#build-apex",
+        "--out-link",
+        build_apex_link,
+    ])?;
+    let build_apex_bin = format!("{build_apex_link}/bin/build-apex");
+
+    fs::create_dir_all(&out_dir)?;
+
+    for pkg in &packages {
+        let payload_dir = payload_out_dir.join(pkg);
+        let apex_out = out_dir.join(format!("{pkg}.apex"));
+        let payload_dir_str = payload_dir
+            .to_str()
+            .ok_or_else(|| eyre!("non-utf8 path: {}", payload_dir.display()))?;
+        let apex_out_str = apex_out
+            .to_str()
+            .ok_or_else(|| eyre!("non-utf8 path: {}", apex_out.display()))?;
+
+        cmd(&[build_apex_bin.as_str(), payload_dir_str, apex_out_str])?;
+        println!("packaged `{pkg}` -> {}", apex_out.display());
     }
 
     Ok(())
