@@ -273,18 +273,44 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     ])?;
     let build_apex_bin = format!("{build_apex_link}/bin/build-apex");
 
+    // Package every crate's payload even if one fails to build/sign, so a
+    // single bad crate doesn't block CI from producing (and this command
+    // from reporting) every other APEX that's otherwise ready.
+    let mut succeeded = Vec::new();
+    let mut failed = Vec::new();
+
     for pkg in &packages {
         let payload_dir = payload_out_dir.join(pkg);
         let apex_out = out_dir.join(format!("{pkg}.apex"));
-        let payload_dir_str = payload_dir
-            .to_str()
-            .ok_or_else(|| eyre!("non-utf8 path: {}", payload_dir.display()))?;
-        let apex_out_str = apex_out
-            .to_str()
-            .ok_or_else(|| eyre!("non-utf8 path: {}", apex_out.display()))?;
+        let result = (|| -> Result<()> {
+            let payload_dir_str = payload_dir
+                .to_str()
+                .ok_or_else(|| eyre!("non-utf8 path: {}", payload_dir.display()))?;
+            let apex_out_str = apex_out
+                .to_str()
+                .ok_or_else(|| eyre!("non-utf8 path: {}", apex_out.display()))?;
 
-        cmd(&[build_apex_bin.as_str(), payload_dir_str, apex_out_str])?;
-        println!("packaged `{pkg}` -> {}", apex_out.display());
+            cmd(&[build_apex_bin.as_str(), payload_dir_str, apex_out_str])
+        })();
+
+        match result {
+            Ok(()) => {
+                println!("packaged `{pkg}` -> {}", apex_out.display());
+                succeeded.push(pkg.clone());
+            }
+            Err(e) => {
+                eprintln!("failed to package `{pkg}`: {e}");
+                failed.push(pkg.clone());
+            }
+        }
+    }
+
+    println!("\n=== apex packaging summary ===");
+    println!("succeeded ({}): {}", succeeded.len(), succeeded.join(", "));
+    println!("failed ({}): {}", failed.len(), failed.join(", "));
+
+    if !failed.is_empty() {
+        return Err(eyre!("failed to package APEX for: {}", failed.join(", ")));
     }
 
     Ok(())
