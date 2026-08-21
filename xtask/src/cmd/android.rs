@@ -75,18 +75,16 @@ pub struct PayloadArgs {
 
 /// Stages one APEX payload directory per Android-supported binary crate, so
 /// each project gets its own APEX rather than one shared one:
-/// `<out_dir>/<crate>/bin/<binary>`, `<out_dir>/<crate>/apex_manifest.json`,
-/// and a placeholder `<out_dir>/<crate>/etc/init/<binary>.rc`.
+/// `<out_dir>/<crate>/content/{bin/<binary>,etc/init/<binary>.rc}` (the
+/// APEX's actual root filesystem) plus sidecar `apex_manifest.json`,
+/// `canned_fs_config`, and `file_contexts` - the full set of inputs
+/// `nix/packages/android-apex.nix`'s `apexer` needs to produce a signed
+/// `.apex`.
 ///
-/// This only stages payload *contents* - it does not invoke `apexer` to
-/// produce a signed `.apex` file. `apexer` requires a cluster of AOSP-built
-/// host tools (avbtool, mkfs.erofs, aapt2, and its own protobuf-generated
-/// manifest parser) that aren't available in this workspace; see the PR
-/// description for what's needed to take this further.
-///
-/// The `apex_manifest.json` name/version and the `etc/init/*.rc` contents
-/// are placeholders (marked TODO) - they need real reverse-DNS naming and a
-/// real SELinux domain/service class before they're usable.
+/// The `apex_manifest.json` name/version, `etc/init/*.rc` contents, and
+/// `file_contexts` are placeholders (marked TODO) - they need real
+/// reverse-DNS naming and a real SELinux domain/service class before the
+/// resulting APEX is anything more than a structurally-valid placeholder.
 pub fn run_payload(args: PayloadArgs) -> Result<()> {
     let PayloadArgs { out_dir, release } = args;
 
@@ -113,8 +111,15 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
             continue;
         }
 
+        // `content/` holds exactly what apexer should see as the APEX's
+        // root filesystem ("/"). apex_manifest.json/canned_fs_config/
+        // file_contexts are sidecar inputs *about* that content, read via
+        // their own CLI flags - they must not live inside content/ itself,
+        // or apexer's e2fsdroid scans them as if they were payload files
+        // and fails looking them up in canned_fs_config.
         let pkg_out = out_dir.join(pkg.name.as_str());
-        let bin_out = pkg_out.join("bin");
+        let content_dir = pkg_out.join("content");
+        let bin_out = content_dir.join("bin");
         fs::create_dir_all(&bin_out)?;
 
         // We author every path in this payload ourselves below, so we can
@@ -153,7 +158,7 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
             ),
         )?;
 
-        let init_dir = pkg_out.join("etc/init");
+        let init_dir = content_dir.join("etc/init");
         fs::create_dir_all(&init_dir)?;
         fs_config.push("/etc 1000 1000 0755".to_string());
         fs_config.push("/etc/init 1000 1000 0755".to_string());
@@ -178,6 +183,16 @@ pub fn run_payload(args: PayloadArgs) -> Result<()> {
         fs::write(
             pkg_out.join("canned_fs_config"),
             fs_config.join("\n") + "\n",
+        )?;
+
+        // TODO: placeholder SELinux context for every path - matches no
+        // real sepolicy type yet. `mkfs.erofs --file-contexts` wants
+        // Android's file_contexts regex format (`<path-regex> <context>`),
+        // so a single catch-all entry is syntactically valid here, unlike
+        // the plain per-path listing in canned_fs_config.
+        fs::write(
+            pkg_out.join("file_contexts"),
+            "(/.*)?    u:object_r:TODO_SELINUX_CONTEXT:s0\n",
         )?;
 
         println!("staged payload for `{}` at {}", pkg.name, pkg_out.display());
