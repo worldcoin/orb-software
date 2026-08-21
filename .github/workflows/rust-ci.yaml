@@ -230,18 +230,6 @@ jobs:
   android-build:
     name: Android Build
     runs-on: public-ubuntu-24.04-8core
-    # Scopes the APEX signing key to a reviewable, separately-protected
-    # GitHub Environment instead of a plain repo/org secret, and picks a
-    # different environment (and thus a different APEX_SIGNING_KEY secret)
-    # depending on whether this is a real release build (push to `prod` or
-    # any tag) or not (PRs, main, workflow_dispatch/call) - so a compromised
-    # PR/branch build can't sign with the prod key. Configure the
-    # APEX_SIGNING_KEY secret (PEM-encoded RSA key) on each environment; if
-    # unset, build-apex falls back to a throwaway key (see
-    # nix/packages/android-apex.nix).
-    environment: >-
-      ${{ (github.ref == 'refs/heads/prod' || startsWith(github.ref, 'refs/tags/'))
-      && 'android-apex-signing-prod' || 'android-apex-signing-dev' }}
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
@@ -266,16 +254,7 @@ jobs:
           nix develop -c env
 
       - name: Build and package Android APEXes
-        env:
-          APEX_SIGNING_KEY_PEM: ${{ secrets.APEX_SIGNING_KEY }}
         run: |
-          set -euo pipefail
-          if [ -n "$APEX_SIGNING_KEY_PEM" ]; then
-            key_file="$RUNNER_TEMP/apex-signing-key.pem"
-            trap 'rm -f "$key_file"' EXIT
-            (umask 077 && printf '%s' "$APEX_SIGNING_KEY_PEM" > "$key_file")
-            export APEX_SIGNING_KEY="$key_file"
-          fi
           nix develop -c \
             cargo x android-apex
 

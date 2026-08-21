@@ -40,6 +40,21 @@ let
     hash = "sha256-MG7PUB2ZeNexpNgnKunBQl0gzFJA+BLfpTdhcvRnnlc=";
   };
 
+  # AOSP's own well-known AVB test key (a real, unencrypted 4096-bit RSA
+  # key, publicly published for exactly this purpose): used to sign every
+  # APEX this builds, instead of a throwaway key generated fresh every
+  # invocation. Deterministic across runs/machines, and matches apexer's
+  # avbtool invocation (SHA256_RSA4096) exactly - never use it for
+  # anything but local testing; there is no path to a real signing key
+  # here.
+  testKeyBase64 = pkgs.fetchurl {
+    url = "https://android.googlesource.com/platform/external/avb/+/refs/tags/${aospRev}/test/data/testkey_rsa4096.pem?format=TEXT";
+    hash = "sha256-5qt2JnvmWaLN1QclfuLxm4oKynyxPAjnBp2tiirUaiA=";
+  };
+  androidTestKey = pkgs.runCommand "android-test-key-rsa4096.pem" { } ''
+    base64 -d ${testKeyBase64} > $out
+  '';
+
   # Google's own prebuilt mkfs.erofs host binary, built with -DWITH_ANDROID
   # (confirmed via --help: has both --file-contexts and --fs-config-file).
   # Pinned to a specific prebuilts revision - independent of aospRev, but
@@ -143,17 +158,15 @@ let
   '';
 
   # Packages one already-staged payload dir (as produced by `cargo x
-  # android-apex-payload`) into `<name>.apex`, signing it with the key at
-  # $APEX_SIGNING_KEY if set (CI wires this to a real, securely-managed key
-  # from a GitHub Environment secret), or otherwise a throwaway key
-  # generated fresh for this invocation - fine for local testing, but never
-  # persisted or reused across runs.
+  # android-apex-payload`) into `<name>.apex`, always signed with AOSP's
+  # well-known AVB test key - deterministic, recognizable as test-signed,
+  # and never meant to back a real release. There is no real signing key
+  # wired in anywhere: don't point this at production deployment.
   buildApex = pkgs.writeShellApplication {
     name = "build-apex";
     runtimeInputs = [
       compileApexManifest
       apexer
-      pkgs.openssl
     ];
     text = ''
       set -euo pipefail
@@ -166,19 +179,13 @@ let
       work=$(mktemp -d)
       trap 'rm -rf "$work"' EXIT
 
-      key="''${APEX_SIGNING_KEY:-}"
-      if [ -z "$key" ]; then
-        key="$work/key.pem"
-        openssl genrsa -out "$key" 4096 2>/dev/null
-      fi
-
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
 
       apexer -v \
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
         --canned_fs_config "$payload/canned_fs_config" \
-        --key "$key" \
+        --key "${androidTestKey}" \
         --payload_type image \
         --payload_fs_type erofs \
         --android_jar_path "${androidJar}" \
