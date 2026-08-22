@@ -217,10 +217,5 @@ let
   };
 in
 {
-  inherit
-    apexer
-    compileApexManifest
-    buildApex
-    androidJar
-    ;
+  inherit buildApex;
 }
