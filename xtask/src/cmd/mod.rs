@@ -6,11 +6,22 @@ pub mod pre_commit;
 pub mod test;
 pub mod test_watch;
 
+use std::ffi::OsStr;
 use std::process::{Command, Stdio};
 
 use color_eyre::{eyre::eyre, Result};
 
-fn new_command<'a>(args: &[&'a str]) -> Result<(&'a str, Command)> {
+/// Builds a `[&OsStr; N]` from a mix of `&str`/`&String`/`&Path`/`&PathBuf`
+/// arguments - so a `cmd(&args![...])` call site can freely mix string
+/// literals and paths in one argument list.
+macro_rules! args {
+    ($($arg:expr),+ $(,)?) => {
+        [$(::std::convert::AsRef::<::std::ffi::OsStr>::as_ref($arg)),+]
+    };
+}
+pub(crate) use args;
+
+fn new_command<S: AsRef<OsStr>>(args: &[S]) -> Result<(&S, Command)> {
     let (program, rest) = args.split_first().ok_or_else(|| eyre!("empty cmd"))?;
     let mut command = Command::new(program);
     command.args(rest);
@@ -18,7 +29,7 @@ fn new_command<'a>(args: &[&'a str]) -> Result<(&'a str, Command)> {
     Ok((program, command))
 }
 
-pub(crate) fn cmd(args: &[&str]) -> Result<()> {
+pub(crate) fn cmd<S: AsRef<OsStr>>(args: &[S]) -> Result<()> {
     let (program, mut command) = new_command(args)?;
     command
         .stdin(Stdio::inherit())
@@ -27,6 +38,7 @@ pub(crate) fn cmd(args: &[&str]) -> Result<()> {
 
     let status = command.status()?;
     if !status.success() {
+        let program = program.as_ref().to_string_lossy();
         return Err(eyre!("{program} exited with {status}"));
     }
 
@@ -43,6 +55,7 @@ pub(crate) fn cmd_captured<S: AsRef<OsStr>>(args: &[S]) -> Result<Vec<u8>> {
     let mut output = command.output()?;
 
     if !output.status.success() {
+        let program = program.as_ref().to_string_lossy();
         return Err(eyre!("{program} exited with {}", output.status));
     }
 
