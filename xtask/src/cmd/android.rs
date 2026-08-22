@@ -228,7 +228,10 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // metadata` again for data that can't change mid-run.
     let md = MetadataCommand::new().no_deps().exec()?;
 
-    // Absolute, so this works regardless of the invoking cwd.
+    // Absolute, so this works regardless of the invoking cwd. "build-apex"
+    // must match the flake output name in nix/shells/flake-outputs.nix
+    // (packages."x86_64-linux"."build-apex") - nothing checks the two
+    // stay in sync, so grep for "build-apex" in both places if renaming.
     let flake_ref = format!("{}#build-apex", md.workspace_root);
 
     // A unique dir per invocation: `run_payload` tears down and recreates
