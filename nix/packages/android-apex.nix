@@ -144,6 +144,18 @@ let
     '';
   };
 
+  # apexer.py uses /usr/bin/fallocate, /bin/cp, and /bin/ls - absent on a bare NixOS host.
+  # run it inside a synthetic FHS root
+  apexerFHS = pkgs.buildFHSEnv {
+    name = "apexer";
+    targetPkgs = pkgs: [
+      apexer
+      pkgs.coreutils
+      pkgs.util-linux
+    ];
+    runScript = "apexer";
+  };
+
   # JSON -> compiled apex_manifest.pb, using apexer's own generated
   # protobuf module. Avoids needing AOSP's separate conv_apex_manifest host
   # tool (and whatever repo that would drag in) for this one conversion.
@@ -172,7 +184,7 @@ let
     name = "build-apex";
     runtimeInputs = [
       compileApexManifest
-      apexer
+      apexerFHS
       pkgs.jdk21_headless
     ];
     text = ''
