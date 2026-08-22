@@ -20,7 +20,8 @@
 let
   # googlesource's raw-content endpoint only serves files base64-encoded
   # (`?format=TEXT`); this fetches and decodes in one step.
-  fetchGoogleSourceFile = { url, hash }:
+  fetchGoogleSourceFile =
+    { url, hash }:
     pkgs.runCommand "google-source-file" { } ''
       base64 -d ${pkgs.fetchurl { inherit url hash; }} > $out
     '';
