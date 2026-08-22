@@ -1,6 +1,6 @@
 [package]
 name = "orb-jobs-agent"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
 description = "Worldcoin Jobs Agent"
 publish = false

@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{build, deb, deploy, pre_commit, test, test_watch};
+use x::cmd::{android, build, deb, deploy, pre_commit, test, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -13,6 +13,13 @@ enum Cmd {
     /// Build the select crate using `cargo zigbuild --release`. alias: 'b'
     #[command(alias = "b")]
     Build(build::Args),
+    /// Builds the whole workspace for `aarch64-linux-android`, skipping
+    /// crates marked unsupported via `[package.metadata.orb]
+    /// unsupported_targets`.
+    AndroidBuild(android::BuildArgs),
+    /// Build Android payloads and package each into a signed
+    /// `<crate>.apex`
+    AndroidApex(android::ApexArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -40,6 +47,8 @@ fn main() -> Result<()> {
 
     match cmd {
         Cmd::Build(args) => build::run(args),
+        Cmd::AndroidBuild(args) => android::run_build(args),
+        Cmd::AndroidApex(args) => android::run_apex(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),

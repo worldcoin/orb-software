@@ -13,3 +13,6 @@ cc.workspace = true
 license-stub-glib.workspace = true
 license-stub-libsquashfs1.workspace = true
 pkg-config.workspace = true
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]
