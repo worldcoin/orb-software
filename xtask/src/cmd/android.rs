@@ -253,7 +253,10 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let build_apex_bin = utf8(&build_apex_bin)?;
 
     // Keep going on failure, so one bad crate doesn't block every other
-    // APEX that's otherwise ready.
+    // APEX that's otherwise ready. One thread per package, uncapped: each
+    // build-apex invocation spends most of its time waiting on apexer/
+    // aapt2/avbtool/mkfs.erofs subprocesses rather than burning CPU itself,
+    // so it's not purely core-bound - a few dozen threads is affordable.
     let payload_out_dir = &payload_out_dir;
     let out_dir = &out_dir;
     let outcomes = std::thread::scope(|scope| {
