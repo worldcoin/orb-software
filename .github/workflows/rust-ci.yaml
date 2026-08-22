@@ -254,15 +254,12 @@ jobs:
           nix develop -c env
 
       - name: Allow unprivileged user namespaces for bubblewrap
-        # apexer (nix/packages/android-apex.nix) runs inside a bubblewrap
-        # FHS sandbox, which needs to create a user namespace even without
-        # --unshare-user (rootless bwrap always does, to get CAP_SYS_ADMIN
-        # in its own ns). Ubuntu 24.04's AppArmor blocks that by default for
-        # binaries without a matching profile - which a nix store path
-        # never has - failing with "bwrap: setting up uid map: Permission
-        # denied". This runner is ephemeral (ARC), so relaxing it repo-wide
-        # for the job's lifetime is fine; a real persistent host should
-        # instead ship an AppArmor exception for the specific bwrap path.
+        # apexer's bubblewrap FHS sandbox (nix/packages/android-apex.nix)
+        # always creates a user namespace for CAP_SYS_ADMIN, which Ubuntu
+        # 24.04's AppArmor blocks for unprofiled binaries like nix store
+        # paths ("bwrap: setting up uid map: Permission denied"). Safe to
+        # relax repo-wide here since this runner is ephemeral (ARC); a
+        # persistent host should ship a scoped AppArmor exception instead.
         run: sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
       - name: Build and package Android APEXes
         run: |

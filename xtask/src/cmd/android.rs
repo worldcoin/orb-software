@@ -14,9 +14,8 @@ fn utf8(path: &Path) -> Result<&str> {
 }
 
 /// Names of workspace packages whose `[package.metadata.orb]
-/// unsupported_targets` lists `aarch64-linux-android` - the same mechanism
-/// `ci/rust_ci_helper.py` already uses to exclude Darwin-incompatible
-/// crates from `cargo nextest run --workspace`.
+/// unsupported_targets` lists `aarch64-linux-android` (same mechanism
+/// `ci/rust_ci_helper.py` uses for its Darwin exclusions).
 fn unsupported_packages() -> Result<Vec<String>> {
     let md = MetadataCommand::new().no_deps().exec()?;
     let mut names: Vec<String> = md
@@ -69,20 +68,16 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
     cmd(&cmd_args)
 }
 
-/// Stages one APEX payload directory per Android-supported binary crate, so
-/// each project gets its own APEX rather than one shared one:
-/// `<out_dir>/<crate>/content/{bin/<binary>,etc/init/<binary>.rc}` (the
-/// APEX's actual root filesystem) plus sidecar `apex_manifest.json`,
-/// `canned_fs_config`, and `file_contexts` - the full set of inputs
-/// `nix/packages/android-apex.nix`'s `apexer` needs to produce a signed
-/// `.apex`.
+/// Stages one APEX payload directory per Android-supported binary crate:
+/// `<out_dir>/<crate>/content/{bin/<binary>,etc/init/<binary>.rc}` plus
+/// sidecar `apex_manifest.json`, `canned_fs_config`, and `file_contexts` -
+/// the inputs `nix/packages/android-apex.nix`'s `apexer` needs to produce a
+/// signed `.apex`.
 ///
-/// The `apex_manifest.json` name/version, `etc/init/*.rc` contents, and
-/// `file_contexts` are placeholders (marked TODO) - they need real
-/// reverse-DNS naming and a real SELinux domain/service class before the
-/// resulting APEX is anything more than a structurally-valid placeholder.
+/// The manifest name/version, `etc/init/*.rc` contents, and `file_contexts`
+/// are TODO placeholders needing real naming and SELinux details.
 fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
-    // Ensure the binaries staged below are actually up to date.
+    // Rebuild first, so the binaries staged below aren't stale.
     run_build(BuildArgs { release })?;
 
     let md = MetadataCommand::new().no_deps().exec()?;
@@ -109,17 +104,13 @@ fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
             continue;
         }
 
-        // `content/` holds exactly what apexer should see as the APEX's
-        // root filesystem ("/"). apex_manifest.json/canned_fs_config/
-        // file_contexts are sidecar inputs *about* that content, read via
-        // their own CLI flags - they must not live inside content/ itself,
-        // or apexer's e2fsdroid scans them as if they were payload files
-        // and fails looking them up in canned_fs_config.
+        // content/ must hold exactly the APEX's root filesystem; the
+        // sidecar manifest/canned_fs_config/file_contexts live outside it,
+        // or apexer's e2fsdroid mistakes them for payload files.
         let pkg_out = out_dir.join(pkg.name.as_str());
-        // Recreate from scratch each run: otherwise a binary/init script
-        // removed since the last run (or a crate that just became
-        // unsupported) would linger here and get bundled into the next
-        // APEX alongside canned_fs_config entries that no longer match it.
+        // Recreate from scratch, so a stale binary/init script from a prior
+        // run isn't bundled into an APEX whose canned_fs_config no longer
+        // lists it.
         if pkg_out.exists() {
             fs::remove_dir_all(&pkg_out)?;
         }
@@ -127,13 +118,10 @@ fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
         let bin_out = content_dir.join("bin");
         fs::create_dir_all(&bin_out)?;
 
-        // We author every path in this payload ourselves below, so we can
-        // emit its canned_fs_config directly instead of re-deriving it by
-        // walking the tree afterward (see gen-canned-fs-config.nix, which
-        // this replaces for crate-authored payloads). uid/gid 1000
-        // (Android's `system`) is a placeholder default, same status as
-        // the TODO_USER/TODO_SELINUX_DOMAIN placeholders below - it should
-        // be revisited together with the real init.rc user/group.
+        // We author every path ourselves, so canned_fs_config is emitted
+        // directly instead of walking the tree afterward. uid/gid 1000
+        // (`system`) is a placeholder, same status as TODO_USER/
+        // TODO_SELINUX_DOMAIN below.
         let mut fs_config = vec![
             "/ 1000 1000 0755".to_string(),
             "/apex_manifest.pb 1000 1000 0644".to_string(),
@@ -149,13 +137,10 @@ fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
             fs_config.push(format!("/bin/{bin} 1000 1000 0755"));
         }
 
-        // TODO: "com.worldcoin.orb.*" is a placeholder reverse-DNS
-        // namespace and "version": 1 is a placeholder - confirm the real
-        // APEX naming/versioning scheme before shipping any of this.
-        //
-        // Android package names are Java identifiers joined by dots, so
-        // `-` (common in crate names, e.g. orb-attest) isn't valid there -
-        // aapt2 rejects it outright. `_` is the closest equivalent.
+        // TODO: "com.worldcoin.orb.*" and "version": 1 are placeholders -
+        // confirm the real naming/versioning scheme before shipping.
+        // `-` isn't valid in Android package names (Java identifiers
+        // joined by dots); aapt2 rejects it, so it's swapped for `_`.
         let pkg_name = pkg
             .name
             .as_str()
@@ -193,11 +178,9 @@ fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
             fs_config.join("\n") + "\n",
         )?;
 
-        // TODO: placeholder SELinux context for every path - matches no
-        // real sepolicy type yet. `mkfs.erofs --file-contexts` wants
-        // Android's file_contexts regex format (`<path-regex> <context>`),
-        // so a single catch-all entry is syntactically valid here, unlike
-        // the plain per-path listing in canned_fs_config.
+        // TODO: placeholder SELinux context, matches no real sepolicy type
+        // yet. A single catch-all regex entry is valid file_contexts
+        // syntax, unlike the per-path listing in canned_fs_config.
         fs::write(
             pkg_out.join("file_contexts"),
             "(/.*)?    u:object_r:TODO_SELINUX_CONTEXT:s0\n",
@@ -246,10 +229,8 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let payload_out_dir = payload_out_dir_handle.path().to_path_buf();
     let packages = run_payload(&payload_out_dir, release)?;
 
-    // Recreate from scratch each run: otherwise a crate that produced a
-    // `.apex` in a previous run but is now unsupported/removed would leave
-    // that stale artifact here to be picked up by CI alongside this run's
-    // genuinely fresh outputs.
+    // Recreate from scratch, so a stale `.apex` from a crate that's now
+    // unsupported/removed doesn't linger for CI to pick up.
     if out_dir.exists() {
         fs::remove_dir_all(&out_dir)?;
     }

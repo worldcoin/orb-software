@@ -15,10 +15,10 @@ enum Cmd {
     Build(build::Args),
     /// Builds the whole workspace for `aarch64-linux-android`, skipping
     /// crates marked unsupported via `[package.metadata.orb]
-    /// unsupported_targets`. Used by CI as the Android build gate.
+    /// unsupported_targets`.
     AndroidBuild(android::BuildArgs),
-    /// Stages Android payloads and packages each into a signed
-    /// `<crate>.apex`, via the `build-apex` flake package (requires `nix`).
+    /// Build Android payloads and package each into a signed
+    /// `<crate>.apex`
     AndroidApex(android::ApexArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
