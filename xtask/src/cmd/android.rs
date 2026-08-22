@@ -151,9 +151,12 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
         // apex_manifest's `version` must be a monotonically increasing
         // int64, not the semver this crate is actually released under (see
         // Cargo.toml), so encode that semver into one instead of a
-        // placeholder constant - assumes minor/patch stay under 1000,
-        // true for every crate version in this workspace today. The
-        // original string is kept as `versionName` for humans.
+        // placeholder constant - assumes minor/patch stay under 1000, true
+        // for every crate version in this workspace today. Must be nonzero:
+        // apexer's own ValidateApexManifest rejects a literal 0 ("version
+        // field is required"), which is why every crate here carries a real
+        // Cargo.toml version instead of the 0.0.0 placeholder. The original
+        // string is kept as `versionName` for humans.
         let version = &pkg.version;
         let version_code =
             version.major * 1_000_000 + version.minor * 1_000 + version.patch;
