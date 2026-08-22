@@ -80,8 +80,8 @@ fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<()> {
 /// the inputs `nix/packages/android-apex.nix`'s `apexer` needs to produce a
 /// signed `.apex`.
 ///
-/// The manifest name/version, `etc/init/*.rc` contents, and `file_contexts`
-/// are TODO placeholders needing real naming and SELinux details.
+/// The manifest name, `etc/init/*.rc` contents, and `file_contexts` are
+/// TODO placeholders needing real naming and SELinux details.
 fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<String>> {
     // Rebuild first, so the binaries staged below aren't stale.
     run_build_with(md, BuildArgs { release })?;
@@ -142,19 +142,31 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
             fs_config.push(format!("/bin/{bin} 1000 1000 0755"));
         }
 
-        // TODO: "com.worldcoin.orb.*" and "version": 1 are placeholders -
-        // confirm the real naming/versioning scheme before shipping.
-        // `-` isn't valid in Android package names (Java identifiers
-        // joined by dots); aapt2 rejects it, so it's swapped for `_`.
+        // TODO: "com.worldcoin.orb.*" is a placeholder - confirm the real
+        // naming scheme before shipping. `-` isn't valid in Android package
+        // names (Java identifiers joined by dots); aapt2 rejects it, so
+        // it's swapped for `_`.
         let pkg_name = pkg
             .name
             .as_str()
             .strip_prefix("orb-")
             .unwrap_or(pkg.name.as_str());
         let apex_name = format!("com.worldcoin.orb.{}", pkg_name.replace('-', "_"));
+
+        // apex_manifest's `version` must be a monotonically increasing
+        // int64, not the semver this crate is actually released under (see
+        // Cargo.toml), so encode that semver into one instead of a
+        // placeholder constant - assumes minor/patch stay under 1000,
+        // true for every crate version in this workspace today. The
+        // original string is kept as `versionName` for humans.
+        let version = &pkg.version;
+        let version_code =
+            version.major * 1_000_000 + version.minor * 1_000 + version.patch;
         fs::write(
             pkg_out.join("apex_manifest.json"),
-            format!("{{\n  \"name\": \"{apex_name}\",\n  \"version\": 1\n}}\n"),
+            format!(
+                "{{\n  \"name\": \"{apex_name}\",\n  \"version\": {version_code},\n  \"versionName\": \"{version}\"\n}}\n"
+            ),
         )?;
 
         let init_dir = content_dir.join("etc/init");
