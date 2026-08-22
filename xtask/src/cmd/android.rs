@@ -1,5 +1,5 @@
 use crate::cmd::{cmd, cmd_captured};
-use cargo_metadata::MetadataCommand;
+use cargo_metadata::{Metadata, MetadataCommand};
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use std::fs;
@@ -16,8 +16,7 @@ fn utf8(path: &Path) -> Result<&str> {
 /// Names of workspace packages whose `[package.metadata.orb]
 /// unsupported_targets` lists `aarch64-linux-android` (same mechanism
 /// `ci/rust_ci_helper.py` uses for its Darwin exclusions).
-fn unsupported_packages() -> Result<Vec<String>> {
-    let md = MetadataCommand::new().no_deps().exec()?;
+fn unsupported_packages(md: &Metadata) -> Result<Vec<String>> {
     let mut names: Vec<String> = md
         .workspace_packages()
         .into_iter()
@@ -48,8 +47,15 @@ pub struct BuildArgs {
 /// unsupported via `[package.metadata.orb] unsupported_targets`. Meant for
 /// CI: any failure among the non-excluded crates is a hard error.
 pub fn run_build(args: BuildArgs) -> Result<()> {
+    let md = MetadataCommand::new().no_deps().exec()?;
+    run_build_with(&md, args)
+}
+
+/// Like [`run_build`], but reuses metadata the caller already fetched
+/// instead of shelling out to `cargo metadata` again.
+fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<()> {
     let BuildArgs { release } = args;
-    let excludes = unsupported_packages()?;
+    let excludes = unsupported_packages(md)?;
 
     println!(
         "skipping (unsupported on {TARGET}): {}",
@@ -76,12 +82,11 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 ///
 /// The manifest name/version, `etc/init/*.rc` contents, and `file_contexts`
 /// are TODO placeholders needing real naming and SELinux details.
-fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
+fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<String>> {
     // Rebuild first, so the binaries staged below aren't stale.
-    run_build(BuildArgs { release })?;
+    run_build_with(md, BuildArgs { release })?;
 
-    let md = MetadataCommand::new().no_deps().exec()?;
-    let excluded = unsupported_packages()?;
+    let excluded = unsupported_packages(md)?;
     let profile_dir = if release { "release" } else { "debug" };
     // Absolute, so this works regardless of the invoking cwd.
     let target_dir = md.target_directory.as_std_path();
@@ -218,16 +223,20 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     let ApexArgs { out_dir, release } = args;
 
+    // Fetched once and threaded through run_build_with/run_payload/
+    // unsupported_packages below, instead of each shelling out to `cargo
+    // metadata` again for data that can't change mid-run.
+    let md = MetadataCommand::new().no_deps().exec()?;
+
     // Absolute, so this works regardless of the invoking cwd.
-    let workspace_root = MetadataCommand::new().no_deps().exec()?.workspace_root;
-    let flake_ref = format!("{workspace_root}#build-apex");
+    let flake_ref = format!("{}#build-apex", md.workspace_root);
 
     // A unique dir per invocation: `run_payload` tears down and recreates
     // each package's subdirectory on every call, so a fixed shared path
     // would race across concurrent `android-apex` invocations.
     let payload_out_dir_handle = tempfile::tempdir()?;
     let payload_out_dir = payload_out_dir_handle.path().to_path_buf();
-    let packages = run_payload(&payload_out_dir, release)?;
+    let packages = run_payload(&md, &payload_out_dir, release)?;
 
     // Recreate from scratch, so a stale `.apex` from a crate that's now
     // unsupported/removed doesn't linger for CI to pick up.
