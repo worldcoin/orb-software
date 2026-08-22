@@ -5,7 +5,6 @@ use color_eyre::{eyre::eyre, Result};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 const TARGET: &str = "aarch64-linux-android";
 
@@ -274,48 +273,56 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // with no cross-crate dependency, so run them all concurrently -
     // capturing output instead of streaming it live, since interleaved
     // output from several concurrent subprocesses would be unreadable.
-    let succeeded = Mutex::new(Vec::new());
-    let failed = Mutex::new(Vec::new());
+    let payload_out_dir = &payload_out_dir;
+    let out_dir = &out_dir;
+    let outcomes = std::thread::scope(|scope| {
+        let handles: Vec<_> = packages
+            .iter()
+            .map(|pkg| {
+                scope.spawn(move || -> Result<String, String> {
+                    let payload_dir = payload_out_dir.join(pkg);
+                    let apex_out = out_dir.join(format!("{pkg}.apex"));
+                    let result = (|| -> Result<String> {
+                        cmd_captured(&[
+                            build_apex_bin,
+                            utf8(&payload_dir)?,
+                            utf8(&apex_out)?,
+                        ])
+                    })();
 
-    std::thread::scope(|scope| {
-        for pkg in &packages {
-            let succeeded = &succeeded;
-            let failed = &failed;
-            let payload_out_dir = &payload_out_dir;
-            let out_dir = &out_dir;
-            scope.spawn(move || {
-                let payload_dir = payload_out_dir.join(pkg);
-                let apex_out = out_dir.join(format!("{pkg}.apex"));
-                let result = (|| -> Result<String> {
-                    cmd_captured(&[
-                        build_apex_bin,
-                        utf8(&payload_dir)?,
-                        utf8(&apex_out)?,
-                    ])
-                })();
+                    match result {
+                        Ok(output) => {
+                            // Locked once for the whole block, so concurrently
+                            // finishing packages can't interleave mid-output.
+                            let mut out = std::io::stdout().lock();
+                            let _ = write!(out, "{output}");
+                            let _ = writeln!(
+                                out,
+                                "packaged `{pkg}` -> {}",
+                                apex_out.display()
+                            );
+                            Ok(pkg.clone())
+                        }
+                        Err(e) => {
+                            let mut err = std::io::stderr().lock();
+                            let _ = writeln!(err, "failed to package `{pkg}`: {e}");
+                            Err(pkg.clone())
+                        }
+                    }
+                })
+            })
+            .collect();
 
-                match result {
-                    Ok(output) => {
-                        succeeded.lock().unwrap().push(pkg.clone());
-                        // Locked once for the whole block, so concurrently
-                        // finishing packages can't interleave mid-output.
-                        let mut out = std::io::stdout().lock();
-                        let _ = write!(out, "{output}");
-                        let _ =
-                            writeln!(out, "packaged `{pkg}` -> {}", apex_out.display());
-                    }
-                    Err(e) => {
-                        failed.lock().unwrap().push(pkg.clone());
-                        let mut err = std::io::stderr().lock();
-                        let _ = writeln!(err, "failed to package `{pkg}`: {e}");
-                    }
-                }
-            });
-        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>()
     });
 
-    let mut succeeded = succeeded.into_inner().unwrap();
-    let mut failed = failed.into_inner().unwrap();
+    let mut succeeded: Vec<String> =
+        outcomes.iter().cloned().filter_map(Result::ok).collect();
+    let mut failed: Vec<String> =
+        outcomes.into_iter().filter_map(Result::err).collect();
     succeeded.sort();
     failed.sort();
 
