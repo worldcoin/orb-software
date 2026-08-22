@@ -7167,7 +7167,7 @@ dependencies = [
 
 [[package]]
 name = "orb-backend-status"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-tempfile",
  "bon",
@@ -7515,7 +7515,7 @@ version = "0.0.0"
 
 [[package]]
 name = "orb-jobs-agent"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-tempfile",
  "async-trait",
@@ -7570,7 +7570,7 @@ dependencies = [
 
 [[package]]
 name = "orb-jwk-util"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -7644,7 +7644,7 @@ dependencies = [
 
 [[package]]
 name = "orb-ota-backend"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "axum 0.8.6",
  "clap",
@@ -7774,7 +7774,7 @@ dependencies = [
 
 [[package]]
 name = "orb-se050"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "bon",
  "clap",
@@ -7796,7 +7796,7 @@ dependencies = [
 
 [[package]]
 name = "orb-se050-reprovision"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "bon",
@@ -7928,7 +7928,7 @@ dependencies = [
 
 [[package]]
 name = "orb-speed-test"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -8281,7 +8281,7 @@ dependencies = [
 
 [[package]]
 name = "orb-zbus-proxies-cli"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "clap",
  "color-eyre",
