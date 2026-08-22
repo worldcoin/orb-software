@@ -1,9 +1,11 @@
-use crate::cmd::cmd;
+use crate::cmd::{cmd, cmd_captured};
 use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 const TARGET: &str = "aarch64-linux-android";
 
@@ -267,28 +269,55 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let build_apex_bin = utf8(&build_apex_bin)?;
 
     // Keep going on failure, so one bad crate doesn't block every other
-    // APEX that's otherwise ready.
-    let mut succeeded = Vec::new();
-    let mut failed = Vec::new();
+    // APEX that's otherwise ready. Each build-apex invocation is an
+    // independent, CPU-bound subprocess (apexer/avbtool/aapt2/mkfs.erofs)
+    // with no cross-crate dependency, so run them all concurrently -
+    // capturing output instead of streaming it live, since interleaved
+    // output from several concurrent subprocesses would be unreadable.
+    let succeeded = Mutex::new(Vec::new());
+    let failed = Mutex::new(Vec::new());
 
-    for pkg in &packages {
-        let payload_dir = payload_out_dir.join(pkg);
-        let apex_out = out_dir.join(format!("{pkg}.apex"));
-        let result = (|| -> Result<()> {
-            cmd(&[build_apex_bin, utf8(&payload_dir)?, utf8(&apex_out)?])
-        })();
+    std::thread::scope(|scope| {
+        for pkg in &packages {
+            let succeeded = &succeeded;
+            let failed = &failed;
+            let payload_out_dir = &payload_out_dir;
+            let out_dir = &out_dir;
+            scope.spawn(move || {
+                let payload_dir = payload_out_dir.join(pkg);
+                let apex_out = out_dir.join(format!("{pkg}.apex"));
+                let result = (|| -> Result<String> {
+                    cmd_captured(&[
+                        build_apex_bin,
+                        utf8(&payload_dir)?,
+                        utf8(&apex_out)?,
+                    ])
+                })();
 
-        match result {
-            Ok(()) => {
-                println!("packaged `{pkg}` -> {}", apex_out.display());
-                succeeded.push(pkg.clone());
-            }
-            Err(e) => {
-                eprintln!("failed to package `{pkg}`: {e}");
-                failed.push(pkg.clone());
-            }
+                match result {
+                    Ok(output) => {
+                        succeeded.lock().unwrap().push(pkg.clone());
+                        // Locked once for the whole block, so concurrently
+                        // finishing packages can't interleave mid-output.
+                        let mut out = std::io::stdout().lock();
+                        let _ = write!(out, "{output}");
+                        let _ =
+                            writeln!(out, "packaged `{pkg}` -> {}", apex_out.display());
+                    }
+                    Err(e) => {
+                        failed.lock().unwrap().push(pkg.clone());
+                        let mut err = std::io::stderr().lock();
+                        let _ = writeln!(err, "failed to package `{pkg}`: {e}");
+                    }
+                }
+            });
         }
-    }
+    });
+
+    let mut succeeded = succeeded.into_inner().unwrap();
+    let mut failed = failed.into_inner().unwrap();
+    succeeded.sort();
+    failed.sort();
 
     println!("\n=== apex packaging summary ===");
     println!("succeeded ({}): {}", succeeded.len(), succeeded.join(", "));
