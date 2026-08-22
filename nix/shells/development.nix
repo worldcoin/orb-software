@@ -207,10 +207,8 @@ in
           export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
 
           # Android NDK toolchain, used by `cargo build --target
-          # aarch64-linux-android` (or `cargo x build --target
-          # aarch64-linux-android -p <crate>`). Not every crate in the
-          # workspace builds for Android (dbus/systemd/gstreamer-dependent
-          # crates won't) - that's expected.
+          # aarch64-linux-android`. Not every crate builds for Android
+          # (dbus/systemd/gstreamer-dependent crates won't) - expected.
           export ANDROID_NDK_HOME="${androidNdk.ndkRoot}";
           export CC_aarch64_linux_android="${androidNdk.cc}";
           export AR_aarch64_linux_android="${androidNdk.ar}";

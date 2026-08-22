@@ -19,9 +19,6 @@ let
   androidComposition = pkgs.androidenv.composeAndroidPackages {
     ndkVersions = [ ndkVersion ];
     includeNDK = true;
-    # We only cross-compile with the NDK's toolchain here, we don't build or
-    # run an actual .apk, so skip everything else the SDK would otherwise
-    # pull in.
     includeEmulator = false;
     includeSystemImages = false;
     includeSources = false;

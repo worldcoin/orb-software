@@ -1,21 +1,18 @@
 # Packages per-crate payloads staged by `cargo x android-apex` into
 # signed `.apex` files.
 #
-# `apexer` isn't a standalone downloadable tool: it and the protobuf
-# schemas for apex_manifest/apex_build_info only exist in AOSP source, so we
-# fetch just the `system/apex` repo and build the host tool from it,
-# substituting nixpkgs packages for the rest of its usual (normally
-# AOSP-build-only) toolchain: android-tools for avbtool, aapt for aapt2.
+# `apexer` and its apex_manifest/apex_build_info protobuf schemas only
+# exist in AOSP source, not as a standalone tool, so we fetch just the
+# `system/apex` repo and build it, substituting nixpkgs for the rest of
+# its usual AOSP-build-only toolchain: android-tools for avbtool, aapt for
+# aapt2.
 #
-# Payload filesystem is erofs. nixpkgs' erofs-utils can't produce a
-# canned_fs_config-capable mkfs.erofs (that needs a -DWITH_ANDROID build
-# plus AOSP's libcutils from system/core, which isn't buildable outside a
-# full AOSP tree - see git history for the ext4-based approach we used
-# before finding this). Instead we fetch Google's own prebuilt mkfs.erofs
-# host binary directly from kernel/prebuilts/build-tools (verified: it has
-# both --file-contexts and --fs-config-file, and produces smaller images
-# than ext4 thanks to lz4hc compression) and patch it to run under nixpkgs'
-# glibc via autoPatchelfHook.
+# Payload filesystem is erofs. nixpkgs' erofs-utils can't build a
+# canned_fs_config-capable mkfs.erofs (needs AOSP's libcutils, not
+# buildable outside a full AOSP tree - see git history for the ext4
+# approach used before this). Instead we fetch Google's own prebuilt
+# mkfs.erofs from kernel/prebuilts/build-tools and patch it to run under
+# nixpkgs' glibc via autoPatchelfHook.
 { pkgs }:
 let
   # googlesource's raw-content endpoint only serves files base64-encoded
@@ -27,8 +24,7 @@ let
     '';
 
   # Pinned for reproducibility - bump deliberately, and re-verify the hash
-  # below (and that platformVersion still matches an available SDK
-  # platform) when you do.
+  # below when you do.
   aospRev = "android-16.0.0_r4";
 
   apexSrc = pkgs.fetchgit {
@@ -90,14 +86,11 @@ let
     '';
   };
 
-  # apexer unconditionally shells out to `aapt2 link -I <android_jar_path>`
-  # to build the outer APK-style container, so we need an android.jar for
-  # some platform version - not tied to aospRev, just needs to be recent
-  # enough to understand whatever AndroidManifest.xml apexer generates.
-  # build-tools is pulled in too, for `apksigner` - apexer's outer container
-  # (apex.apk merged with the payload zip) comes out of apexer completely
-  # APK-unsigned; only the inner payload image gets AVB-signed via --key.
-  # apksigner closes that gap (see buildApex below).
+  # apexer shells out to `aapt2 link -I <android_jar_path>` for the outer
+  # APK-style container, so we need some android.jar - not tied to aospRev,
+  # just recent enough for whatever AndroidManifest.xml apexer generates.
+  # build-tools is pulled in too, for `apksigner`, which APK-signs that
+  # otherwise-unsigned outer container (see buildApex below).
   platformVersion = "36";
   buildToolsVersion = "36.0.0";
   androidPlatform = pkgs.androidenv.composeAndroidPackages {
@@ -145,8 +138,8 @@ let
     '';
   };
 
-  # apexer.py uses /usr/bin/fallocate, /bin/cp, and /bin/ls - absent on a bare NixOS host.
-  # run it inside a synthetic FHS root
+  # apexer.py shells out to /usr/bin/fallocate, /bin/cp, /bin/ls - absent
+  # on a bare NixOS host, so run it inside a synthetic FHS root.
   apexerFHS = pkgs.buildFHSEnv {
     name = "apexer";
     targetPkgs = pkgs: [
@@ -201,11 +194,8 @@ let
 
       compile-apex-manifest < "$payload/apex_manifest.json" > "$work/apex_manifest.pb"
 
-      # apexer only AVB-signs the inner payload image (via --key below);
-      # the outer APK-style container it builds (apex.apk merged with the
-      # payload zip) comes out completely APK-unsigned. Sign that container
-      # in a second step so both apexd (checks the inner AVB signature) and
-      # PackageManager (checks the outer APK v2/v3 signature) accept it.
+      # apexer only AVB-signs the inner payload (--key below); APK-sign the
+      # outer container here too, so both apexd and PackageManager accept it.
       apexer -v \
         --manifest "$work/apex_manifest.pb" \
         --file_contexts "$payload/file_contexts" \
