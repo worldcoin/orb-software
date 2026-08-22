@@ -1,4 +1,4 @@
-use crate::cmd::{cmd, cmd_captured};
+use crate::cmd::{args, cmd, cmd_captured};
 use cargo_metadata::{Metadata, MetadataCommand};
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
@@ -7,11 +7,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const TARGET: &str = "aarch64-linux-android";
-
-fn utf8(path: &Path) -> Result<&str> {
-    path.to_str()
-        .ok_or_else(|| eyre!("non-utf8 path: {}", path.display()))
-}
 
 /// Names of workspace packages whose `[package.metadata.orb]
 /// unsupported_targets` lists `aarch64-linux-android` (same mechanism
@@ -264,17 +259,16 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // whatever's at that path, so a fixed path would race across runs.
     let build_apex_link_dir = tempfile::tempdir()?;
     let build_apex_link = build_apex_link_dir.path().join("build-apex");
-    cmd(&[
+    cmd(&args![
         "nix",
         "build",
         "--extra-experimental-features",
         "nix-command flakes",
         &flake_ref,
         "--out-link",
-        utf8(&build_apex_link)?,
+        &build_apex_link,
     ])?;
     let build_apex_bin = build_apex_link.join("bin/build-apex");
-    let build_apex_bin = utf8(&build_apex_bin)?;
 
     // Keep going on failure, so one bad crate doesn't block every other
     // APEX that's otherwise ready. One thread per package, uncapped: each
@@ -283,6 +277,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // so it's not purely core-bound - a few dozen threads is affordable.
     let payload_out_dir = &payload_out_dir;
     let out_dir = &out_dir;
+    let build_apex_bin = &build_apex_bin;
     let outcomes = std::thread::scope(|scope| {
         let handles: Vec<_> = packages
             .iter()
@@ -290,13 +285,8 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
                 scope.spawn(move || -> Result<String, String> {
                     let payload_dir = payload_out_dir.join(pkg);
                     let apex_out = out_dir.join(format!("{pkg}.apex"));
-                    let result = (|| -> Result<String> {
-                        cmd_captured(&[
-                            build_apex_bin,
-                            utf8(&payload_dir)?,
-                            utf8(&apex_out)?,
-                        ])
-                    })();
+                    let result =
+                        cmd_captured(&args![build_apex_bin, &payload_dir, &apex_out]);
 
                     match result {
                         Ok(output) => {
