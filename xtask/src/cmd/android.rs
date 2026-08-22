@@ -156,8 +156,12 @@ fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
         // Android package names are Java identifiers joined by dots, so
         // `-` (common in crate names, e.g. orb-attest) isn't valid there -
         // aapt2 rejects it outright. `_` is the closest equivalent.
-        let apex_name =
-            format!("com.worldcoin.orb.{}", pkg.name.as_str().replace('-', "_"));
+        let pkg_name = pkg
+            .name
+            .as_str()
+            .strip_prefix("orb-")
+            .unwrap_or(pkg.name.as_str());
+        let apex_name = format!("com.worldcoin.orb.{}", pkg_name.replace('-', "_"));
         fs::write(
             pkg_out.join("apex_manifest.json"),
             format!("{{\n  \"name\": \"{apex_name}\",\n  \"version\": 1\n}}\n"),
