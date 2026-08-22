@@ -14,7 +14,9 @@ let
     # Used like a dev shell, but only for flashing.
     packages."x86_64-linux"."tegra-bash" = tegraBashFHS;
     # Packages a staged Android APEX payload dir into a signed `.apex` -
-    # see nix/packages/android-apex.nix. Used by `cargo x android-apex`.
+    # see nix/packages/android-apex.nix. The name "build-apex" is matched
+    # by a hardcoded string in xtask/src/cmd/android.rs's flake_ref -
+    # nothing checks the two stay in sync, so grep both if renaming.
     packages."x86_64-linux"."build-apex" = androidApex.buildApex;
     devShells.x86_64-linux.nfsboot = nfsboot;
   };
