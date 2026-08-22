@@ -6,7 +6,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const TARGET: &str = "aarch64-linux-android";
-const DEFAULT_PAYLOAD_OUT_DIR: &str = "target/android-apex-payloads";
 
 fn utf8(path: &Path) -> Result<&str> {
     path.to_str()
@@ -47,7 +46,7 @@ pub struct BuildArgs {
 
 /// Builds the whole workspace for Android, skipping crates marked
 /// unsupported via `[package.metadata.orb] unsupported_targets`. Meant for
-/// CI: unlike `android-sweep`, a build failure here is an error.
+/// CI: any failure among the non-excluded crates is a hard error.
 pub fn run_build(args: BuildArgs) -> Result<()> {
     let BuildArgs { release } = args;
     let excludes = unsupported_packages()?;
@@ -69,16 +68,6 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
     cmd(&cmd_args)
 }
 
-#[derive(ClapArgs, Debug)]
-pub struct PayloadArgs {
-    /// Directory to stage per-crate APEX payloads into.
-    #[arg(long, default_value = DEFAULT_PAYLOAD_OUT_DIR)]
-    pub out_dir: PathBuf,
-    /// Use binaries from a release build.
-    #[arg(long)]
-    pub release: bool,
-}
-
 /// Stages one APEX payload directory per Android-supported binary crate, so
 /// each project gets its own APEX rather than one shared one:
 /// `<out_dir>/<crate>/content/{bin/<binary>,etc/init/<binary>.rc}` (the
@@ -91,9 +80,7 @@ pub struct PayloadArgs {
 /// `file_contexts` are placeholders (marked TODO) - they need real
 /// reverse-DNS naming and a real SELinux domain/service class before the
 /// resulting APEX is anything more than a structurally-valid placeholder.
-pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
-    let PayloadArgs { out_dir, release } = args;
-
+fn run_payload(out_dir: &Path, release: bool) -> Result<Vec<String>> {
     // Ensure the binaries staged below are actually up to date.
     run_build(BuildArgs { release })?;
 
@@ -103,7 +90,7 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
     // Absolute, so this works regardless of the invoking cwd.
     let target_dir = md.target_directory.as_std_path();
 
-    fs::create_dir_all(&out_dir)?;
+    fs::create_dir_all(out_dir)?;
 
     let mut staged = Vec::new();
 
@@ -211,7 +198,6 @@ pub fn run_payload(args: PayloadArgs) -> Result<Vec<String>> {
             "(/.*)?    u:object_r:TODO_SELINUX_CONTEXT:s0\n",
         )?;
 
-        println!("staged payload for `{}` at {}", pkg.name, pkg_out.display());
         staged.push(pkg.name.as_str().to_owned());
     }
 
@@ -228,8 +214,8 @@ pub struct ApexArgs {
     pub release: bool,
 }
 
-/// Stages Android payloads (like `android-apex-payload`) and packages each
-/// into a signed `<out_dir>/<crate>.apex`, using the `build-apex` tool from
+/// Stages Android payloads and packages each into a signed
+/// `<out_dir>/<crate>.apex`, using the `build-apex` tool from
 /// `nix/packages/android-apex.nix` (exposed as the `build-apex` flake
 /// package). Requires `nix` on PATH.
 pub fn run_apex(args: ApexArgs) -> Result<()> {
@@ -253,10 +239,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     // would race across concurrent `android-apex` invocations.
     let payload_out_dir_handle = tempfile::tempdir()?;
     let payload_out_dir = payload_out_dir_handle.path().to_path_buf();
-    let packages = run_payload(PayloadArgs {
-        out_dir: payload_out_dir.clone(),
-        release,
-    })?;
+    let packages = run_payload(&payload_out_dir, release)?;
 
     // Recreate from scratch each run: otherwise a crate that produced a
     // `.apex` in a previous run but is now unsupported/removed would leave
@@ -309,70 +292,10 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
     println!("\n=== apex packaging summary ===");
     println!("succeeded ({}): {}", succeeded.len(), succeeded.join(", "));
-    println!("failed ({}): {}", failed.len(), failed.join(", "));
 
     if !failed.is_empty() {
+        println!("failed ({}): {}", failed.len(), failed.join(", "));
         return Err(eyre!("failed to package APEX for: {}", failed.join(", ")));
-    }
-
-    Ok(())
-}
-
-#[derive(ClapArgs, Debug)]
-pub struct Args {
-    /// Build in release mode.
-    #[arg(long)]
-    pub release: bool,
-    /// Only attempt these crates instead of every workspace member.
-    pub pkgs: Vec<String>,
-}
-
-/// Attempts to build every requested crate (default: the whole workspace)
-/// for Android, reporting which succeed and which don't. Not every crate is
-/// expected to build: this is a discovery sweep, not a release gate.
-pub fn run(args: Args) -> Result<()> {
-    let Args { release, pkgs } = args;
-
-    let pkgs = if pkgs.is_empty() {
-        let md = MetadataCommand::new().no_deps().exec()?;
-        let mut names: Vec<String> = md
-            .workspace_packages()
-            .into_iter()
-            .map(|pkg| pkg.name.as_str().to_owned())
-            .collect();
-        names.sort();
-        names
-    } else {
-        pkgs
-    };
-
-    let mut succeeded = Vec::new();
-    let mut failed = Vec::new();
-
-    for pkg in &pkgs {
-        println!("\n=== building `{pkg}` for {TARGET} ===");
-
-        let mut cmd_args =
-            vec!["cargo", "build", "--target", TARGET, "-p", pkg.as_str()];
-        if release {
-            cmd_args.push("--release");
-        }
-
-        if cmd(&cmd_args).is_ok() {
-            succeeded.push(pkg.clone());
-        } else {
-            failed.push(pkg.clone());
-        }
-    }
-
-    println!("\n=== {TARGET} build sweep summary ===");
-    println!("succeeded ({}):", succeeded.len());
-    for pkg in &succeeded {
-        println!("  {pkg}");
-    }
-    println!("failed ({}):", failed.len());
-    for pkg in &failed {
-        println!("  {pkg}");
     }
 
     Ok(())

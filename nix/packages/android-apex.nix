@@ -1,4 +1,4 @@
-# Packages per-crate payloads (see `cargo x android-apex-payload`) into
+# Packages per-crate payloads staged by `cargo x android-apex` into
 # signed `.apex` files.
 #
 # `apexer` isn't a standalone downloadable tool: it and the protobuf
@@ -178,8 +178,8 @@ let
   '';
 
   # Packages one already-staged payload dir (as produced by `cargo x
-  # android-apex-payload`) into `<name>.apex`, always signed with the AOSP
-  # test key/cert above - never use this for a real release.
+  # android-apex`) into `<name>.apex`, always signed with the AOSP test
+  # key/cert above - never use this for a real release.
   buildApex = pkgs.writeShellApplication {
     name = "build-apex";
     runtimeInputs = [
