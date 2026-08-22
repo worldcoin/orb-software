@@ -36,20 +36,17 @@ pub(crate) fn cmd(args: &[&str]) -> Result<()> {
 /// Like [`cmd`], but captures stdout/stderr instead of streaming them live -
 /// for callers running several of these concurrently, where interleaved
 /// output from independent processes would otherwise be unreadable. On
-/// success, returns the captured output; on failure, the error includes it.
-pub(crate) fn cmd_captured(args: &[&str]) -> Result<String> {
+/// success, returns the captured output, stdout followed by stderr, as raw
+/// bytes - the child's output isn't guaranteed to be valid UTF-8.
+pub(crate) fn cmd_captured<S: AsRef<OsStr>>(args: &[S]) -> Result<Vec<u8>> {
     let (program, mut command) = new_command(args)?;
-    let output = command.output()?;
-
-    let mut captured = String::from_utf8_lossy(&output.stdout).into_owned();
-    captured.push_str(&String::from_utf8_lossy(&output.stderr));
+    let mut output = command.output()?;
 
     if !output.status.success() {
-        return Err(eyre!(
-            "{program} exited with {}:\n{captured}",
-            output.status
-        ));
+        return Err(eyre!("{program} exited with {}", output.status));
     }
 
-    Ok(captured)
+    output.stdout.extend(output.stderr);
+
+    Ok(output.stdout)
 }
