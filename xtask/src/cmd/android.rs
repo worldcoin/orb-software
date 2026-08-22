@@ -268,11 +268,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let build_apex_bin = utf8(&build_apex_bin)?;
 
     // Keep going on failure, so one bad crate doesn't block every other
-    // APEX that's otherwise ready. Each build-apex invocation is an
-    // independent, CPU-bound subprocess (apexer/avbtool/aapt2/mkfs.erofs)
-    // with no cross-crate dependency, so run them all concurrently -
-    // capturing output instead of streaming it live, since interleaved
-    // output from several concurrent subprocesses would be unreadable.
+    // APEX that's otherwise ready.
     let payload_out_dir = &payload_out_dir;
     let out_dir = &out_dir;
     let outcomes = std::thread::scope(|scope| {
@@ -292,8 +288,6 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
 
                     match result {
                         Ok(output) => {
-                            // Locked once for the whole block, so concurrently
-                            // finishing packages can't interleave mid-output.
                             let mut out = std::io::stdout().lock();
                             let _ = write!(out, "{output}");
                             let _ = writeln!(
