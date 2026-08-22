@@ -10,10 +10,16 @@ use std::process::{Command, Stdio};
 
 use color_eyre::{eyre::eyre, Result};
 
-pub(crate) fn cmd(args: &[&str]) -> Result<()> {
+fn new_command<'a>(args: &[&'a str]) -> Result<(&'a str, Command)> {
     let (program, rest) = args.split_first().ok_or_else(|| eyre!("empty cmd"))?;
     let mut command = Command::new(program);
     command.args(rest);
+
+    Ok((program, command))
+}
+
+pub(crate) fn cmd(args: &[&str]) -> Result<()> {
+    let (program, mut command) = new_command(args)?;
     command
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -32,8 +38,8 @@ pub(crate) fn cmd(args: &[&str]) -> Result<()> {
 /// output from independent processes would otherwise be unreadable. On
 /// success, returns the captured output; on failure, the error includes it.
 pub(crate) fn cmd_captured(args: &[&str]) -> Result<String> {
-    let (program, rest) = args.split_first().ok_or_else(|| eyre!("empty cmd"))?;
-    let output = Command::new(program).args(rest).output()?;
+    let (program, mut command) = new_command(args)?;
+    let output = command.output()?;
 
     let mut captured = String::from_utf8_lossy(&output.stdout).into_owned();
     captured.push_str(&String::from_utf8_lossy(&output.stderr));
