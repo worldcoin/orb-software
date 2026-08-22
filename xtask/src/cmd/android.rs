@@ -289,7 +289,7 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
                     match result {
                         Ok(output) => {
                             let mut out = std::io::stdout().lock();
-                            let _ = write!(out, "{output}");
+                            let _ = out.write_all(&output);
                             let _ = writeln!(
                                 out,
                                 "packaged `{pkg}` -> {}",
