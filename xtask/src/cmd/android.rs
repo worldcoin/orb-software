@@ -3,6 +3,7 @@ use cargo_metadata::{Metadata, MetadataCommand};
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -228,6 +229,19 @@ pub struct ApexArgs {
     pub release: bool,
 }
 
+/// Prints a captured command's stdout+stderr to this process' matching
+/// stream (stdout on success, stderr on failure), so a job's own tool
+/// output is still visible even though nothing streamed live.
+fn print_captured(output: &std::process::Output) {
+    let mut stream: Box<dyn Write> = if output.status.success() {
+        Box::new(std::io::stdout())
+    } else {
+        Box::new(std::io::stderr())
+    };
+    let _ = stream.write_all(&output.stdout);
+    let _ = stream.write_all(&output.stderr);
+}
+
 /// Stages Android payloads and packages each into a signed
 /// `<out_dir>/<crate>.apex`, using the `build-apex` tool from
 /// `nix/packages/android-apex.nix` (exposed as the `build-apex` flake
@@ -297,50 +311,51 @@ pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
     // build-apex invocation spends most of its time waiting on apexer/
     // aapt2/avbtool/mkfs.erofs subprocesses rather than burning CPU itself,
     // so it's not purely core-bound - a few dozen threads is affordable.
+    // Each thread just returns its captured output; nothing is printed
+    // until every thread has joined, so it's all sequential and doesn't
+    // need a stdout/stderr lock to stay unmangled.
     let payload_out_dir = &payload_out_dir;
     let out_dir = &out_dir;
     let build_apex_bin = &build_apex_bin;
-    let outcomes = std::thread::scope(|scope| {
-        let handles: Vec<_> = packages
-            .iter()
-            .map(|pkg| {
-                scope.spawn(move || -> Result<String, String> {
-                    let payload_dir = payload_out_dir.join(pkg);
-                    let apex_out = out_dir.join(format!("{pkg}.apex"));
-                    let result =
-                        cmd_captured(&[build_apex_bin, &payload_dir, &apex_out]);
-
-                    match result {
-                        Ok(output) => {
-                            let mut out = std::io::stdout().lock();
-                            let _ = out.write_all(&output);
-                            let _ = writeln!(
-                                out,
-                                "packaged `{pkg}` -> {}",
-                                apex_out.display()
-                            );
-                            Ok(pkg.clone())
-                        }
-                        Err(e) => {
-                            let mut err = std::io::stderr().lock();
-                            let _ = writeln!(err, "failed to package `{pkg}`: {e}");
-                            Err(pkg.clone())
-                        }
-                    }
+    let outcomes: HashMap<String, Result<std::process::Output>> =
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = packages
+                .iter()
+                .map(|pkg| {
+                    scope.spawn(move || {
+                        let payload_dir = payload_out_dir.join(pkg);
+                        let apex_out = out_dir.join(format!("{pkg}.apex"));
+                        let result =
+                            cmd_captured(&[build_apex_bin, &payload_dir, &apex_out]);
+                        (pkg.clone(), result)
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
-        handles
-            .into_iter()
-            .map(|handle| handle.join().unwrap())
-            .collect::<Vec<_>>()
-    });
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect()
+        });
 
-    let mut succeeded: Vec<String> =
-        outcomes.iter().cloned().filter_map(Result::ok).collect();
-    let mut failed: Vec<String> =
-        outcomes.into_iter().filter_map(Result::err).collect();
+    let mut succeeded = Vec::new();
+    let mut failed = Vec::new();
+    for (pkg, result) in outcomes {
+        match result {
+            Ok(output) => {
+                print_captured(&output);
+                if output.status.success() {
+                    succeeded.push(pkg);
+                } else {
+                    failed.push(pkg);
+                }
+            }
+            Err(e) => {
+                eprintln!("{pkg}: {e}");
+                failed.push(pkg);
+            }
+        }
+    }
     succeeded.sort();
     failed.sort();
 
