@@ -2,6 +2,7 @@ use crate::cmd::{args, cmd, cmd_captured};
 use cargo_metadata::{Metadata, MetadataCommand};
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
+use serde_json::json;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,7 @@ const TARGET: &str = "aarch64-linux-android";
 /// Names of workspace packages whose `[package.metadata.orb]
 /// unsupported_targets` lists `aarch64-linux-android` (same mechanism
 /// `ci/rust_ci_helper.py` uses for its Darwin exclusions).
-fn unsupported_packages(md: &Metadata) -> Result<Vec<String>> {
+fn unsupported_packages(md: &Metadata) -> Vec<String> {
     let mut names: Vec<String> = md
         .workspace_packages()
         .into_iter()
@@ -28,7 +29,7 @@ fn unsupported_packages(md: &Metadata) -> Result<Vec<String>> {
         .collect();
     names.sort();
 
-    Ok(names)
+    names
 }
 
 #[derive(ClapArgs, Debug)]
@@ -50,7 +51,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 /// instead of shelling out to `cargo metadata` again.
 fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<()> {
     let BuildArgs { release } = args;
-    let excludes = unsupported_packages(md)?;
+    let excludes = unsupported_packages(md);
 
     println!(
         "skipping (unsupported on {TARGET}): {}",
@@ -81,7 +82,7 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
     // Rebuild first, so the binaries staged below aren't stale.
     run_build_with(md, BuildArgs { release })?;
 
-    let excluded = unsupported_packages(md)?;
+    let excluded = unsupported_packages(md);
     let profile_dir = if release { "release" } else { "debug" };
     // Absolute, so this works regardless of the invoking cwd.
     let target_dir = md.target_directory.as_std_path();
@@ -162,9 +163,11 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
             version.major * 1_000_000 + version.minor * 1_000 + version.patch;
         fs::write(
             pkg_out.join("apex_manifest.json"),
-            format!(
-                "{{\n  \"name\": \"{apex_name}\",\n  \"version\": {version_code},\n  \"versionName\": \"{version}\"\n}}\n"
-            ),
+            serde_json::to_vec_pretty(&json!({
+                "name": apex_name,
+                "version": version_code,
+                "versionName": version.to_string(),
+            }))?,
         )?;
 
         let init_dir = content_dir.join("etc/init");
