@@ -78,6 +78,7 @@ fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<()> {
 ///
 /// The manifest name, `etc/init/*.rc` contents, and `file_contexts` are
 /// TODO placeholders needing real naming and SELinux details.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<String>> {
     // Rebuild first, so the binaries staged below aren't stale.
     run_build_with(md, BuildArgs { release })?;
@@ -210,8 +211,12 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
     Ok(staged)
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[derive(ClapArgs, Debug)]
 pub struct ApexArgs {
+    /// Crate to package. If omitted, packages every Android-supported
+    /// crate's APEX.
+    pub pkg: Option<String>,
     /// Directory to write the resulting `<crate>.apex` files into.
     #[arg(long, default_value = "target/android-apex")]
     pub out_dir: PathBuf,
@@ -223,18 +228,20 @@ pub struct ApexArgs {
 /// Stages Android payloads and packages each into a signed
 /// `<out_dir>/<crate>.apex`, using the `build-apex` tool from
 /// `nix/packages/android-apex.nix` (exposed as the `build-apex` flake
-/// package). Requires `nix` on PATH.
-pub fn run_apex(args: ApexArgs) -> Result<()> {
-    if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        return Err(eyre!(
-            "android-apex packaging requires an x86_64-linux host: the \
-             `build-apex` flake package (see nix/packages/android-apex.nix) \
-             only ships a Linux/x86_64 prebuilt mkfs.erofs and is only \
-             exposed for that system in nix/shells/flake-outputs.nix"
-        ));
-    }
-
-    let ApexArgs { out_dir, release } = args;
+/// package). Requires `nix` on PATH. `out_dir` must already exist. Returns
+/// the path to each produced `.apex`.
+///
+/// Only compiled for x86_64-linux: `build-apex` (see
+/// nix/packages/android-apex.nix) only ships a Linux/x86_64 prebuilt
+/// mkfs.erofs and is only exposed for that system in
+/// nix/shells/flake-outputs.nix.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
+    let ApexArgs {
+        pkg,
+        out_dir,
+        release,
+    } = args;
 
     // Fetched once and threaded through run_build_with/run_payload/
     // unsupported_packages below, instead of each shelling out to `cargo
@@ -254,12 +261,18 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     let payload_out_dir = payload_out_dir_handle.path().to_path_buf();
     let packages = run_payload(&md, &payload_out_dir, release)?;
 
-    // Recreate from scratch, so a stale `.apex` from a crate that's now
-    // unsupported/removed doesn't linger for CI to pick up.
-    if out_dir.exists() {
-        fs::remove_dir_all(&out_dir)?;
-    }
-    fs::create_dir_all(&out_dir)?;
+    let packages = match &pkg {
+        Some(want) if packages.iter().any(|p| p == want) => vec![want.clone()],
+        Some(want) => {
+            return Err(eyre!(
+                "package `{want}` not found in workspace, has no binary \
+                 target, or is unsupported on {TARGET}"
+            ));
+        }
+        None => packages,
+    };
+
+    // `out_dir` is assumed to already exist - the caller's job, not ours.
 
     // A unique dir per invocation: `nix build --out-link` replaces
     // whatever's at that path, so a fixed path would race across runs.
@@ -334,6 +347,46 @@ pub fn run_apex(args: ApexArgs) -> Result<()> {
     if !failed.is_empty() {
         println!("failed ({}): {}", failed.len(), failed.join(", "));
         return Err(eyre!("failed to package APEX for: {}", failed.join(", ")));
+    }
+
+    Ok(succeeded
+        .into_iter()
+        .map(|pkg| out_dir.join(format!("{pkg}.apex")))
+        .collect())
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(ClapArgs, Debug)]
+pub struct DeployArgs {
+    /// Crate to install. If omitted, installs every Android-supported
+    /// crate's APEX.
+    pub pkg: Option<String>,
+    /// Stage/build binaries in release mode.
+    #[arg(long)]
+    pub release: bool,
+}
+
+/// Runs `android-apex`, then `adb install`s the result(s). Installs with
+/// `-t -r -g --stage` so each APEX is usable immediately, without a
+/// reboot. Only compiled for x86_64-linux, same restriction as
+/// [`run_apex`].
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub fn run_deploy(args: DeployArgs) -> Result<()> {
+    let DeployArgs { pkg, release } = args;
+
+    let out_dir_handle = tempfile::tempdir()?;
+    let out_dir = out_dir_handle.path().to_path_buf();
+    let apexes = run_apex(ApexArgs {
+        pkg,
+        out_dir,
+        release,
+    })?;
+
+    for apex_path in &apexes {
+        println!("\ninstalling via adb: {}", apex_path.display());
+        cmd(&args![
+            "adb", "install", "-t", "-r", "-g", "--stage", apex_path
+        ])?;
     }
 
     Ok(())
