@@ -8,7 +8,8 @@
 	},
 	"remoteUser": "ubuntu",
 	"containerEnv": {
-		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}"
+		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}",
+		"ANDROID_ADB_SERVER_ADDRESS": "host.docker.internal"
 	},
 	"customizations": {
 		"vscode": {
@@ -19,7 +20,7 @@
 			]
 		}
 	},
-	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws",
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws && { adb kill-server; adb -a start-server; true; }",
 	"mounts": [
 		// Keep the rust target directory in a persistent docker volume instead of bind mount
 		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
