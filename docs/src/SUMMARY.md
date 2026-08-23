@@ -4,6 +4,7 @@
 - [First Time Setup](./first-time-setup.md)
 - [Setting up AWS credentials](./aws-creds.md)
 - [Developing Code](./development.md)
+- [Android](./android.md)
 - [How we do Open Source](./open-source.md)
 - [Over The Air Updates](./ota/README.md)
   - [OTA Structure](./ota/ota-structure.md)
