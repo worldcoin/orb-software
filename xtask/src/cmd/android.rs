@@ -388,7 +388,7 @@ pub fn run_deploy(args: DeployArgs) -> Result<()> {
     for apex_path in &apexes {
         println!("\ninstalling via adb: {}", apex_path.display());
         cmd(&args![
-            "adb", "install", "-t", "-r", "-g", "--stage", apex_path
+            "adb", "install", "-t", "-r", "-g", "--staged", apex_path
         ])?;
     }
 
