@@ -212,13 +212,16 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+const DEFAULT_APEX_OUT_DIR: &str = "target/android-apex";
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[derive(ClapArgs, Debug)]
 pub struct ApexArgs {
     /// Crate to package. If omitted, packages every Android-supported
     /// crate's APEX.
     pub pkg: Option<String>,
     /// Directory to write the resulting `<crate>.apex` files into.
-    #[arg(long, default_value = "target/android-apex")]
+    #[arg(long, default_value = DEFAULT_APEX_OUT_DIR)]
     pub out_dir: PathBuf,
     /// Stage/build binaries in release mode.
     #[arg(long)]
@@ -374,8 +377,8 @@ pub struct DeployArgs {
 pub fn run_deploy(args: DeployArgs) -> Result<()> {
     let DeployArgs { pkg, release } = args;
 
-    let out_dir_handle = tempfile::tempdir()?;
-    let out_dir = out_dir_handle.path().to_path_buf();
+    let out_dir = PathBuf::from(DEFAULT_APEX_OUT_DIR);
+    fs::create_dir_all(&out_dir)?;
     let apexes = run_apex(ApexArgs {
         pkg,
         out_dir,
