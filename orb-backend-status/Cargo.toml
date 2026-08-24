@@ -1,6 +1,6 @@
 [package]
 name = "orb-backend-status"
-version = "0.0.0"
+version = "0.0.1"
 description = "Systemd service that receives orb status and periodicallyprovides it to the Orb backend"
 authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
 publish = false
