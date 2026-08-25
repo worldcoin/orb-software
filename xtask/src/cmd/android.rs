@@ -169,6 +169,10 @@ fn run_payload(md: &Metadata, out_dir: &Path, release: bool) -> Result<Vec<Strin
                 "name": apex_name,
                 "version": version_code,
                 "versionName": version.to_string(),
+                // Required for `adb install --force-non-staged` (see
+                // run_deploy) to activate immediately instead of being
+                // rejected/ignored by apexd.
+                "supportsRebootlessUpdate": true,
             }))?,
         )?;
 
@@ -289,7 +293,7 @@ pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
         None => packages,
     };
 
-    // `out_dir` is assumed to already exist - the caller's job, not ours.
+    fs::create_dir_all(&out_dir)?;
 
     // A unique dir per invocation: `nix build --out-link` replaces
     // whatever's at that path, so a fixed path would race across runs.
@@ -441,7 +445,6 @@ pub fn run_deploy(args: DeployArgs) -> Result<()> {
     let DeployArgs { pkg, release } = args;
 
     let out_dir = PathBuf::from(DEFAULT_APEX_OUT_DIR);
-    fs::create_dir_all(&out_dir)?;
     let apexes = run_apex(ApexArgs {
         pkg,
         out_dir,
