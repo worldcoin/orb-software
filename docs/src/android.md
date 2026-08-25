@@ -40,8 +40,9 @@ cargo x android-deploy orb-foo       # just one crate
 cargo x android-deploy orb-foo --release
 ```
 
-Runs `android-apex` under the hood, then `adb install -t -r -g --stage`s
-each resulting `.apex`, so it's usable immediately - no reboot required.
+Runs `android-apex` under the hood, then installs each resulting `.apex` via
+`adb install -t -r -g --force-non-staged`, so it's usable immediately - no
+reboot required.
 Needs a device reachable over `adb` (same x86_64-linux + `nix`
 requirement as `android-apex` also applies here).
 
