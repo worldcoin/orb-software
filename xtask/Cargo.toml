@@ -23,3 +23,6 @@ serde_json.workspace = true
 tempfile.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]
