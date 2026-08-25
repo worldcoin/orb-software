@@ -241,9 +241,10 @@ default-features = false
 features = ["rustls-tls", "stream"]
 version = "0.12.24"
 
+# This crate uses 'tfh' branch on fork of an upstream project. Pin its 'rev' to protect from supply chain attacks.
 [patch.crates-io.optee-teec-sys]
-branch = "tfh"
 git = "https://github.com/TheButlah/teaclave-trustzone-sdk"
+rev = "2b6ca05f8b38496c201cf635032dcce3cfedb3d7"
 
 # increase the optimization of third party crates in dev builds.
 # [profile.dev.package."*"]

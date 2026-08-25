@@ -7072,7 +7072,7 @@ dependencies = [
 [[package]]
 name = "optee-teec-sys"
 version = "0.7.0"
-source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk?branch=tfh#2b6ca05f8b38496c201cf635032dcce3cfedb3d7"
+source = "git+https://github.com/TheButlah/teaclave-trustzone-sdk?rev=2b6ca05f8b38496c201cf635032dcce3cfedb3d7#2b6ca05f8b38496c201cf635032dcce3cfedb3d7"
 dependencies = [
  "libc",
 ]
