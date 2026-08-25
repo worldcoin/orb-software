@@ -18,6 +18,7 @@
 
   worldcoin.orbId = "53d9f7ed";
   worldcoin.orbPlatform = "pearl";
+  worldcoin.githubRunner.orbLabel = "pearl-stable";
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''

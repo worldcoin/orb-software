@@ -98,6 +98,12 @@ in
     description = "Whether this HIL registers as a GitHub Actions self-hosted runner. Disable for machines that only act as Jenkins agents.";
   };
 
+  options.worldcoin.githubRunner.orbLabel = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = config.worldcoin.orbPlatform;
+    description = "The Orb-specific GitHub runner label suffix.";
+  };
+
   options.worldcoin.extraPythonPackages = lib.mkOption {
     type = lib.types.listOf lib.types.package;
     default = [ ];
@@ -379,8 +385,8 @@ in
           "${hostname}"
         ]
         ++ lib.optional (
-          config.worldcoin.orbPlatform != null
-        ) "worldcoin-hil-${config.worldcoin.orbPlatform}";
+          config.worldcoin.githubRunner.orbLabel != null
+        ) "worldcoin-hil-${config.worldcoin.githubRunner.orbLabel}";
         replace = true;
         user = ghRunnerUser;
         runnerGroup = "hardware-in-the-loop-server";
