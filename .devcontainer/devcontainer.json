@@ -10,6 +10,9 @@
 	"containerEnv": {
 		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}"
 	},
+	"features": {
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -19,12 +22,14 @@
 			]
 		}
 	},
-	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws",
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws ${localEnv:HOME}/.claude",
 	"mounts": [
 		// Keep the rust target directory in a persistent docker volume instead of bind mount
 		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
 		"source=${localEnv:HOME}/.aws,target=/home/ubuntu/.aws,type=bind",
-		"source=${localEnv:HOME}/.config/nix,target=/home/ubuntu/.config/nix,type=bind"
+		"source=${localEnv:HOME}/.config/nix,target=/home/ubuntu/.config/nix,type=bind",
+		"source=${localEnv:HOME}/.claude,target=/home/ubuntu/.claude,type=bind",
+		"source=${localEnv:HOME}/.claude.json,target=/home/ubuntu/.claude.json,type=bind"
 	],
 	// "overrideCommand": false, // Broken in devcontainer cli qwq https://github.com/devcontainers/cli/issues/816
 	"postCreateCommand": ".devcontainer/postCreateCommand.sh"
