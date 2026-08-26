@@ -22,7 +22,7 @@
 			]
 		}
 	},
-	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws ${localEnv:HOME}/.claude",
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws ${localEnv:HOME}/.claude; touch -a ${localEnv:HOME}/.claude.json",
 	"mounts": [
 		// Keep the rust target directory in a persistent docker volume instead of bind mount
 		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
