@@ -22,6 +22,10 @@ on:
           - artifact
         default: artifact
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   CRATE: ${{ inputs.crate }}
   BUILD_AARCH64: ${{ inputs.build_aarch64 }}
@@ -207,6 +211,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
     needs:
       - release-name
       - test

@@ -1,4 +1,9 @@
 name: Rust CI
+
+permissions:
+  contents: read
+  actions: read
+
 on:
   pull_request:
   workflow_dispatch:
