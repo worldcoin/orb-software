@@ -10,18 +10,25 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# Off by default; build.rs turns them on for Linux builds. Android has no
+# D-Bus session bus / zenoh router for this daemon to use, so they stay
+# off there. Pass `--features dbus,zenoh` to force them on elsewhere.
+default = []
+dbus = []
+zenoh = []
+
 [dependencies]
 bon.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 color-eyre.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["from"] }
-flume.workspace = true
+flume = { workspace = true, features = ["async"] }
 futures-util = { version = "0.3.31" }
 eyre.workspace = true
 oes.workspace = true
 orb-backend-status-dbus.workspace = true
 orb-build-info.workspace = true
-orb-connd-dbus.workspace = true
 orb-endpoints.workspace = true
 orb-messages.workspace = true
 orb-info = { workspace = true, features = [

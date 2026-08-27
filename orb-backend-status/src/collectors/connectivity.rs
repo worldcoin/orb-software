@@ -1,26 +1,7 @@
-use super::ZenorbCtx;
+use super::{GlobalConnectivity, ZenorbCtx};
 use color_eyre::Result;
 use tracing::info;
 use zenorb::zenoh::sample::Sample;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GlobalConnectivity {
-    Connected { ssid: Option<String> },
-    NotConnected,
-}
-
-impl GlobalConnectivity {
-    pub fn is_connected(&self) -> bool {
-        matches!(self, Self::Connected { .. })
-    }
-
-    pub fn ssid(&self) -> Option<&str> {
-        match self {
-            Self::Connected { ssid } => ssid.as_deref(),
-            Self::NotConnected => None,
-        }
-    }
-}
 
 pub(crate) async fn handle_connection_event(
     ctx: ZenorbCtx,

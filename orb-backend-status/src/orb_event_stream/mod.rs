@@ -1,7 +1,5 @@
 use crate::backend::client::StatusClient;
-use chrono::Utc;
 use color_eyre::{eyre::eyre, Result};
-use eyre::ContextCompat;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,8 +9,14 @@ use std::{
 use tokio::task;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
-use zenorb::zenoh::{bytes::Encoding, sample::Sample};
+#[cfg(feature = "zenoh")]
+use {
+    chrono::Utc,
+    eyre::ContextCompat,
+    zenorb::zenoh::{bytes::Encoding, sample::Sample},
+};
 
+#[cfg(feature = "zenoh")]
 pub mod reroute;
 
 mod flusher;
@@ -151,6 +155,7 @@ impl OrbEventStream {
     }
 }
 
+#[cfg(feature = "zenoh")]
 impl TryFrom<Sample> for Payload {
     type Error = color_eyre::Report;
 
@@ -205,6 +210,7 @@ impl TryFrom<Sample> for Payload {
 /// - `bfd00a01/signup/oes/capture_started` -> `signup/capture_started`
 /// - `bfd00a01/deep/nested/ns/oes/my_event` -> `deep/nested/ns/my_event`
 /// - `bfd00a01/ns/my_event` -> `ns/my_event`
+#[cfg(feature = "zenoh")]
 fn extract_event_name(key: &str) -> Option<String> {
     // Strip the orb_id prefix (everything up to and including the
     // first `/`)
@@ -230,7 +236,7 @@ fn extract_event_name(key: &str) -> Option<String> {
     Some(format!("{namespace}/{event_name}"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "zenoh"))]
 mod tests {
     use super::*;
     use proptest::prelude::*;

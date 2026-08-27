@@ -1,19 +1,17 @@
+use super::types::OrbStatusApiV2;
+#[cfg(feature = "dbus")]
 use super::types::{
-    ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
+    ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2,
     UpdateProgressApiV2, WifiProfileApiV2,
 };
-use crate::{
-    backend::{
-        types::{
-            AmbientLightApiV2, BatteryApiV2, CellularStatusApiV2, HardwareStateApiV2,
-            MainMcuApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2, WifiDataApiV2,
-            WifiQualityApiV2,
-        },
-        uptime::orb_uptime,
-    },
-    collectors::front_als::flag_to_api_str,
-    dbus::intf_impl::CurrentStatus,
+#[cfg(feature = "zenoh")]
+use crate::backend::types::{AmbientLightApiV2, HardwareStateApiV2, MainMcuApiV2};
+#[cfg(feature = "dbus")]
+use crate::backend::types::{
+    BatteryApiV2, CellularStatusApiV2, SsdStatusApiV2, TemperatureApiV2, WifiApiV2,
+    WifiDataApiV2, WifiQualityApiV2,
 };
+use crate::{backend::uptime::orb_uptime, dbus::intf_impl::CurrentStatus};
 use chrono::Utc;
 use tracing::warn;
 
@@ -24,14 +22,29 @@ impl CurrentStatus {
             .inspect_err(|e| warn!("failed to read orb uptime: {e:?}"))
             .ok();
 
-        OrbStatusApiV2 {
-            orb_id: None,
-            orb_name: None,
-            jabil_id: None,
-            version: None,
+        let mut req = OrbStatusApiV2 {
             uptime_sec,
-            location_data: self.wifi_networks.as_ref().map(|wifi_networks| {
-                LocationDataApiV2 {
+            timestamp: Utc::now(),
+            ..Default::default()
+        };
+
+        #[cfg(feature = "dbus")]
+        self.apply_dbus_fields(&mut req);
+        #[cfg(feature = "zenoh")]
+        self.apply_zenoh_fields(&mut req);
+
+        req
+    }
+
+    /// Populates the legacy D-Bus-sourced fields (update-agent progress,
+    /// orb-core signup/stats, connd's WiFi/cellular report).
+    #[cfg(feature = "dbus")]
+    fn apply_dbus_fields(&self, req: &mut OrbStatusApiV2) {
+        req.location_data =
+            self.dbus
+                .wifi_networks
+                .as_ref()
+                .map(|wifi_networks| LocationDataApiV2 {
                     wifi: Some(
                         wifi_networks
                             .iter()
@@ -47,9 +60,10 @@ impl CurrentStatus {
                     ),
                     gps: None,
                     cell: None,
-                }
-            }),
-            update_progress: self.update_progress.as_ref().map(|update_progress| {
+                });
+
+        req.update_progress =
+            self.dbus.update_progress.as_ref().map(|update_progress| {
                 UpdateProgressApiV2 {
                     download_progress: update_progress.download_progress,
                     processed_progress: update_progress.processed_progress,
@@ -58,157 +72,181 @@ impl CurrentStatus {
                     error: update_progress.error.clone(),
                     state: update_progress.state,
                 }
-            }),
-            net_stats: self.net_stats.as_ref().map(|net_stats| NetStatsApiV2 {
-                interfaces: net_stats
-                    .interfaces
-                    .iter()
-                    .map(|i| NetIntfApiV2 {
-                        name: i.name.clone(),
-                        tx_bytes: i.tx_bytes,
-                        rx_bytes: i.rx_bytes,
-                        tx_packets: i.tx_packets,
-                        rx_packets: i.rx_packets,
-                        tx_errors: i.tx_errors,
-                        rx_errors: i.rx_errors,
-                    })
-                    .collect(),
-            }),
-            battery: self.core_stats.as_ref().map(|core_stats| BatteryApiV2 {
+            });
+
+        req.net_stats = self.dbus.net_stats.as_ref().map(|net_stats| NetStatsApiV2 {
+            interfaces: net_stats
+                .interfaces
+                .iter()
+                .map(|i| NetIntfApiV2 {
+                    name: i.name.clone(),
+                    tx_bytes: i.tx_bytes,
+                    rx_bytes: i.rx_bytes,
+                    tx_packets: i.tx_packets,
+                    rx_packets: i.rx_packets,
+                    tx_errors: i.tx_errors,
+                    rx_errors: i.rx_errors,
+                })
+                .collect(),
+        });
+
+        req.battery = self
+            .dbus
+            .core_stats
+            .as_ref()
+            .map(|core_stats| BatteryApiV2 {
                 level: Some(core_stats.battery.level),
                 is_charging: Some(core_stats.battery.is_charging),
-            }),
-            mac_address: self
-                .core_stats
-                .as_ref()
-                .map(|core_stats| core_stats.mac_address.clone()),
-            ssd: self.core_stats.as_ref().map(|core_stats| SsdStatusApiV2 {
+            });
+
+        req.mac_address = self
+            .dbus
+            .core_stats
+            .as_ref()
+            .map(|core_stats| core_stats.mac_address.clone());
+
+        req.ssd = self
+            .dbus
+            .core_stats
+            .as_ref()
+            .map(|core_stats| SsdStatusApiV2 {
                 file_left: Some(core_stats.ssd.file_left),
                 space_left: Some(core_stats.ssd.space_left),
                 signup_left_to_upload: Some(core_stats.ssd.signup_left_to_upload),
-            }),
-            temperature: self.core_stats.as_ref().map(|core_stats| TemperatureApiV2 {
-                cpu: Some(core_stats.temperature.cpu),
-                gpu: Some(core_stats.temperature.gpu),
-                front_unit: Some(core_stats.temperature.front_unit),
-                front_pcb: Some(core_stats.temperature.front_pcb),
-                battery_pcb: Some(core_stats.temperature.battery_pcb),
-                battery_cell: Some(core_stats.temperature.battery_cell),
-                backup_battery: Some(core_stats.temperature.backup_battery),
-                liquid_lens: Some(core_stats.temperature.liquid_lens),
-                main_accelerometer: Some(core_stats.temperature.main_accelerometer),
-                main_mcu: Some(core_stats.temperature.main_mcu),
-                mainboard: Some(core_stats.temperature.mainboard),
-                security_accelerometer: Some(
-                    core_stats.temperature.security_accelerometer,
-                ),
-                security_mcu: Some(core_stats.temperature.security_mcu),
-                battery_pack: Some(core_stats.temperature.battery_pack),
-                ssd: Some(core_stats.temperature.ssd),
-            }),
-            wifi: self
-                .connd_report
-                .as_ref()
-                .and_then(|connd_report| {
-                    connd_report.scanned_networks.iter().find(|n| {
-                        connd_report
-                            .active_wifi_profile
-                            .as_ref()
-                            .is_some_and(|p| p == &n.ssid)
-                    })
-                })
-                .map(|wifi| WifiApiV2 {
-                    ssid: Some(wifi.ssid.clone()),
-                    bssid: Some(wifi.bssid.clone()),
-                    frequency: Some(wifi.frequency),
-                    quality: Some(WifiQualityApiV2 {
-                        signal_level: Some(wifi.signal_level),
-                        bit_rate: None,
-                        link_quality: None,
-                        noise_level: None,
-                    }),
-                }),
-            signup_state: self.signup_state.as_ref().map(|state| state.to_string()),
-            cellular_status: self
-                .cellular_status
-                .as_ref()
-                // backend requires ICCID to be Some otherwise it will fail deserialization
-                // of CellularStatusApiV2. So if ICCID is None, the struct itself should be None.
-                .and_then(|cs| cs.iccid.as_ref().map(|iccid| (cs, iccid)))
-                .map(|(cs, iccid)| CellularStatusApiV2 {
-                    imei: cs.imei.clone(),
-                    fw_revision: cs.fw_revision.clone(),
-                    iccid: iccid.to_owned(),
-                    rat: cs.rat.clone(),
-                    operator: cs.operator.clone(),
-                    rsrp: cs.rsrp,
-                    rsrq: cs.rsrq,
-                    rssi: cs.rssi,
-                    snr: cs.snr,
-                }),
-            connd_report: self.connd_report.as_ref().map(|r| ConndReportApiV2 {
-                egress_iface: r.egress_iface.clone(),
-                wifi_enabled: r.wifi_enabled,
-                smart_switching: r.smart_switching,
-                airplane_mode: r.airplane_mode,
-                active_wifi_profile: r.active_wifi_profile.clone(),
-                saved_wifi_profiles: r
-                    .saved_wifi_profiles
-                    .iter()
-                    .map(|p| WifiProfileApiV2 {
-                        ssid: p.ssid.clone(),
-                        sec: p.sec.clone(),
-                    })
-                    .collect(),
-            }),
-            hardware_states: self.hardware_states.as_ref().map(|states| {
-                states
-                    .iter()
-                    .map(|(k, v)| {
-                        (
-                            k.clone(),
-                            HardwareStateApiV2 {
-                                status: v.status.clone(),
-                                message: v.message.clone(),
-                            },
-                        )
-                    })
-                    .collect()
-            }),
-            main_mcu: build_main_mcu_api(self),
-            oes: None,
-            oes_cached: false,
-            orb_stand_qr_id: self
-                .core_stats
-                .as_ref()
-                .and_then(|core_stats| core_stats.orb_stand_qr_id.clone()),
-            orb_stand_qr_type: self
-                .core_stats
-                .as_ref()
-                .and_then(|core_stats| core_stats.orb_stand_qr_type.clone()),
-            timestamp: Utc::now(),
-        }
-    }
-}
+            });
 
-fn build_main_mcu_api(current_status: &CurrentStatus) -> Option<MainMcuApiV2> {
-    let front_als = current_status
-        .front_als
-        .as_ref()
-        .map(|als| AmbientLightApiV2 {
-            ambient_light_lux: als.ambient_light_lux,
-            flag: flag_to_api_str(als.flag).to_string(),
+        req.temperature =
+            self.dbus
+                .core_stats
+                .as_ref()
+                .map(|core_stats| TemperatureApiV2 {
+                    cpu: Some(core_stats.temperature.cpu),
+                    gpu: Some(core_stats.temperature.gpu),
+                    front_unit: Some(core_stats.temperature.front_unit),
+                    front_pcb: Some(core_stats.temperature.front_pcb),
+                    battery_pcb: Some(core_stats.temperature.battery_pcb),
+                    battery_cell: Some(core_stats.temperature.battery_cell),
+                    backup_battery: Some(core_stats.temperature.backup_battery),
+                    liquid_lens: Some(core_stats.temperature.liquid_lens),
+                    main_accelerometer: Some(core_stats.temperature.main_accelerometer),
+                    main_mcu: Some(core_stats.temperature.main_mcu),
+                    mainboard: Some(core_stats.temperature.mainboard),
+                    security_accelerometer: Some(
+                        core_stats.temperature.security_accelerometer,
+                    ),
+                    security_mcu: Some(core_stats.temperature.security_mcu),
+                    battery_pack: Some(core_stats.temperature.battery_pack),
+                    ssd: Some(core_stats.temperature.ssd),
+                });
+
+        req.wifi = self
+            .dbus
+            .connd_report
+            .as_ref()
+            .and_then(|connd_report| {
+                connd_report.scanned_networks.iter().find(|n| {
+                    connd_report
+                        .active_wifi_profile
+                        .as_ref()
+                        .is_some_and(|p| p == &n.ssid)
+                })
+            })
+            .map(|wifi| WifiApiV2 {
+                ssid: Some(wifi.ssid.clone()),
+                bssid: Some(wifi.bssid.clone()),
+                frequency: Some(wifi.frequency),
+                quality: Some(WifiQualityApiV2 {
+                    signal_level: Some(wifi.signal_level),
+                    bit_rate: None,
+                    link_quality: None,
+                    noise_level: None,
+                }),
+            });
+
+        req.signup_state = self
+            .dbus
+            .signup_state
+            .as_ref()
+            .map(|state| state.to_string());
+
+        req.cellular_status = self
+            .dbus
+            .cellular_status
+            .as_ref()
+            // backend requires ICCID to be Some otherwise it will fail deserialization
+            // of CellularStatusApiV2. So if ICCID is None, the struct itself should be None.
+            .and_then(|cs| cs.iccid.as_ref().map(|iccid| (cs, iccid)))
+            .map(|(cs, iccid)| CellularStatusApiV2 {
+                imei: cs.imei.clone(),
+                fw_revision: cs.fw_revision.clone(),
+                iccid: iccid.to_owned(),
+                rat: cs.rat.clone(),
+                operator: cs.operator.clone(),
+                rsrp: cs.rsrp,
+                rsrq: cs.rsrq,
+                rssi: cs.rssi,
+                snr: cs.snr,
+            });
+
+        req.connd_report = self.dbus.connd_report.as_ref().map(|r| ConndReportApiV2 {
+            egress_iface: r.egress_iface.clone(),
+            wifi_enabled: r.wifi_enabled,
+            smart_switching: r.smart_switching,
+            airplane_mode: r.airplane_mode,
+            active_wifi_profile: r.active_wifi_profile.clone(),
+            saved_wifi_profiles: r
+                .saved_wifi_profiles
+                .iter()
+                .map(|p| WifiProfileApiV2 {
+                    ssid: p.ssid.clone(),
+                    sec: p.sec.clone(),
+                })
+                .collect(),
         });
 
-    // Only return Some if there's at least one field populated
-    if front_als.is_some() {
-        Some(MainMcuApiV2 { front_als })
-    } else {
-        None
+        req.orb_stand_qr_id = self
+            .dbus
+            .core_stats
+            .as_ref()
+            .and_then(|core_stats| core_stats.orb_stand_qr_id.clone());
+
+        req.orb_stand_qr_type = self
+            .dbus
+            .core_stats
+            .as_ref()
+            .and_then(|core_stats| core_stats.orb_stand_qr_type.clone());
+    }
+
+    /// Populates the zenoh-sourced fields (hardware states, front ALS).
+    #[cfg(feature = "zenoh")]
+    fn apply_zenoh_fields(&self, req: &mut OrbStatusApiV2) {
+        req.hardware_states = self.zenoh.hardware_states.as_ref().map(|states| {
+            states
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        HardwareStateApiV2 {
+                            status: v.status.clone(),
+                            message: v.message.clone(),
+                        },
+                    )
+                })
+                .collect()
+        });
+
+        let front_als = self.zenoh.front_als.as_ref().map(|als| AmbientLightApiV2 {
+            ambient_light_lux: als.ambient_light_lux,
+            flag: crate::collectors::front_als::flag_to_api_str(als.flag).to_string(),
+        });
+
+        // Only set main_mcu if there's at least one field populated
+        req.main_mcu = front_als.is_some().then_some(MainMcuApiV2 { front_als });
     }
 }
 
 // Helper function to convert frequency to channel number
+#[cfg(feature = "dbus")]
 fn freq_to_channel(freq: u32) -> Option<u32> {
     // For 2.4 GHz: channel = (freq - 2412) / 5 + 1
     if (2412..=2484).contains(&freq) {
@@ -232,9 +270,10 @@ fn freq_to_channel(freq: u32) -> Option<u32> {
     None
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "dbus"))]
 mod tests {
     use super::*;
+    use crate::dbus::intf_impl::DbusStatus;
     use orb_backend_status_dbus::types::{SignupState, WifiNetwork};
 
     #[tokio::test]
@@ -246,8 +285,11 @@ mod tests {
             ssid: "TestAP".into(),
         }];
         let request = CurrentStatus {
-            wifi_networks: Some(wifi_networks),
-            signup_state: Some(SignupState::Ready),
+            dbus: DbusStatus {
+                wifi_networks: Some(wifi_networks),
+                signup_state: Some(SignupState::Ready),
+                ..Default::default()
+            },
             ..Default::default()
         }
         .to_orb_status_api_v2_req()

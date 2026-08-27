@@ -1,6 +1,6 @@
 use crate::{
     backend::types::{OrbStatusApiV2, VersionApiV2},
-    collectors::connectivity::GlobalConnectivity,
+    collectors::GlobalConnectivity,
 };
 use chrono::Utc;
 use color_eyre::Result;

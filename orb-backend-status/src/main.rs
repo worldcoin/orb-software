@@ -47,15 +47,14 @@ async fn main() -> Result<()> {
         OrbJabilId("unknown".to_string())
     });
 
+    #[cfg(feature = "zenoh")]
     let zsession = zenorb::Zenorb::from_cfg(zenorb::default_cfg())
         .orb_id(orb_id.clone())
         .with_name("orb-backend-status")
         .await?;
 
-    let result = orb_backend_status::program()
+    let builder = orb_backend_status::program()
         .metrics(DogstatsdClient::default())
-        .dbus(zbus::Connection::session().await?)
-        .zsession(&zsession)
         .endpoint(endpoint)
         .orb_os_version(OrbOsRelease::read().await?.platform_version())
         .orb_id(orb_id)
@@ -67,9 +66,14 @@ async fn main() -> Result<()> {
         .req_timeout(Duration::from_secs(2))
         .req_min_retry_interval(Duration::from_millis(100))
         .req_max_retry_interval(Duration::from_secs(500))
-        .shutdown_token(shutdown_token)
-        .run()
-        .await;
+        .shutdown_token(shutdown_token);
+
+    #[cfg(feature = "dbus")]
+    let builder = builder.dbus(zbus::Connection::session().await?);
+    #[cfg(feature = "zenoh")]
+    let builder = builder.zsession(&zsession);
+
+    let result = builder.run().await;
 
     telemetry.flush().await;
 

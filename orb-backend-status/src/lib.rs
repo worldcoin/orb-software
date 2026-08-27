@@ -6,28 +6,33 @@ pub mod sender;
 
 use crate::{
     backend::boot_id::orb_boot_id,
-    orb_event_stream::{reroute::OesReroute, Event, OrbEventStream, Payload},
+    orb_event_stream::{Event, OrbEventStream, Payload},
     sender::BackendSender,
 };
 use backend::client::StatusClient;
 use chrono::Utc;
+use collectors::GlobalConnectivity;
+#[cfg(feature = "zenoh")]
 use collectors::{
-    connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats, oes_collector,
-    token::TokenWatcher,
-    update_progress, ZenorbCtx,
+    connectivity::handle_connection_event, front_als, hardware_states, oes_collector,
+    ZenorbCtx,
 };
+#[cfg(feature = "dbus")]
+use collectors::{core_signups, net_stats, token::TokenWatcher, update_progress};
 use color_eyre::eyre::Result;
-use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
+use dbus::intf_impl::BackendStatusImpl;
+#[cfg(feature = "dbus")]
+use dbus::setup_dbus;
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_dogd::MetricEmitter;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use zenorb::Zenorb as ZSession;
+#[cfg(feature = "zenoh")]
+use {crate::orb_event_stream::reroute::OesReroute, zenorb::Zenorb as ZSession};
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
 const BOOT_ID_EVENT_NAME: &str = "system/boot_id";
@@ -46,13 +51,14 @@ fn boot_id_payload(boot_id: String) -> Result<Payload> {
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     metrics: impl MetricEmitter,
-    dbus: zbus::Connection,
-    zsession: &ZSession,
+    #[cfg(feature = "dbus")] dbus: zbus::Connection,
+    #[cfg(feature = "zenoh")] zsession: &ZSession,
     endpoint: Url,
     orb_os_version: String,
     orb_id: OrbId,
     orb_name: OrbName,
     orb_jabil_id: OrbJabilId,
+    #[cfg_attr(not(feature = "dbus"), allow(unused_variables))]
     net_stats_poll_interval: Duration,
     sender_interval: Duration,
     req_timeout: Duration,
@@ -71,12 +77,26 @@ pub async fn program(
 
     let backend_status_impl = BackendStatusImpl::new();
 
+    #[cfg(feature = "dbus")]
     setup_dbus(&dbus, backend_status_impl.clone()).await?;
 
+    // The attest token is only obtainable over D-Bus (AuthTokenManager);
+    // without the `dbus` feature there's no token source, so requests
+    // are permanently sent unauthenticated (see StatusClient::Err::
+    // MissingAttestToken).
+    #[cfg(feature = "dbus")]
     let token_receiver =
         TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
+    #[cfg(not(feature = "dbus"))]
+    let token_receiver = watch::channel(String::new()).1;
 
-    // Build unified zenorb context and single receiver
+    // Global connectivity is only observed via the zenoh `connd` topic;
+    // without the `zenoh` feature `connectivity_tx` is never sent on, so
+    // it's kept alive (unused) for the rest of this function instead of
+    // being dropped - a dropped sender makes every future `changed()`
+    // call on the receiver below resolve immediately, spinning the
+    // client's select loop instead of waiting on it.
+    #[cfg_attr(not(feature = "zenoh"), allow(unused_variables))]
     let (connectivity_tx, connectivity_receiver) =
         watch::channel(GlobalConnectivity::NotConnected);
 
@@ -97,24 +117,27 @@ pub async fn program(
     // Spawn non-zenorb collectors
     let mut tasks: Vec<JoinHandle<()>> = vec![];
 
-    tasks.push(net_stats::spawn_reporter(
-        backend_status_impl.clone(),
-        net_stats_poll_interval,
-        procfs,
-        shutdown_token.clone(),
-    ));
+    #[cfg(feature = "dbus")]
+    {
+        tasks.push(net_stats::spawn_reporter(
+            backend_status_impl.clone(),
+            net_stats_poll_interval,
+            procfs,
+            shutdown_token.clone(),
+        ));
 
-    tasks.push(update_progress::spawn_reporter(
-        dbus.clone(),
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    ));
+        tasks.push(update_progress::spawn_reporter(
+            dbus.clone(),
+            backend_status_impl.clone(),
+            shutdown_token.clone(),
+        ));
 
-    tasks.push(core_signups::spawn_reporter(
-        dbus.clone(),
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    ));
+        tasks.push(core_signups::spawn_reporter(
+            dbus.clone(),
+            backend_status_impl.clone(),
+            shutdown_token.clone(),
+        ));
+    }
 
     let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
     if let Some(boot_id) = boot_id
@@ -123,39 +146,44 @@ pub async fn program(
         warn!("failed to cache boot-id OES event: {e:?}");
     }
 
-    let zenorb_ctx = ZenorbCtx {
-        backend_status: backend_status_impl.clone(),
-        connectivity_tx,
-        hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-        front_als: Arc::new(tokio::sync::Mutex::new(None)),
-        oes: oes.clone(),
-    };
+    #[cfg(feature = "zenoh")]
+    let zenorb_tasks = {
+        let zenorb_ctx = ZenorbCtx {
+            backend_status: backend_status_impl.clone(),
+            connectivity_tx,
+            hardware_states: Default::default(),
+            front_als: Default::default(),
+            oes: oes.clone(),
+        };
 
-    let zenorb_tasks = zsession
-        .receiver(zenorb_ctx)
-        .querying_subscriber(
-            "connd/oes/active_connections",
-            Duration::from_millis(15),
-            connectivity::handle_connection_event,
-        )
-        .querying_subscriber(
-            hardware_states::HARDWARE_STATUS_KEY_EXPR,
-            Duration::from_millis(100),
-            hardware_states::handle_hardware_state_event,
-        )
-        .querying_subscriber(
-            front_als::FRONT_ALS_KEY_EXPR,
-            Duration::from_millis(100),
-            front_als::handle_front_als_event,
-        )
-        .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
-        .oes_reroute(
-            "core/config",
-            Duration::from_millis(100),
-            oes::Mode::CacheOnly,
-        )
-        .run()
-        .await?;
+        zsession
+            .receiver(zenorb_ctx)
+            .querying_subscriber(
+                "connd/oes/active_connections",
+                Duration::from_millis(15),
+                handle_connection_event,
+            )
+            .querying_subscriber(
+                hardware_states::HARDWARE_STATUS_KEY_EXPR,
+                Duration::from_millis(100),
+                hardware_states::handle_hardware_state_event,
+            )
+            .querying_subscriber(
+                front_als::FRONT_ALS_KEY_EXPR,
+                Duration::from_millis(100),
+                front_als::handle_front_als_event,
+            )
+            .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
+            .oes_reroute(
+                "core/config",
+                Duration::from_millis(100),
+                oes::Mode::CacheOnly,
+            )
+            .run()
+            .await?
+    };
+    #[cfg(not(feature = "zenoh"))]
+    let zenorb_tasks: Vec<JoinHandle<()>> = vec![];
 
     let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
     sender

@@ -7181,7 +7181,6 @@ dependencies = [
  "oes",
  "orb-backend-status-dbus",
  "orb-build-info",
- "orb-connd-dbus",
  "orb-dogd",
  "orb-endpoints",
  "orb-info",

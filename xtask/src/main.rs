@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{android, build, deb, deploy, pre_commit, test, target, test_watch};
+use x::cmd::{android, build, deb, deploy, pre_commit, target, test, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
