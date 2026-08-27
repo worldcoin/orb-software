@@ -129,6 +129,7 @@ in
         # venv
         uv # python venv management
 
+        android-tools
         awscli2
         bacon # better cargo-watch
         black # Python autoformatter

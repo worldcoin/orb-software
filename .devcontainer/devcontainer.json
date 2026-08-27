@@ -8,7 +8,8 @@
 	},
 	"remoteUser": "ubuntu",
 	"containerEnv": {
-		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}"
+		"CACHIX_AUTH_TOKEN": "${localEnv:CACHIX_AUTH_TOKEN}",
+		"ANDROID_ADB_SERVER_ADDRESS": "host.docker.internal"
 	},
 	"features": {
 		"ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
@@ -22,7 +23,8 @@
 			]
 		}
 	},
-	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws ${localEnv:HOME}/.claude; touch -a ${localEnv:HOME}/.claude.json",
+	// Binds the adb server to all interfaces so the container can reach it - assumes your host firewall blocks external access, otherwise anyone on the LAN can take over the adb device.
+	"initializeCommand": "mkdir -p ${localEnv:HOME}/.config/nix ${localEnv:HOME}/.aws ${localEnv:HOME}/.claude; touch -a ${localEnv:HOME}/.claude.json; { adb kill-server; adb -a start-server; true; }",
 	"mounts": [
 		// Keep the rust target directory in a persistent docker volume instead of bind mount
 		"source=${localWorkspaceFolderBasename}-rust-target-vol,target=${containerWorkspaceFolder}/target,type=volume",
