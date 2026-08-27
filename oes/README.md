@@ -63,7 +63,7 @@ the same `OrbStatusApiV2` schema, but only the `oes` field is populated:
 ```rust
 struct OrbStatusApiV2 {
     oes_cached: bool, // true only whenever cached events are sent (every 30s)
-    oes: Option<Vec<Event>>,
+    oes: Vec<Event>,
     // ... all other fields omitted (all Optional) ...
 }
 

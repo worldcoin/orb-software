@@ -93,7 +93,7 @@ async fn maybe_flush(client: &StatusClient, buffer: &mut VecDeque<Event>) {
 
 async fn flush_events(client: &StatusClient, events: &[Event]) -> eyre::Result<bool> {
     let req = OrbStatusApiV2 {
-        oes: Some(events.to_vec()),
+        oes: events.to_vec(),
         ..Default::default()
     };
 
