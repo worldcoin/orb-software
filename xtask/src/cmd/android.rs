@@ -342,3 +342,120 @@ pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
         .map(|pkg| out_dir.join(format!("{pkg}.apex")))
         .collect())
 }
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(ClapArgs, Debug)]
+pub struct DeployArgs {
+    /// Crate to install. If omitted, installs every Android-supported
+    /// crate's APEX.
+    pub pkg: Option<String>,
+    /// Stage/build binaries in release mode.
+    #[arg(long)]
+    pub release: bool,
+}
+
+/// Substring apexd's `adb install` prints when the device has never seen
+/// this APEX package before - `adb install`/`--force-non-staged` can only
+/// update a package already recorded as part of a built-in partition, see
+/// docs/src/android.md.
+const APEX_NEW_PACKAGE_MARKER: &str = "INSTALL_FAILED_PACKAGE_CHANGED";
+
+/// Disables dm-verity and reboots for it to take effect, unless it's
+/// already disabled - `adb disable-verity` reports that
+/// itself, so no separate check is needed. Needs a userdebug/eng build.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn disable_verity() -> Result<()> {
+    cmd(&["adb", "root"])?;
+
+    let output = cmd_captured(&["adb", "disable-verity"])?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if !output.status.success() {
+        return Err(eyre!(
+            "adb disable-verity exited with {}: {text}",
+            output.status
+        ));
+    }
+    if text.contains("already disabled") {
+        return Ok(());
+    }
+
+    cmd(&["adb", "reboot"])?;
+    cmd(&["adb", "wait-for-device"])
+}
+
+/// Bootstraps a never-before-installed APEX by pushing it directly onto a
+/// writable `/vendor/apex`, so apexd starts treating it as if it shipped
+/// with the device's built-in partition (see docs/src/android.md).
+/// One-time per flash - wiped by the next full flash/OTA.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn seed_apex_on_device(apex_path: &Path) -> Result<()> {
+    disable_verity()?;
+    cmd(&["adb", "root"])?;
+    cmd(&["adb", "remount"])?;
+    cmd(&args!["adb", "push", apex_path, "/vendor/apex/"])?;
+    cmd(&["adb", "reboot"])?;
+    cmd(&["adb", "wait-for-device"])
+}
+
+/// Runs `android-apex`, then `adb install`s the result(s). Installs with
+/// `-t -r -g --force-non-staged` so each APEX is usable immediately,
+/// without a reboot. If the device has never had a given package before,
+/// seeds it via [`seed_apex_on_device`] and retries once. Only compiled
+/// for x86_64-linux, same restriction as [`run_apex`].
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+pub fn run_deploy(args: DeployArgs) -> Result<()> {
+    let DeployArgs { pkg, release } = args;
+
+    let out_dir = PathBuf::from(DEFAULT_APEX_OUT_DIR);
+    let apexes = run_apex(ApexArgs {
+        pkg,
+        out_dir,
+        release,
+    })?;
+
+    for apex_path in &apexes {
+        println!("\ninstalling via adb: {}", apex_path.display());
+        let output = cmd_captured(&args![
+            "adb",
+            "install",
+            "-t",
+            "-r",
+            "-g",
+            "--force-non-staged",
+            apex_path
+        ])?;
+
+        if output.status.success() {
+            continue;
+        }
+
+        let text = String::from_utf8_lossy(&output.stderr);
+        if !text.contains(APEX_NEW_PACKAGE_MARKER) {
+            return Err(eyre!("adb install exited with {}: {text}", output.status));
+        }
+
+        println!(
+            "\n`{}` has never been installed on this device before - hold \
+             on, seeding it onto /vendor/apex first...",
+            apex_path.display()
+        );
+        seed_apex_on_device(apex_path)?;
+
+        println!("\nretrying install of {}", apex_path.display());
+        cmd(&args![
+            "adb",
+            "install",
+            "-t",
+            "-r",
+            "-g",
+            "--force-non-staged",
+            apex_path
+        ])?;
+    }
+
+    Ok(())
+}

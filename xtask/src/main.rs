@@ -25,6 +25,10 @@ enum Cmd {
     /// `<crate>.apex`
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     AndroidApex(android::ApexArgs),
+    /// Build Android payload(s) into signed `.apex`(es) same as
+    /// `android-apex`, then `adb install` each onto the device.
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    AndroidDeploy(android::DeployArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -72,6 +76,8 @@ fn main() -> Result<()> {
             std::fs::create_dir_all(&args.out_dir)?;
             android::run_apex(args).map(|_| ())
         }
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        Cmd::AndroidDeploy(args) => android::run_deploy(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
