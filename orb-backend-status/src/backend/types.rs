@@ -27,8 +27,8 @@ pub struct OrbStatusApiV2 {
     // state events
     pub signup_state: Option<String>,
     // hardware states from zenoh
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hardware_states: Option<HashMap<String, HardwareStateApiV2>>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub hardware_states: HashMap<String, HardwareStateApiV2>,
     // main mcu telemetry from zenoh
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_mcu: Option<MainMcuApiV2>,

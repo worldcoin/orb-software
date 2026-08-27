@@ -38,7 +38,7 @@ pub struct CurrentStatus {
     pub core_stats: Option<CoreStats>,
     pub signup_state: Option<SignupState>,
     pub connd_report: Option<ConndReport>,
-    pub hardware_states: Option<HashMap<String, HardwareState>>,
+    pub hardware_states: HashMap<String, HardwareState>,
     pub front_als: Option<AmbientLight>,
 }
 
@@ -219,11 +219,7 @@ impl BackendStatusImpl {
         let Ok(mut current_status) = self.current_status.lock() else {
             return;
         };
-        if states.is_empty() {
-            current_status.hardware_states = None;
-        } else {
-            current_status.hardware_states = Some(states);
-        }
+        current_status.hardware_states = states;
     }
 
     /// Update front ALS (Ambient Light Sensor) data from zenoh.

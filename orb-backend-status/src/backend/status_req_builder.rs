@@ -161,20 +161,19 @@ impl CurrentStatus {
                     })
                     .collect(),
             }),
-            hardware_states: self.hardware_states.as_ref().map(|states| {
-                states
-                    .iter()
-                    .map(|(k, v)| {
-                        (
-                            k.clone(),
-                            HardwareStateApiV2 {
-                                status: v.status.clone(),
-                                message: v.message.clone(),
-                            },
-                        )
-                    })
-                    .collect()
-            }),
+            hardware_states: self
+                .hardware_states
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        HardwareStateApiV2 {
+                            status: v.status.clone(),
+                            message: v.message.clone(),
+                        },
+                    )
+                })
+                .collect(),
             main_mcu: build_main_mcu_api(self),
             oes: vec![],
             oes_cached: false,
