@@ -1,6 +1,10 @@
 # Github workflow for update-agent
 
 name: update-agent
+
+permissions:
+  contents: read
+
 on:
   pull_request:
   workflow_dispatch:
