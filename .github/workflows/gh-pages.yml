@@ -34,7 +34,7 @@ jobs:
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
         with:
           github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # pin@v17
         continue-on-error: true
         with:
           name: worldcoin
