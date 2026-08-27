@@ -1,6 +1,7 @@
 use super::Event;
 use crate::backend::client::{self, StatusClient};
 use crate::backend::types::OrbStatusApiV2;
+use std::collections::VecDeque;
 use std::time::Duration;
 use tokio::time::{self};
 use tokio_util::sync::CancellationToken;
@@ -11,7 +12,7 @@ pub async fn run_oes_flush_loop(
     client: StatusClient,
     shutdown_token: CancellationToken,
 ) {
-    let mut buffer: Vec<Event> = Vec::new();
+    let mut buffer: VecDeque<Event> = VecDeque::new();
     let mut interval = time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -26,7 +27,7 @@ pub async fn run_oes_flush_loop(
 
                     if let Err(e) = flush_events(
                         &client,
-                        &buffer,
+                        buffer.make_contiguous(),
                     ).await {
                         warn!("Final OES flush failed: {e}");
                     }
@@ -38,7 +39,7 @@ pub async fn run_oes_flush_loop(
             result = oes_rx.recv_async() => {
                 match result {
                     Ok(event) => {
-                        buffer.push(event);
+                        buffer.push_back(event);
                         drain_available(&oes_rx, &mut buffer);
                     }
 
@@ -57,21 +58,21 @@ pub async fn run_oes_flush_loop(
     }
 }
 
-fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut Vec<Event>) {
+fn drain_available(rx: &flume::Receiver<Event>, buffer: &mut VecDeque<Event>) {
     while let Ok(event) = rx.try_recv() {
-        buffer.push(event);
+        buffer.push_back(event);
     }
 }
 
 const MAX_BATCH_EVENTS: usize = 100;
 
-async fn maybe_flush(client: &StatusClient, buffer: &mut Vec<Event>) {
+async fn maybe_flush(client: &StatusClient, buffer: &mut VecDeque<Event>) {
     if buffer.is_empty() {
         return;
     }
 
     let batch_size = buffer.len().min(MAX_BATCH_EVENTS);
-    let batch = &buffer[..batch_size];
+    let batch = &buffer.make_contiguous()[..batch_size];
 
     match flush_events(client, batch).await {
         Ok(sent) => {
