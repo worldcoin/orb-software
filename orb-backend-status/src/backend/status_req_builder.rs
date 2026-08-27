@@ -176,7 +176,7 @@ impl CurrentStatus {
                     .collect()
             }),
             main_mcu: build_main_mcu_api(self),
-            oes: None,
+            oes: vec![],
             oes_cached: false,
             orb_stand_qr_id: self
                 .core_stats

@@ -33,8 +33,8 @@ pub struct OrbStatusApiV2 {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_mcu: Option<MainMcuApiV2>,
     // orb event stream
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub oes: Option<Vec<Event>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub oes: Vec<Event>,
     pub oes_cached: bool,
     pub orb_stand_qr_id: Option<String>,
     pub orb_stand_qr_type: Option<String>,
