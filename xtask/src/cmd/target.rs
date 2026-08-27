@@ -4,10 +4,9 @@ use color_eyre::{eyre::eyre, Result};
 use std::collections::BTreeSet;
 
 /// Names of workspace packages whose `[package.metadata.orb]
-/// unsupported_targets` lists `target` (same mechanism
-/// `ci/rust_ci_helper.py` uses for its Darwin exclusions). A `BTreeSet` so
-/// callers get both a fast `.contains()` and a deterministic, sorted
-/// iteration order for printing.
+/// unsupported_targets` lists `target`. A `BTreeSet` so callers get both a
+/// fast `.contains()` and a deterministic, sorted iteration order for
+/// printing.
 pub fn unsupported_packages(md: &Metadata, target: &str) -> BTreeSet<String> {
     md.workspace_packages()
         .into_iter()
@@ -29,7 +28,9 @@ pub struct SupportedArgs {
     /// Crate to check.
     pub pkg: String,
     /// Target triple to check support for, e.g. `aarch64-linux-android`.
-    #[arg(long)]
+    /// Defaults to the host triple, baked in at compile time by `build.rs`
+    /// from cargo's `HOST` env var.
+    #[arg(long, default_value = env!("HOST_TRIPLE"))]
     pub target: String,
 }
 

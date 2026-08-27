@@ -152,11 +152,18 @@ jobs:
 
       - name: Configure cargo to exclude platform-specific crates
         run: |
-          tmp=($(ci/rust_ci_helper.py excludes))
+          crates="$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name')"
           EXCLUDES=""
-          for e in ${tmp[@]}; do
-            EXCLUDES+="--exclude ${e} "
-          done
+          while IFS= read -r c; do
+            status=0
+            cargo x crate-supported "$c" >/dev/null || status=$?
+            if [[ $status -eq 1 ]]; then
+              EXCLUDES+="--exclude ${c} "
+            elif [[ $status -ne 0 ]]; then
+              echo "cargo x crate-supported failed unexpectedly for '${c}' (exit ${status})" >&2
+              exit 1
+            fi
+          done <<<"$crates"
           echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
           cat ${GITHUB_ENV}
       - name: Cargo Nextest
