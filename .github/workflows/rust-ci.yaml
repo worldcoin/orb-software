@@ -68,7 +68,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
@@ -99,7 +99,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
@@ -135,7 +135,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
@@ -176,7 +176,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
@@ -244,7 +244,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Print environment
         run: |
           uname -a

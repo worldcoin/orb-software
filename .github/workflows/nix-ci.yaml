@@ -67,7 +67,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
       - name: Confirm HIL FhsEnv works
         run: |
           set -Eeux -o pipefail
@@ -96,7 +96,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
 
       - name: Build NixOS configurations
         run: |
@@ -122,7 +122,7 @@ jobs:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
+        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com/worldcoin/".insteadOf https://github.com/worldcoin/
 
       - name: Build Disko Image Script
         run: |
