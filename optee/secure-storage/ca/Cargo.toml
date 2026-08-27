@@ -39,7 +39,11 @@ branch = "main"
 git = "https://github.com/worldcoin/orb-rustzone.git"
 
 [package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+unsupported_targets = [
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"aarch64-linux-android",
+]
 
 [package.metadata.deb]
 assets = [["target/release/orb-secure-storage-ca", "/usr/local/bin/", "755"]]
