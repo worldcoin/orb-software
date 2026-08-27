@@ -21,6 +21,10 @@ enum Cmd {
     /// crates marked unsupported via `[package.metadata.orb]
     /// unsupported_targets`.
     AndroidBuild(android::BuildArgs),
+    /// Build Android payloads and package each into a signed
+    /// `<crate>.apex`
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    AndroidApex(android::ApexArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -63,6 +67,11 @@ fn main() -> Result<()> {
             }
         }
         Cmd::AndroidBuild(args) => android::run_build(args),
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        Cmd::AndroidApex(args) => {
+            std::fs::create_dir_all(&args.out_dir)?;
+            android::run_apex(args).map(|_| ())
+        }
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
