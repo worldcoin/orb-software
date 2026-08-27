@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{build, deb, deploy, pre_commit, test, target, test_watch};
+use x::cmd::{android, build, deb, deploy, pre_commit, test, target, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -17,6 +17,10 @@ enum Cmd {
     /// Exit code: 0 - supported, 1 - unsupported, 2 - no such crate (or another
     /// error).
     CrateSupported(target::SupportedArgs),
+    /// Builds the whole workspace for `aarch64-linux-android`, skipping
+    /// crates marked unsupported via `[package.metadata.orb]
+    /// unsupported_targets`.
+    AndroidBuild(android::BuildArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -58,6 +62,7 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Cmd::AndroidBuild(args) => android::run_build(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
