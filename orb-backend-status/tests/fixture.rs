@@ -21,8 +21,6 @@ const SAMPLE_NET_DEV: &str = r#"Inter-|   Receive                               
     lo: 351106997 3114910    0    0    0     0          0         0 351106997 3114910    0    0    0     0       0          0
  wlan0: 583824134  881197    0    0    0     0          0         0 992486687  776785    0    0    0     0       0          0
 "#;
-const SAMPLE_BOOT_ID: &str = "0f0e0d0c-0b0a-0908-0706-050403020100";
-
 pub struct Fixture {
     _dbusd: dbus_launch::Daemon,
     _tmpdir: TempDir,
@@ -192,14 +190,6 @@ impl Fixture {
         fs::write(net_dir.join("dev"), SAMPLE_NET_DEV)
             .await
             .expect("failed to write fake net/dev");
-
-        let random_dir = self.procfs.join("sys").join("kernel").join("random");
-        fs::create_dir_all(&random_dir)
-            .await
-            .expect("failed to create procfs random dir");
-        fs::write(random_dir.join("boot_id"), SAMPLE_BOOT_ID)
-            .await
-            .expect("failed to write fake boot_id");
     }
 
     pub async fn start(&self) -> JoinHandle<Result<()>> {
@@ -404,29 +394,6 @@ impl Fixture {
             .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
 
         // Give time for the message to propagate
-        time::sleep(Duration::from_millis(100)).await;
-
-        Ok(())
-    }
-
-    pub async fn publish_oes_event(
-        &self,
-        namespace: &str,
-        event_name: &str,
-        payload: serde_json::Value,
-    ) -> Result<()> {
-        use zenorb::zenoh::bytes::Encoding;
-
-        let keyexpr = format!("{}/{}/oes/{}", self.orb_id, namespace, event_name);
-        let zraw = zenoh::open(zenorb::client_cfg(self.zenoh_port))
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
-
-        zraw.put(keyexpr, payload.to_string())
-            .encoding(Encoding::APPLICATION_JSON)
-            .await
-            .map_err(|e| color_eyre::eyre::eyre!("{e}"))?;
-
         time::sleep(Duration::from_millis(100)).await;
 
         Ok(())

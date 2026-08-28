@@ -1,6 +1,5 @@
 use crate::backend::client::{self, StatusClient};
 use crate::dbus::intf_impl::CurrentStatus;
-use crate::orb_event_stream::OrbEventStream;
 use color_eyre::eyre::Result;
 use std::time::Duration;
 use tokio::time::{self};
@@ -11,22 +10,15 @@ use tracing::error;
 pub struct BackendSender {
     client: StatusClient,
     interval: Duration,
-    oes: OrbEventStream,
 }
 
 impl BackendSender {
-    pub fn new(client: StatusClient, oes: OrbEventStream, interval: Duration) -> Self {
-        Self {
-            client,
-            oes,
-            interval,
-        }
+    pub fn new(client: StatusClient, interval: Duration) -> Self {
+        Self { client, interval }
     }
 
     pub async fn send_snapshot(&self, snapshot: &CurrentStatus) -> Result<bool> {
-        let mut req = snapshot.to_orb_status_api_v2_req().await;
-        req.oes_cached = true;
-        req.oes = Some(self.oes.cached()?);
+        let req = snapshot.to_orb_status_api_v2_req().await;
 
         let res = match self.client.req(req).await {
             Err(client::Err::MissingAttestToken | client::Err::NoConnectivity) => {

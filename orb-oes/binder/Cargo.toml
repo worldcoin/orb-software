@@ -1,0 +1,17 @@
+[package]
+name = "orb-oes-binder"
+version = "0.1.0"
+description = "Binder proxy and interface for orb-oes"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+derive_more = { workspace = true, features = ["from"] }
+rsbinder.workspace = true
+
+[build-dependencies]
+rsbinder-aidl.workspace = true

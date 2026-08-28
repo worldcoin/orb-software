@@ -1,19 +1,13 @@
 pub mod backend;
 pub mod collectors;
 pub mod dbus;
-pub mod orb_event_stream;
 pub mod sender;
 
-use crate::{
-    backend::boot_id::orb_boot_id,
-    orb_event_stream::{reroute::OesReroute, Event, OrbEventStream, Payload},
-    sender::BackendSender,
-};
+use crate::sender::BackendSender;
 use backend::client::StatusClient;
-use chrono::Utc;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats, oes_collector,
+    core_signups, front_als, hardware_states, net_stats,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -26,22 +20,10 @@ use reqwest::Url;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::info;
 use zenorb::Zenorb as ZSession;
 
 pub const BUILD_INFO: BuildInfo = make_build_info!();
-const BOOT_ID_EVENT_NAME: &str = "system/boot_id";
-
-fn boot_id_payload(boot_id: String) -> Result<Payload> {
-    Ok(Payload {
-        headers: oes::Headers::default().mode(oes::Mode::CacheOnly),
-        event: Event {
-            name: BOOT_ID_EVENT_NAME.to_string(),
-            created_at: Utc::now().timestamp_millis(),
-            payload: Some(serde_json::to_value(oes::BootIdEvent { boot_id })?),
-        },
-    })
-}
 
 #[bon::builder(finish_fn = run)]
 pub async fn program(
@@ -64,11 +46,6 @@ pub async fn program(
     info!("Starting backend-status, endpoint: {endpoint}, orb_id: {orb_id}, orb_name: {orb_name}, orb_jabil_id: {orb_jabil_id}");
 
     let procfs = procfs.into();
-    let boot_id = orb_boot_id(&procfs)
-        .await
-        .inspect_err(|e| warn!("failed to read boot-id: {e:?}"))
-        .ok();
-
     let backend_status_impl = BackendStatusImpl::new();
 
     setup_dbus(&dbus, backend_status_impl.clone()).await?;
@@ -116,19 +93,11 @@ pub async fn program(
         shutdown_token.clone(),
     ));
 
-    let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
-    if let Some(boot_id) = boot_id
-        && let Err(e) = oes.ingest(boot_id_payload(boot_id)?)
-    {
-        warn!("failed to cache boot-id OES event: {e:?}");
-    }
-
     let zenorb_ctx = ZenorbCtx {
         backend_status: backend_status_impl.clone(),
         connectivity_tx,
         hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         front_als: Arc::new(tokio::sync::Mutex::new(None)),
-        oes: oes.clone(),
     };
 
     let zenorb_tasks = zsession
@@ -148,16 +117,10 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
-        .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
-        .oes_reroute(
-            "core/config",
-            Duration::from_millis(100),
-            oes::Mode::CacheOnly,
-        )
         .run()
         .await?;
 
-    let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
+    let sender = BackendSender::new(status_client.clone(), sender_interval);
     sender
         .run_loop(backend_status_impl, shutdown_token.clone())
         .await;
@@ -176,25 +139,4 @@ pub async fn program(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_boot_id_payload_uses_cached_system_event() {
-        let payload =
-            boot_id_payload("16e16562-856b-4a20-9b46-4574a9be1d19".to_string())
-                .unwrap();
-
-        assert_eq!(payload.headers.mode, oes::Mode::CacheOnly);
-        assert_eq!(payload.event.name, BOOT_ID_EVENT_NAME);
-        assert_eq!(
-            payload.event.payload,
-            Some(serde_json::json!({
-                "boot_id": "16e16562-856b-4a20-9b46-4574a9be1d19"
-            }))
-        );
-    }
 }

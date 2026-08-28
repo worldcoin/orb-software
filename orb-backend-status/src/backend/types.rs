@@ -1,4 +1,3 @@
-use crate::orb_event_stream::Event;
 use chrono::{DateTime, Utc};
 use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
@@ -32,10 +31,6 @@ pub struct OrbStatusApiV2 {
     // main mcu telemetry from zenoh
     #[serde(skip_serializing_if = "Option::is_none")]
     pub main_mcu: Option<MainMcuApiV2>,
-    // orb event stream
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub oes: Option<Vec<Event>>,
-    pub oes_cached: bool,
     pub orb_stand_qr_id: Option<String>,
     pub orb_stand_qr_type: Option<String>,
 }
