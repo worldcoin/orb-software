@@ -13,6 +13,13 @@
 # approach used before this). Instead we fetch Google's own prebuilt
 # mkfs.erofs from kernel/prebuilts/build-tools and patch it to run under
 # nixpkgs' glibc via autoPatchelfHook.
+#
+# These apexes are signed with AOSP's public test key on purpose - this
+# package has no access to, and must never be given, a production signing
+# key. Use test-key-signed apexes to test the system end to end, then
+# re-sign the ones you intend to ship using AOSP's `sign_apex.py`
+# (platform/build tools/releasetools) with the real production key, run
+# only in a secure/controlled signing environment.
 { pkgs }:
 let
   # googlesource's raw-content endpoint only serves files base64-encoded
