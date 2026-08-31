@@ -145,6 +145,7 @@ in
       cryptsetup
       arp-scan
       lsof
+      git-lfs
       uv
       (python312.withPackages (
         ps:
