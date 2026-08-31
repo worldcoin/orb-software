@@ -16,10 +16,7 @@ default = []
 allow_http = []
 
 [dependencies]
-reqwest = { version = "0.11.4", features = [
-	"blocking",
-	"rustls-tls-native-roots",
-], default-features = false }
+reqwest = { workspace = true, features = ["blocking", "rustls-tls-native-roots"] }
 base64 = "0.22.1"
 clap = { version = "4.4", features = ["derive"] }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }

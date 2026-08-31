@@ -1,5 +1,4 @@
-use iroh::{endpoint::Connection, protocol::ProtocolHandler};
-use n0_future::FutureExt as _;
+use iroh::{endpoint::Connection, protocol::AcceptError};
 use orb_agent_iroh::Alpn;
 
 pub const PHONE_SECRETKEY: [u8; 32] = [69; 32];
@@ -16,12 +15,8 @@ impl AppProtocol {
     pub const ALPN: Alpn = Alpn("app-protocol");
 }
 
-impl ProtocolHandler for AppProtocol {
-    fn accept(
-        &self,
-        _connection: Connection,
-    ) -> n0_future::future::Boxed<anyhow::Result<()>> {
-        // Accept all peers without auth
-        std::future::ready(Ok(())).boxed()
+impl iroh::protocol::ProtocolHandler for AppProtocol {
+    async fn accept(&self, _connection: Connection) -> Result<(), AcceptError> {
+        Ok(())
     }
 }

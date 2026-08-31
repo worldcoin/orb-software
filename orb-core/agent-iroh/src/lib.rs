@@ -8,11 +8,15 @@ use std::{
 
 use eyre::Result;
 use eyre::WrapErr as _;
-use iroh::{endpoint::ConnectionType, protocol::ProtocolHandler, Endpoint};
+use iroh::{
+    endpoint::ConnectionType,
+    protocol::{DynProtocolHandler, ProtocolHandler},
+    Endpoint,
+};
 
 pub use crate::agent::Agent;
 pub use handler::BoxedHandler;
-pub type ConnectionTypeWatcher = iroh::watchable::Watcher<ConnectionType>;
+pub type ConnectionTypeWatcher = n0_watcher::Direct<ConnectionType>;
 
 #[derive(Debug, Eq, Hash, Clone, Copy, derive_more::Display)]
 pub struct Alpn(pub &'static str);
@@ -34,14 +38,6 @@ impl<T: AsRef<[u8]>> PartialEq<T> for Alpn {
         self.0.as_bytes() == other.as_ref()
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct FromAnyhow(#[from] pub anyhow::Error);
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct FromEyre(#[from] pub eyre::Report);
 
 /// Configures which discovery service providers are enabled.
 ///
@@ -122,16 +118,16 @@ impl Default for EnabledDiscoveryServices {
 #[derive(Debug, bon::Builder)]
 pub struct RouterConfig {
     #[builder(field)]
-    pub handlers: HashMap<Alpn, Box<dyn ProtocolHandler>>,
+    pub handlers: HashMap<Alpn, Box<dyn DynProtocolHandler>>,
 }
 
 impl<S: router_config_builder::State> RouterConfigBuilder<S> {
     pub fn handler<T: ProtocolHandler>(
         mut self,
         alpn: impl Into<Alpn>,
-        router: impl Into<Box<T>>,
+        handler: T,
     ) -> Self {
-        self.handlers.insert(alpn.into(), router.into());
+        self.handlers.insert(alpn.into(), handler.into());
         self
     }
 }
@@ -173,7 +169,6 @@ impl EndpointConfig {
         let endpoint = endpoint
             .bind()
             .await
-            .map_err(FromAnyhow)
             .wrap_err("failed to bind iroh endpoint")?;
 
         Ok(endpoint)

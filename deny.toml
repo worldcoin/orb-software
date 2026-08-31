@@ -6,12 +6,14 @@ all-features = true
 ignore = [
 	# List of advisories we have ignored
 	{ id = "RUSTSEC-2026-0002", reason = "todo" },
-	# rustls-webpki 0.101.7 and 0.102.8 are pulled in by older aws-sdk/reqwest 0.11
-	# crates; upgrade blocked until those dependents update their rustls stack
-	{ id = "RUSTSEC-2026-0049", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
-	{ id = "RUSTSEC-2026-0098", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
-	{ id = "RUSTSEC-2026-0099", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
-	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
+	# rustls-webpki 0.101.7 is pulled in by aws-sdk-s3 (via aws-smithy-http-client
+	# → rustls 0.21.12); upgrade requires aws-sdk-s3 to switch to its hyper-1.x
+	# connector, which conflicts with the ring crypto backend used by several
+	# other transitive deps; upgrade blocked until aws-sdk-s3 resolves the conflict.
+	{ id = "RUSTSEC-2026-0049", reason = "transitive dep via aws-sdk-s3 legacy rustls stack, low severity, upgrade blocked by upstream crypto backend conflict" },
+	{ id = "RUSTSEC-2026-0098", reason = "transitive dep via aws-sdk-s3 legacy rustls stack, low severity, upgrade blocked by upstream crypto backend conflict" },
+	{ id = "RUSTSEC-2026-0099", reason = "transitive dep via aws-sdk-s3 legacy rustls stack, low severity, upgrade blocked by upstream crypto backend conflict" },
+	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk-s3 legacy rustls stack, low severity, upgrade blocked by upstream crypto backend conflict" },
 	{ id = "RUSTSEC-2026-0118", reason = "no upgrade available, is merely DoS" },
 	{ id = "RUSTSEC-2026-0119", reason = "no upgrade available, is merely DoS" },
 	# lru 0.12 and 0.13 are pulled in by aws-sdk-s3 and iroh. The fix is only

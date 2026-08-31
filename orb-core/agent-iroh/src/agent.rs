@@ -4,7 +4,7 @@ use std::{
 };
 
 use agentwire::port;
-use eyre::{Result, WrapErr as _};
+use eyre::{eyre, Result, WrapErr as _};
 use iroh::{endpoint::Connection, Endpoint};
 use n0_future::FutureExt as _;
 use n0_future::StreamExt as _;
@@ -13,7 +13,7 @@ use tracing::trace;
 
 use crate::{
     handler::{BoxedHandler, ConnTx, Forwarder},
-    Alpn, ConnectionTypeWatcher, EndpointConfig, FromAnyhow, RouterConfig,
+    Alpn, ConnectionTypeWatcher, EndpointConfig, RouterConfig,
 };
 
 #[derive(Debug, bon::Builder)]
@@ -71,7 +71,6 @@ impl agentwire::agent::Task for Agent {
         router
             .shutdown()
             .await
-            .map_err(FromAnyhow)
             .wrap_err("failed to shutdown router")?;
 
         Ok(())
@@ -136,13 +135,13 @@ async fn handle_inputs(
                     let conn_result = endpoint
                         .connect(addr.clone(), alpn.as_ref())
                         .await
-                        .map_err(FromAnyhow)
                         .wrap_err("failed to connect")
                         .and_then(|conn| {
                             let conn_type = endpoint
                                 .conn_type(addr.node_id)
-                                .map_err(FromAnyhow)
-                                .wrap_err("failed to get connection type")?;
+                                .ok_or_else(|| {
+                                    eyre!("failed to get connection type")
+                                })?;
 
                             Ok(ConnectionInfo { conn, conn_type })
                         });

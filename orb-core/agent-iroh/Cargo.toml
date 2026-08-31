@@ -14,15 +14,13 @@ rust-version.workspace = true
 
 [dependencies]
 agentwire.workspace = true
-# the same version that iroh uses. this is only here to provide conversions
-anyhow = "1.0.98"
 bon.workspace = true
 derive_more = { workspace = true, features = ["from", "into", "display"] }
 eyre.workspace = true
 flume.workspace = true
 iroh = { workspace = true, default-features = true } # TODO: fine grained features
 n0-future = "0.1.3"
-n0-watcher = "0.2.0"
+n0-watcher = "0.3"
 thiserror = { workspace = true, features = ["std"] }
 tokio.workspace = true
 tracing.workspace = true

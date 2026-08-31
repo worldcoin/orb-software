@@ -3,34 +3,33 @@ use std::{
     time::Duration,
 };
 
-use eyre::{eyre, WrapErr as _};
-use iroh::{protocol::ProtocolHandler, Endpoint};
-use n0_future::{boxed::BoxFuture, FutureExt, TryFutureExt as _};
+use iroh::{
+    endpoint::{Connecting, Connection},
+    protocol::{AcceptError, DynProtocolHandler, ProtocolHandler},
+    Endpoint,
+};
 
-use crate::{agent::ConnectionInfo, Alpn, FromAnyhow, FromEyre};
+use crate::{agent::ConnectionInfo, Alpn};
 
 const ACCEPT_TIMEOUT: Duration = Duration::from_millis(5000);
 
-#[derive(Debug, derive_more::From, derive_more::Into)]
-pub struct BoxedHandler(Box<dyn ProtocolHandler>);
+#[derive(Debug, derive_more::From)]
+pub struct BoxedHandler(Box<dyn DynProtocolHandler>);
 
 impl ProtocolHandler for BoxedHandler {
-    fn accept(
-        &self,
-        connection: iroh::endpoint::Connection,
-    ) -> BoxFuture<anyhow::Result<()>> {
-        self.0.accept(connection)
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        self.0.accept(connection).await
     }
 
-    fn on_connecting(
+    async fn on_connecting(
         &self,
-        connecting: iroh::endpoint::Connecting,
-    ) -> BoxFuture<anyhow::Result<iroh::endpoint::Connection>> {
-        self.0.on_connecting(connecting)
+        connecting: Connecting,
+    ) -> Result<Connection, AcceptError> {
+        self.0.on_connecting(connecting).await
     }
 
-    fn shutdown(&self) -> BoxFuture<()> {
-        self.0.shutdown()
+    async fn shutdown(&self) {
+        self.0.shutdown().await
     }
 }
 
@@ -61,45 +60,45 @@ impl<T: ProtocolHandler> Forwarder<T> {
 }
 
 impl<T: ProtocolHandler> ProtocolHandler for Forwarder<T> {
-    fn accept(
-        &self,
-        connection: iroh::endpoint::Connection,
-    ) -> BoxFuture<anyhow::Result<()>> {
-        let conn_type = match connection
+    async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        let conn_type = connection
             .remote_node_id()
-            .and_then(|node_id| self.endpoint.conn_type(node_id))
-        {
-            Ok(watcher) => watcher,
-            Err(err) => return std::future::ready(Err(err)).boxed(),
-        };
+            .map_err(|source| AcceptError::MissingRemoteNodeId { source })
+            .and_then(|node_id| {
+                self.endpoint.conn_type(node_id).ok_or_else(|| {
+                    AcceptError::from(std::io::Error::other("no connection type available"))
+                })
+            })?;
+
         let handler = self.handler.clone();
         let arc_conn_tx = self.conn_tx.clone();
         let alpn = self.alpn;
-        let fut = async move {
-            if arc_conn_tx.lock().expect("poisoned").is_none() {
-                return Err(eyre!("not accepting connections on alpn {alpn}"));
-            };
-            tokio::time::timeout(
-                ACCEPT_TIMEOUT,
-                handler.accept(connection.clone()).map_err(FromAnyhow),
-            )
-            .await
-            .wrap_err_with(|| format!("timeout in accept for alpn {alpn}"))?
-            .wrap_err_with(|| format!("error in accept for alpn {alpn}"))?;
 
-            let Some(ref mut conn_tx) = *arc_conn_tx.lock().expect("poisoned") else {
-                return Err(eyre!("not accepting connections on alpn {alpn}"));
-            };
-            conn_tx
-                .try_send(ConnectionInfo {
-                    conn: connection,
-                    conn_type,
-                })
-                .wrap_err("too many concurrent connections")?;
-
-            Ok(())
+        if arc_conn_tx.lock().expect("poisoned").is_none() {
+            return Err(AcceptError::from(std::io::Error::other(format!(
+                "not accepting connections on alpn {alpn}"
+            ))));
         };
 
-        fut.map_err(FromEyre).map_err(anyhow::Error::new).boxed()
+        tokio::time::timeout(ACCEPT_TIMEOUT, ProtocolHandler::accept(&*handler, connection.clone()))
+            .await
+            .map_err(|_| {
+                AcceptError::from(std::io::Error::other(format!(
+                    "timeout in accept for alpn {alpn}"
+                )))
+            })??;
+
+        let Some(ref mut conn_tx) = *arc_conn_tx.lock().expect("poisoned") else {
+            return Err(AcceptError::from(std::io::Error::other(format!(
+                "not accepting connections on alpn {alpn}"
+            ))));
+        };
+        conn_tx.try_send(ConnectionInfo { conn: connection, conn_type }).map_err(|e| {
+            AcceptError::from(std::io::Error::other(format!(
+                "too many concurrent connections: {e}"
+            )))
+        })?;
+
+        Ok(())
     }
 }

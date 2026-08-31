@@ -130,7 +130,7 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 http = "1.2.0"
 indicatif = "0.17.9"
-iroh = { version = "0.35.0", default-features = false }
+iroh = { version = "0.92.0", default-features = false }
 jose-jwk = { version = "0.1.2", default-features = false }
 libc = "0.2.153"
 mockall = "0.13.1"
