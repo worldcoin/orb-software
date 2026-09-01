@@ -270,3 +270,124 @@ pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
         .map(|pkg| out_dir.join(format!("{}.apex", apex_name(&pkg))))
         .collect())
 }
+
+/// `android-deploy` needs no fields beyond [`BuildArgs`]'s.
+pub type DeployArgs = BuildArgs;
+
+/// Substring apexd's `adb install` prints when the device has never seen
+/// this APEX package before - `adb install`/`--force-non-staged` can only
+/// update a package already recorded as part of a built-in partition, see
+/// docs/src/android.md.
+const APEX_NEW_PACKAGE_MARKER: &str = "INSTALL_FAILED_PACKAGE_CHANGED";
+
+/// `adb wait-for-device` only waits for the adb transport to come back, not
+/// for Android itself to finish booting - installing right after it returns
+/// can race `pm` and fail with "device is still booting". Polls
+/// `sys.boot_completed` on top of it instead.
+fn wait_for_boot_completed() -> Result<()> {
+    cmd(&["adb", "wait-for-device"])?;
+
+    info!("waiting for the device to finish booting");
+    let start = std::time::Instant::now();
+    loop {
+        let output = cmd_captured(&["adb", "shell", "getprop", "sys.boot_completed"])?;
+        if String::from_utf8_lossy(&output.stdout).trim() == "1" {
+            info!("device finished booting after {:?}", start.elapsed());
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+/// Disables dm-verity and reboots for it to take effect. `adb
+/// disable-verity` itself reports whether it was already disabled, so no
+/// separate check is needed beforehand.
+fn disable_verity() -> Result<()> {
+    cmd(&["adb", "root"])?;
+
+    let output = cmd_captured(&["adb", "disable-verity"])?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if !output.status.success() {
+        return Err(eyre!(
+            "adb disable-verity exited with {}: {text}",
+            output.status
+        ));
+    }
+    if text.contains("already disabled") {
+        return Ok(());
+    }
+
+    info!("rebooting the device to disable verity, hold tight");
+    cmd(&["adb", "reboot"])?;
+    wait_for_boot_completed()
+}
+
+/// Runs `android-apex`, then `adb install`s the result(s). Installs with
+/// `-t -r -g --force-non-staged` so each APEX is usable immediately,
+/// without a reboot. Whichever ones the device has never had before are
+/// seeded onto the device instead of installed (see below).
+pub fn run_deploy(args: DeployArgs) -> Result<()> {
+    let apexes = run_apex(args)?;
+
+    let mut needs_seeding = Vec::new();
+
+    for apex_path in &apexes {
+        println!("\ninstalling via adb: {}", apex_path.display());
+        let output = cmd_captured(&args![
+            "adb",
+            "install",
+            "-t",
+            "-r",
+            "-g",
+            "--force-non-staged",
+            apex_path
+        ])?;
+
+        if output.status.success() {
+            continue;
+        }
+
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if !text.contains(APEX_NEW_PACKAGE_MARKER) {
+            return Err(eyre!("adb install exited with {}: {text}", output.status));
+        }
+
+        println!(
+            "\n`{}` has never been installed on this device before, will \
+             seed it onto /vendor/apex instead",
+            apex_path.display()
+        );
+        needs_seeding.push(apex_path);
+    }
+
+    if needs_seeding.is_empty() {
+        return Ok(());
+    }
+
+    // Bootstrap never-before-installed APEXes by pushing them directly onto
+    // a writable `/vendor/apex`, so apexd starts treating them as if they
+    // shipped with the device's built-in partition (see docs/src/android.md).
+    // One-time per flash - wiped by the next full flash/OTA.
+
+    disable_verity()?;
+    cmd(&["adb", "root"])?;
+    cmd(&["adb", "remount"])?;
+    for apex_path in needs_seeding {
+        println!("\nseeding: {}", apex_path.display());
+        cmd(&args!["adb", "push", apex_path, "/vendor/apex/"])?;
+    }
+
+    info!("rebooting the device to seed APEX, hold tight");
+    cmd(&["adb", "reboot"])?;
+    wait_for_boot_completed()?;
+
+    Ok(())
+}

@@ -22,6 +22,8 @@ enum Cmd {
     AndroidBuild(android::BuildArgs),
     /// Build Android payload(s) and package each into a `<crate>.apex`
     AndroidApex(apex::ApexArgs),
+    /// Build Android payload(s) into `.apex`(es) same as `android-apex`, then `adb install` each onto the device.
+    AndroidDeploy(apex::DeployArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
