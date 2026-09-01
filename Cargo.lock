@@ -7153,7 +7153,6 @@ dependencies = [
  "url",
  "wiremock",
  "zbus",
- "zbus_systemd",
  "zenorb",
 ]
 
