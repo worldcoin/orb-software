@@ -4,7 +4,12 @@
  */
 import { $ } from "bun";
 
-import { affectedCrates, workspaceCrates } from "./affected_crates";
+import {
+  affectedCrates,
+  cargoPackageArgs,
+  type WorkspacePackage,
+  workspaceCrates,
+} from "./affected_crates";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -35,10 +40,10 @@ const pullRequestBase = async (): Promise<string | undefined> => {
 const main = async (): Promise<void> => {
   const base = await pullRequestBase();
   const candidates = base === undefined ? await workspaceCrates() : await affectedCrates(base);
-  const supported: string[] = [];
+  const supported: WorkspacePackage[] = [];
 
   for (const crate of candidates) {
-    const result = await $`cargo x crate-supported ${crate}`.quiet().nothrow();
+    const result = await $`cargo x crate-supported ${crate.name}`.quiet().nothrow();
 
     if (result.exitCode === 0) {
       supported.push(crate);
@@ -49,16 +54,15 @@ const main = async (): Promise<void> => {
       continue;
     }
 
-    throw new Error("cargo x crate-supported failed for " + crate);
+    throw new Error("cargo x crate-supported failed for " + crate.name);
   }
 
   if (supported.length === 0) {
     return;
   }
 
-  const packageArgs = supported.flatMap((crate) => ["-p", crate]);
+  const packageArgs = cargoPackageArgs(supported);
   await $`cargo nextest run --all-features --all-targets ${packageArgs}`;
 };
 
 await main();
-

@@ -6,9 +6,13 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 
-type Package = {
-  id: string;
+export type WorkspacePackage = {
   name: string;
+  cargoPackageId: string;
+};
+
+type Package = WorkspacePackage & {
+  id: string;
   root: string;
 };
 
@@ -84,6 +88,7 @@ const cargoMetadata = async (cwd?: string): Promise<Metadata> => {
     .map((pkg) => ({
       id: pkg.id,
       name: pkg.name,
+      cargoPackageId: pkg.id,
       root: relative(workspaceRoot, dirname(pkg.manifestPath)),
     }));
 
@@ -242,14 +247,35 @@ export const selectAffectedCrates = (input: SelectionInput): string[] => {
   return dependentNames(changed, input.head);
 };
 
-/** Returns all workspace package names in lexical order. */
-export const workspaceCrates = async (): Promise<string[]> =>
-  (await cargoMetadata()).packages.map((pkg) => pkg.name).sort();
+const selectedPackages = (
+  names: string[],
+  packages: Package[],
+): WorkspacePackage[] => {
+  const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
+
+  return names.flatMap((name) => {
+    const pkg = byName.get(name);
+    return pkg === undefined
+      ? []
+      : [{ name: pkg.name, cargoPackageId: pkg.cargoPackageId }];
+  });
+};
+
+/** Returns all workspace packages in lexical name order. */
+export const workspaceCrates = async (): Promise<WorkspacePackage[]> =>
+  (await cargoMetadata()).packages
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((pkg) => ({ name: pkg.name, cargoPackageId: pkg.cargoPackageId }));
+
+/** Returns exact Cargo package arguments for workspace packages. */
+export const cargoPackageArgs = (
+  packages: WorkspacePackage[],
+): string[] => packages.flatMap((pkg) => ["-p", pkg.cargoPackageId]);
 
 /** Returns workspace crates affected between baseRevision and HEAD. */
 export const affectedCrates = async (
   baseRevision: string,
-): Promise<string[]> => {
+): Promise<WorkspacePackage[]> => {
   if (baseRevision.length === 0) {
     throw new Error("A base revision is required");
   }
@@ -264,14 +290,20 @@ export const affectedCrates = async (
   const head = await cargoMetadata();
 
   if (!changedPaths.some((path) => rootCargoInputs.has(path))) {
-    return selectAffectedCrates({ changedPaths, head });
+    return selectedPackages(
+      selectAffectedCrates({ changedPaths, head }),
+      head.packages,
+    );
   }
 
   const worktree = await mkdtemp(join(tmpdir(), "affected-crates-"));
   try {
     await $`git worktree add --detach ${worktree} ${baseRevision}`.quiet();
     const base = await cargoMetadata(worktree);
-    return selectAffectedCrates({ changedPaths, base, head });
+    return selectedPackages(
+      selectAffectedCrates({ changedPaths, base, head }),
+      head.packages,
+    );
   } finally {
     await $`git worktree remove --force ${worktree}`.nothrow().quiet();
     await rm(worktree, { recursive: true, force: true });

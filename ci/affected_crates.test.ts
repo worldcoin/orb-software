@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  cargoPackageArgs,
   selectAffectedCrates,
   type SelectionInput,
 } from "./affected_crates";
@@ -96,4 +97,22 @@ describe("selectAffectedCrates", () => {
     // Assert
     expect(affected).toEqual([]);
   });
+});
+
+test("uses exact Cargo package IDs for package arguments", () => {
+  // Arrange
+  const packages = [{
+    name: "orb-security-utils",
+    cargoPackageId:
+      "path+file:///workspace/security-utils#orb-security-utils@0.0.0",
+  }];
+
+  // Act
+  const args = cargoPackageArgs(packages);
+
+  // Assert
+  expect(args).toEqual([
+    "-p",
+    "path+file:///workspace/security-utils#orb-security-utils@0.0.0",
+  ]);
 });

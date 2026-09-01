@@ -4,7 +4,11 @@
  */
 import { $ } from "bun";
 
-import { affectedCrates, workspaceCrates } from "./affected_crates";
+import {
+  affectedCrates,
+  cargoPackageArgs,
+  workspaceCrates,
+} from "./affected_crates";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -42,10 +46,9 @@ const main = async (): Promise<void> => {
 
   const packageArgs = base === undefined
     ? ["--workspace"]
-    : crates.flatMap((crate) => ["-p", crate]);
+    : cargoPackageArgs(crates);
 
   await $`cargo zigbuild --locked --release --target aarch64-unknown-linux-gnu --target x86_64-unknown-linux-gnu ${packageArgs}`;
 };
 
 await main();
-
