@@ -7,10 +7,10 @@ Wants=persistent.target
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 
-# Pearl stores artifacts at mnt-updates
-# Diamond stores artifacts at mnt-scratch
-After=mnt-scratch.mount mnt-updates.mount
-Wants=mnt-scratch.mount mnt-updates.mount
+# Pearl provides updates.target for update storage.
+# Diamond provides scratch.target for update storage.
+After=scratch.target updates.target
+Wants=scratch.target updates.target
 
 [Service]
 # As update-agent has no dependencies, it should be fine to make this Type=simple (rather than

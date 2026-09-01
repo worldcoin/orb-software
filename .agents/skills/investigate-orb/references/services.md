@@ -35,7 +35,7 @@ Read the section that matches the symptom. Query the primary service first, then
 - `worldcoin-supervisor`: coordinates privileged device state and shutdown behavior.
 - `worldcoin-update-agent`: fetches and installs update components; coordinates with supervisor and update storage mounts.
 - `worldcoin-update-verifier`: waits for system stability, then approves or rejects the active slot.
-- `mnt-scratch.mount`, `mnt-updates.mount`, `worldcoin-ssd-setup-scratch`, and `worldcoin-ssd-setup-models`: inspect when downloads, artifacts, models, or slot verification fail.
+- `scratch.target`, `updates.target`, `worldcoin-ssd-setup-scratch`, and `worldcoin-ssd-setup-models`: inspect when downloads, artifacts, models, or slot verification fail.
 
 ## Remote jobs
 

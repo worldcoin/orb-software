@@ -1,6 +1,6 @@
 [package]
 name = "orb-zbus-proxies-cli"
-version = "0.0.0"
+version = "0.0.1"
 description = "CLI tool to generate zbus proxies for third party services"
 publish = false
 

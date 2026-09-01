@@ -89,7 +89,7 @@ fn validate_key(s: &str) -> Result<Key<'_>, InvalidKeyErr> {
         if c.is_ascii_uppercase() {
             return Err(InvalidKeyErr::NotLowercase);
         }
-        if !c.is_ascii_alphanumeric() && ![b'-', b'_'].contains(&c) {
+        if !c.is_ascii_alphanumeric() && !b"-_".contains(&c) {
             return Err(InvalidKeyErr::DisallowedCharacter);
         }
     }

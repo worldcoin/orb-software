@@ -32,6 +32,9 @@ NoNewPrivileges=yes
 ProtectHome=yes
 ProtectSystem=strict
 
+# For key recovery we need some folder with write access, use $RUNTIME_DIRECTORY to get it name
+RuntimeDirectory=orb-attest
+
 # If at some point this service will need write access make sure to change this
 ReadOnlyPaths=/
 # D-Bus socket lives at /tmp/worldcoin_bus_socket; PrivateTmp would hide it

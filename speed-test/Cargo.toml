@@ -1,6 +1,6 @@
 [package]
 name = "orb-speed-test"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["Popov Philipp <filipp.popov@toolsforhumanity.com>"]
 description = "Network speed test utility for Orb"
 publish = false

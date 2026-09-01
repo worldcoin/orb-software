@@ -2,7 +2,7 @@ use orb_const_concat::const_concat;
 use reqwest::Client;
 use secrecy::ExposeSecret;
 use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::BUILD_INFO;
 

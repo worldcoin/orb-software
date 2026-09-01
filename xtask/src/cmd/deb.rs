@@ -1,5 +1,5 @@
 use super::build;
-use crate::cmd::cmd;
+use crate::cmd::{args, cmd};
 use clap::Args as ClapArgs;
 use color_eyre::Result;
 
@@ -19,17 +19,17 @@ pub fn run(args: Args) -> Result<()> {
     })?;
 
     let path = format!("./target/deb/{pkg}.deb");
-    cmd(&[
+    cmd(&args![
         "cargo",
         "deb",
         "--no-build",
         "--no-strip",
         "-p",
-        pkg.as_str(),
+        &pkg,
         "--target",
-        target.as_str(),
+        &target,
         "-o",
-        path.as_str(),
+        &path,
     ])?;
     println!("\n{pkg} successfully packaged at {path}");
 

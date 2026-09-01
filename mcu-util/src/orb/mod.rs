@@ -119,8 +119,8 @@ impl Orb {
             ));
         match self.main_board.send(reboot_orb_msg).await {
             Ok(CommonAckError::Success) => {
-                if delay.is_some() {
-                    info!("🚦 The Orb will be forced to reboot in {} seconds. Better to gracefully shutdown with `sudo shutdown now`", delay.unwrap());
+                if let Some(delay) = delay {
+                    info!("🚦 The Orb will be forced to reboot in {delay} seconds. Better to gracefully shutdown with `sudo shutdown now`");
                 } else {
                     info!("🚦 The Orb will reboot once you shutdown the Jetson gracefully: `sudo shutdown now`");
                 }

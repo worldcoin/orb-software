@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn deadline_of_old_signup_event_is_in_the_past() {
         let an_hour_ago = Instant::now()
-            .checked_sub(Duration::from_secs(60 * 60))
+            .checked_sub(Duration::from_hours(1))
             .expect("`Instant` should always be able to represent current time minus 60 minutes");
         let stop_deadline = calculate_stop_deadline(
             an_hour_ago,

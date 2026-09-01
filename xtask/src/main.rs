@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{build, deb, deploy, pre_commit, test, test_watch};
+use x::cmd::{build, deb, deploy, pre_commit, target, test, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -13,6 +13,9 @@ enum Cmd {
     /// Build the select crate using `cargo zigbuild --release`. alias: 'b'
     #[command(alias = "b")]
     Build(build::Args),
+    /// Checks whether a crate is excluded via `[package.metadata.orb].unsupported_targets`.
+    /// Exit code: 0 = supported, 1 = unsupported, 2 = no such crate (or other error).
+    CrateSupported(target::SupportedArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -40,6 +43,20 @@ fn main() -> Result<()> {
 
     match cmd {
         Cmd::Build(args) => build::run(args),
+        Cmd::CrateSupported(args) => {
+            let (pkg, tgt) = (args.pkg.clone(), args.target.clone());
+            match target::run_supported(args) {
+                Ok(true) => Ok(()),
+                Ok(false) => {
+                    eprintln!("`{pkg}` is marked unsupported for {tgt}");
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(2);
+                }
+            }
+        }
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),

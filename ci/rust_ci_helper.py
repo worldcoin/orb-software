@@ -69,20 +69,6 @@ def find_flavored_crates(*, workspace_crates):
     return {n: p for n, p in workspace_crates.items() if predicate(p)}
 
 
-def find_unsupported_platform_crates(*, host_platform, workspace_crates):
-    def predicate(package):
-        unsupported_targets = (
-            (package.get("metadata") or {})
-            .get("orb", {})
-            .get("unsupported_targets", {})
-        )
-        if not unsupported_targets:
-            return False
-        return host_platform in unsupported_targets
-
-    return {n: p for n, p in workspace_crates.items() if predicate(p)}
-
-
 def workspace_crates():
     command = "cargo metadata --format-version=1 --no-deps --frozen --offline"
     cmd_output = run_with_stdout(command)
@@ -93,14 +79,6 @@ def workspace_crates():
     result = {p["name"]: p for p in tmp}
     assert len(tmp) == len(result)  # sanity check
     return result
-
-
-def get_target_triple():
-    cmd_output = run_with_stdout("rustc -vV").strip().split("\n")
-    for s in cmd_output:
-        if s.startswith("host:"):
-            return s.split(" ")[1]
-    raise Exception("no target triple detected")
 
 
 def build_crate_with_features(*, cargo_profile, targets, features):
@@ -217,11 +195,6 @@ def main():
     )
     build.set_defaults(entry_point=subcmd_build_linux_artifacts)
 
-    excludes = subparsers.add_parser(
-        "excludes", description="Detects crates that should be excluded when building"
-    )
-    excludes.set_defaults(entry_point=subcmd_excludes)
-
     args = parser.parse_args()
     args.entry_point(args)
 
@@ -293,16 +266,6 @@ def subcmd_build_linux_artifacts(args):
                 crate=crate,
                 flavor=flavor_name,
             )
-
-
-def subcmd_excludes(args):
-    """entry point for `excludes` subcommand"""
-    wksp_crates = workspace_crates()
-    host = get_target_triple()
-    excludes = find_unsupported_platform_crates(
-        host_platform=host, workspace_crates=wksp_crates
-    )
-    stdout(" ".join(sorted([c for c in excludes])))
 
 
 if __name__ == "__main__":

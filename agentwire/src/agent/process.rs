@@ -2,7 +2,7 @@
 
 use super::{Agent, Kill};
 use crate::{
-    port::{self, SharedPort, SharedSerializer},
+    port::{self, SharedDeserializer, SharedPort, SharedSerializer},
     spawn_named_thread,
 };
 use close_fds::close_open_fds;
@@ -13,10 +13,7 @@ use nix::{
     sys::signal::{self, Signal},
     unistd::Pid,
 };
-use rkyv::{
-    de::deserializers::SharedDeserializeMap, Archive, Deserialize, Infallible,
-    Serialize,
-};
+use rkyv::{Archive, Deserialize, Serialize};
 use std::{
     env,
     error::Error,
@@ -136,12 +133,11 @@ where
         + Send
         + Debug
         + Archive
-        + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self as Archive>::Archived: Deserialize<Self, Infallible>,
-    Self::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    Self::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <Self::Output as Archive>::Archived:
-        Deserialize<Self::Output, SharedDeserializeMap>,
+        + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <Self as Archive>::Archived: Deserialize<Self, SharedDeserializer>,
+    Self::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    Self::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <Self::Output as Archive>::Archived: Deserialize<Self::Output, SharedDeserializer>,
 {
     /// Error type returned by the agent.
     type Error: Debug;
@@ -189,7 +185,8 @@ where
     fn call(shmem: OwnedFd) -> Result<(), CallError<Self::Error>> {
         let mut inner = port::RemoteInner::<Self>::from_shared_memory(shmem)
             .map_err(CallError::SharedMemory)?;
-        let agent = inner.init_state().deserialize(&mut Infallible).unwrap();
+        let agent =
+            rkyv::deserialize::<Self, rkyv::rancor::Error>(inner.init_state()).unwrap();
         agent.run(inner).map_err(CallError::Agent)
     }
 
@@ -307,10 +304,10 @@ async fn spawn_process_impl<T: Process, Fut, F>(
 ) where
     F: Fn(&'static str, ChildStdout, ChildStderr) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + Send + 'static,
-    <T as Archive>::Archived: Deserialize<T, Infallible>,
-    T::Input: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    T::Output: Archive + for<'a> Serialize<SharedSerializer<'a>>,
-    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializeMap>,
+    <T as Archive>::Archived: Deserialize<T, SharedDeserializer>,
+    T::Input: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    T::Output: Archive + for<'w, 'a> Serialize<SharedSerializer<'w, 'a>>,
+    <T::Output as Archive>::Archived: Deserialize<T::Output, SharedDeserializer>,
 {
     let mut recovered_inputs = Vec::new();
     loop {

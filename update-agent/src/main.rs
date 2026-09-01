@@ -3,19 +3,13 @@
 //!
 //! Effectively it's a very simple state machine that performs the following steps:
 //!
-//! 1. read the `versions.json` file on the orb;
-//! 2. read the `components.json` file on the orb;
-//! 3. check that `versions.json` and `components.json` are consistent with each other;
-//! 4. get the update claim, which contains the list of components to be updated, and where to find
+//! 1. get the update claim, which contains the list of components to be updated, and where to find
 //!    them (locally or remotely on a server);
-//! 5. validate the update by checking the component versions that it is updating from (that is,
-//!    ensure that the versions of the components that are currently running/making up the orb match
-//!    those listed in the claim);
-//! 6. collect the actual update components, either by checking them on disk or downloading them
+//! 2. collect the actual update components, either by checking them on disk or downloading them
 //!    from the listed URL;
-//! 7. validate the downloaded components by comparing their hashes against those listed in the
+//! 3. validate the downloaded components by comparing their hashes against those listed in the
 //!    manifest;
-//! 8. actually perform the update by copying the component to its respective position on the
+//! 4. actually perform the update by copying the component to its respective position on the
 //!    currently inactive slot.
 use crate::update::capsule::{EFI_OS_INDICATIONS, EFI_OS_REQUEST_CAPSULE_UPDATE};
 use clap::Parser as _;
@@ -33,11 +27,9 @@ use orb_update_agent::{
         interfaces::{self, UpdateProgress},
         proxies,
     },
-    update, update_component_version_on_disk, write_json_and_sync, Args, Settings,
+    update, Args, Settings,
 };
-use orb_update_agent_core::{
-    version_map::SlotVersion, Claim, Slot, VersionMap, Versions,
-};
+use orb_update_agent_core::{Claim, Slot};
 use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
@@ -47,12 +39,7 @@ use std::default::Default;
 use std::process::ExitCode;
 use std::time::Instant;
 use std::{
-    borrow::Cow,
-    collections::HashSet,
-    fs::{self, File},
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::Duration,
+    borrow::Cow, collections::HashSet, fs, path::Path, str::FromStr, time::Duration,
 };
 use tokio::task::{self, JoinHandle};
 use tracing::{debug, error, info, warn};
@@ -81,6 +68,8 @@ async fn main() -> ExitCode {
         .inspect_err(|e| error!("failed to setup zenoh: {e}"));
 
     let metrics_clone = metrics.clone();
+    #[allow(clippy::result_large_err)]
+    // `Error` shape is dictated by `run`'s error type
     let result =
         task::spawn_blocking(move || run(&args, metrics_clone, conn_tracker)).await;
 
@@ -312,82 +301,9 @@ fn run(
         setup_dbus()
     };
 
-    info!(
-        "reading versions from disk at `{}`",
-        settings.versions.display()
-    );
-    let versions_legacy = read_versions_on_disk(&settings.versions)
-        .wrap_err_with(|| {
-            format!(
-                "failed reading versions on disk at {}",
-                settings.versions.display(),
-            )
-        })
-        .map_err(Error::ReadingVersions)?;
-
-    let mut version_map_dst = settings.versions.clone();
-    version_map_dst.set_extension("map");
-
-    debug!(
-        "attempting to read the new versions map from file system at `{}`",
-        version_map_dst.display(),
-    );
-
-    fn try_read_version_map<P: AsRef<Path>>(
-        version_path: P,
-    ) -> eyre::Result<VersionMap> {
-        let contents =
-            fs::read(version_path).wrap_err("failed to read file to buffer")?;
-        serde_json::from_slice(&contents)
-            .wrap_err("failed deserializing file buffer to json")
-    }
-
-    let version_map_from_legacy = VersionMap::from_legacy(&versions_legacy);
-    let mut version_map = try_read_version_map(&version_map_dst)
-        .wrap_err_with(|| {
-            format!(
-                "failed reading version map from `{}`",
-                version_map_dst.display(),
-            )
-        })
-        .map(|version_map| {
-            if version_map != version_map_from_legacy {
-                warn!(
-                "version map on disk does not match version map constructed from legacy \
-                    versions.json; preferring legacy. this will be an error in the future"
-            );
-                version_map_from_legacy.clone()
-            } else {
-                version_map
-            }
-        })
-        .unwrap_or_else(|e| {
-            info!("unable to read version map from disk; transforming legacy versions: {e:?}");
-            version_map_from_legacy
-        });
-
-    if version_map
-        .get_slot_version(active_slot.into())
-        .is_some_and(|v| v != platform_version)
-    {
-        warn!(
-            "read platform_version mismatches /etc/os-release. Correcting to {}",
-            platform_version
-        );
-        version_map.set_slot_version(&platform_version, active_slot.into());
-    }
-
-    match serde_json::to_string(&version_map) {
-        Ok(s) => info!("versions read from disk: {s}"),
-        Err(e) => {
-            warn!("failed serializing versions read from disk: {e:?}");
-            info!("versions read from disk: {version_map:?}");
-        }
-    }
-
     let claim = match orb_update_agent::claim::get(
         &settings,
-        &version_map,
+        &platform_version,
         orb_type,
         &conn_tracker,
         &metrics,
@@ -422,14 +338,6 @@ fn run(
             warn!("failed serializing update claim as json: {e:?}");
             info!("update claim received: {claim:?}");
         }
-    }
-
-    if settings.skip_version_asserts {
-        info!("skipping versions asserts requested; skipping update claim validation");
-    } else {
-        info!("validating update claim against versions on disk");
-        validate_claim(&claim, &version_map, settings.active_slot)
-            .map_err(claim::Error::Validation)?;
     }
 
     info!("cleanup old updates");
@@ -579,21 +487,6 @@ fn run(
                 format!("manifest:{}", claim.version()),
             ],
         );
-
-        update_component_version_on_disk(
-            target_slot,
-            component,
-            &mut version_map,
-            &version_map_dst,
-        )
-        .wrap_err_with(|| {
-            format!(
-                "failed updating version for component `{}` at `{}`",
-                component.name(),
-                version_map_dst.display(),
-            )
-        })
-        .map_err(Error::UpdateComponentVersionOnDisk)?;
     }
 
     // Now that ALL components have finished installing, set overall status to Installed
@@ -612,8 +505,6 @@ fn run(
             &claim,
             &update_components,
             settings.active_slot,
-            &mut version_map,
-            &version_map_dst,
             &metrics,
         )
         .wrap_err("failed to copy redundant GPT partitions not listed in manifest")
@@ -621,81 +512,11 @@ fn run(
     }
 
     info!("Executing post update logic");
-    finalize(
-        &settings,
-        &claim,
-        version_map,
-        version_map_dst,
-        &slot_ctrl,
-        update_iface.as_ref(),
-    )
-    .wrap_err("failed to finalize update")
-    .map_err(Error::Finalize)?;
+    finalize(&settings, &claim, &slot_ctrl, update_iface.as_ref())
+        .wrap_err("failed to finalize update")
+        .map_err(Error::Finalize)?;
 
     Ok(settings)
-}
-
-fn read_versions_on_disk<T: AsRef<Path>>(versions_path: T) -> eyre::Result<Versions> {
-    let versions_file =
-        File::open(versions_path).wrap_err("failed to open versions file")?;
-    orb_update_agent::json::deserialize(&versions_file)
-        .wrap_err("failed to read versions from file")
-}
-
-/// Checks that the versions asserted in the update claim match those recorded on disk.
-pub fn validate_claim(
-    claim: &Claim,
-    version_map: &VersionMap,
-    active_slot: Slot,
-) -> eyre::Result<()> {
-    for component in claim.manifest_components() {
-        let name = component.name();
-        let Some(slot_version) = version_map.slot_version(component.name()) else {
-            info!("component `{name}` in update manifest is not present in versions on device");
-            continue;
-        };
-        match slot_version {
-            SlotVersion::Single {
-                version: on_disk_version,
-            } => {
-                if &component.version_assert == on_disk_version {
-                    debug!(
-                        "single component `{name}`: on disk version matches expected version in \
-                         claim"
-                    );
-                } else if &component.version_upgrade == on_disk_version {
-                    debug!(
-                        "single component `{name}`: on disk version matches target version in \
-                         claim; was it previously updated?"
-                    );
-                } else {
-                    bail!(
-                        "failed to validate version of single component `{name}`; on disk \
-                         version: {on_disk_version}, expected version: {}, target version: {}",
-                        component.version_assert,
-                        component.version_upgrade,
-                    );
-                }
-            }
-            SlotVersion::Redundant {
-                version_a,
-                version_b,
-            } => {
-                let on_disk_version = match active_slot {
-                    Slot::A => version_a,
-                    Slot::B => version_b,
-                };
-                ensure!(
-                    Some(&component.version_assert) == on_disk_version.as_ref(),
-                    "failed validating redundant component `{name}`; manifest expected version: \
-                     {expected_version:?}; actual version on disk: {actual_version:?}",
-                    expected_version = component.version_assert,
-                    actual_version = on_disk_version,
-                );
-            }
-        }
-    }
-    Ok(())
 }
 
 #[allow(clippy::result_large_err)]
@@ -810,8 +631,8 @@ fn cleanup_old_updates(dst: &Path, claim: &Claim) -> eyre::Result<()> {
 
     let claim_entries: HashSet<_> = claim
         .sources()
-        .iter()
-        .flat_map(|(_, s)| {
+        .values()
+        .flat_map(|s| {
             vec![
                 s.unique_name(),
                 // TODO(andronat): I would like to have a "safer" way to create this names. What if
@@ -879,8 +700,8 @@ fn check_for_available_space<P: AsRef<Path>>(
         .collect();
     let claim_entries: HashSet<_> = claim
         .sources()
-        .iter()
-        .flat_map(|(_, s)| {
+        .values()
+        .flat_map(|s| {
             vec![
                 s.unique_name(),
                 // TODO(andronat): I would like to have a "safer" way to create this names. What if
@@ -926,8 +747,6 @@ fn check_for_available_space<P: AsRef<Path>>(
 fn finalize(
     settings: &Settings,
     claim: &Claim,
-    version_map: VersionMap,
-    version_map_dst: PathBuf,
     slot_ctrl: &OrbSlotCtrl,
     update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
 ) -> eyre::Result<()> {
@@ -936,19 +755,13 @@ fn finalize(
     match claim.manifest().kind() {
         UpdateKind::Full => {
             info!("finalizing full update");
-            finalize_full_update(settings, claim, version_map, version_map_dst)
+            finalize_full_update()
                 .wrap_err("failed running full update post update procedures")?;
         }
         UpdateKind::Normal => {
             info!("finalizing normal update");
-            finalize_normal_update(
-                settings,
-                claim,
-                version_map,
-                version_map_dst,
-                slot_ctrl,
-            )
-            .wrap_err("failed running partial update post update procedures")?;
+            finalize_normal_update(settings, slot_ctrl)
+                .wrap_err("failed running partial update post update procedures")?;
         }
     }
 
@@ -966,20 +779,8 @@ fn finalize(
     Ok(())
 }
 
-// Performs post-update logic on a full system update. It currently does not do anything but print
-// a message, because it currently relies on the slot switch being induced by a component being
-// installed (for example, a component (for example, the smd partition).
-fn finalize_full_update(
-    settings: &Settings,
-    claim: &Claim,
-    mut version_map: VersionMap,
-    version_map_dst: PathBuf,
-) -> eyre::Result<()> {
-    info!("finalizing full system update: only updating versions but taking no extra actions");
-
-    version_map.set_recovery_version(claim.version());
-    write_json_and_sync(&version_map_dst, &version_map)?;
-    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
+fn finalize_full_update() -> eyre::Result<()> {
+    info!("finalizing full system update");
     Ok(())
 }
 
@@ -988,15 +789,9 @@ fn finalize_full_update(
 // TODO: In the future this also needs to trigger a slot switch for the MCU.
 fn finalize_normal_update(
     settings: &Settings,
-    claim: &Claim,
-    mut version_map: VersionMap,
-    version_map_dst: PathBuf,
     slot_ctrl: &OrbSlotCtrl,
 ) -> eyre::Result<()> {
     let target_slot = settings.active_slot.opposite();
-    version_map.set_slot_version(claim.version(), target_slot);
-    write_json_and_sync(&version_map_dst, &version_map)?;
-    write_json_and_sync(&settings.versions, &version_map.to_legacy())?;
 
     // If a capsule update is scheduled, do not set the next active boot slot
     // The capsule update mechanism will do switch the slot and aplly the update

@@ -131,8 +131,8 @@ pub struct RetryCounts {
 
 impl Display for RetryCounts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "efi var: {}", &self.efi_var)?;
-        writeln!(f, "SR_RF: {}", &self.sr_rf)?;
+        writeln!(f, "efi var: {}", self.efi_var)?;
+        writeln!(f, "SR_RF: {}", self.sr_rf)?;
 
         Ok(())
     }
