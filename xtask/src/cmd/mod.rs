@@ -1,4 +1,5 @@
 pub mod android;
+pub mod apex;
 pub mod build;
 pub mod deb;
 pub mod deploy;
@@ -55,7 +56,6 @@ pub(crate) fn cmd<S: AsRef<OsStr>>(args: &[S]) -> Result<()> {
 /// output from independent processes would otherwise be unreadable), or
 /// that need to inspect *why* a command failed instead of just that it
 /// did. Returns [`std::process::Output`] as-is, regardless of exit status.
-#[allow(dead_code)]
 pub(crate) fn cmd_captured<S: AsRef<OsStr>>(
     args: &[S],
 ) -> Result<std::process::Output> {

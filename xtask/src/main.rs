@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{android, build, deb, deploy, pre_commit, target, test, test_watch};
+use x::cmd::{android, apex, build, deb, deploy, pre_commit, target, test, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -20,6 +20,8 @@ enum Cmd {
     /// crates marked unsupported via `[package.metadata.orb]
     /// unsupported_targets`.
     AndroidBuild(android::BuildArgs),
+    /// Build Android payload(s) and package each into a `<crate>.apex`
+    AndroidApex(apex::ApexArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
