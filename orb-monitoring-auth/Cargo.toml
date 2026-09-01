@@ -1,0 +1,44 @@
+[package]
+name = "orb-monitoring-auth"
+version = "0.1.0"
+description = "Responsible for authenticating monitoring in the orb"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors = ["Victor Ferreira Menge <vmenge@users.noreply.github.com>"]
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+clap.workspace = true
+color-eyre.workspace = true
+faux = { workspace = true, optional = true }
+nix = { workspace = true, features = ["user"] }
+orb-info = { workspace = true, features = ["async", "orb-id", "orb-token"] }
+orb-secure-storage-ca = { workspace = true, features = ["backend-optee"] }
+orb-security-utils = { workspace = true, features = ["reqwest"] }
+prelude = { workspace = true, features = ["applet"] }
+serde.workspace = true
+serde_json.workspace = true
+speare.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tokio-util.workspace = true
+tracing.workspace = true
+zbus.workspace = true
+
+[features]
+default = []
+testing = ["dep:faux"]
+
+[dev-dependencies]
+async-tempfile.workspace = true
+dbus-launch.workspace = true
+orb-attest-dbus.workspace = true
+orb-security-utils = { workspace = true, features = [
+	"reqwest",
+	"dangerously-allow-http",
+] }
+wiremock.workspace = true

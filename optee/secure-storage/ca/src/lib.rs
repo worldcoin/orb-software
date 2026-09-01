@@ -56,11 +56,13 @@ pub trait SessionT {
 ///
 /// For the choice of `B`, typically you use [`crate::optee::OpteeBackend`] (except
 /// in tests).
+#[cfg_attr(feature = "testing", faux::create)]
 pub struct Client<B: BackendT> {
     session: B::Session,
     span: tracing::Span,
 }
 
+#[cfg_attr(feature = "testing", faux::methods)]
 impl<B: BackendT> Client<B> {
     pub fn new(ctx: &mut B::Context, domain: StorageDomain) -> Result<Self> {
         let euid = rustix::process::geteuid();

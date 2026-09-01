@@ -1,0 +1,26 @@
+[package]
+name = "orb-bin"
+version = "0.1.0"
+description = "Orb's multicall binary"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+authors = ["Victor Ferreira Menge <vmenge@users.noreply.github.com>"]
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+
+[package.metadata.deb]
+maintainer-scripts = "debian/"
+assets = [["target/release/orb-bin", "/usr/local/bin/", "755"]]
+
+[dependencies]
+clap.workspace = true
+orb-build-info.workspace = true
+orb-monitoring-auth.workspace = true
+orb-telemetry.workspace = true
+prelude = { workspace = true, features = ["applet"] }
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
