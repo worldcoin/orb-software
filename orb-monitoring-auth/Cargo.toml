@@ -16,7 +16,7 @@ chrono = { workspace = true, features = ["serde"] }
 clap.workspace = true
 color-eyre.workspace = true
 faux = { workspace = true, optional = true }
-nix.workspace = true
+nix = { workspace = true, features = ["user"] }
 orb-info = { workspace = true, features = ["async", "orb-id", "orb-token"] }
 orb-secure-storage-ca = { workspace = true, features = ["backend-optee"] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }

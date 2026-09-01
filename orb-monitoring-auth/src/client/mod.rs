@@ -10,7 +10,6 @@ use color_eyre::{
     eyre::{bail, ContextCompat},
     Result,
 };
-use nix::libc::getuid;
 use prelude::applet::Applet;
 use serde_json::json;
 use std::{
@@ -67,13 +66,10 @@ pub fn main(
         warn!("failed to install color-eyre error hook: {error}");
     }
 
-    unsafe {
-        let uid = getuid();
-        if uid != dd_agent_uid {
-            bail!(
-                "user with id {uid} is not allowed to call orb-monitoring-auth-client"
-            )
-        }
+    let uid = nix::unistd::getuid().as_raw();
+
+    if uid != dd_agent_uid {
+        bail!("user with id {uid} is not allowed to call orb-monitoring-auth-client")
     }
 
     let (value, error) = match fetch_monitoring_token(token_server_socket.as_ref()) {
