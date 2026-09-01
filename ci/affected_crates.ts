@@ -3,7 +3,7 @@
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 
 type Package = {
@@ -52,7 +52,7 @@ const requireStrings = (value: unknown, name: string): string[] => {
 
 const cargoMetadata = async (cwd?: string): Promise<Metadata> => {
   const command = cwd === undefined ? $ : $.cwd(cwd);
-  const output = await command`cargo metadata --format-version=1 --locked --offline`.quiet();
+  const output = await command`cargo metadata --format-version=1 --locked`.quiet();
   const parsed: unknown = output.json();
 
   if (!isRecord(parsed)) {
