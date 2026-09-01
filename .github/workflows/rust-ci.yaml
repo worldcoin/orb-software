@@ -49,10 +49,6 @@ jobs:
         with:
           name: worldcoin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
 
       - name: Check Rust formatting
         run: cargo fmt --check --all
@@ -78,10 +74,6 @@ jobs:
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
 
       - name: Clippy lints
         run: |
@@ -109,10 +101,6 @@ jobs:
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
 
       - name: Cargo Doc
         run: |
@@ -146,10 +134,6 @@ jobs:
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
 
       - name: Cargo Nextest
         run: nix develop -c ci/run_tests.ts
@@ -177,11 +161,6 @@ jobs:
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # pin@v2.8.0
         with:
           key: custom-${{ hashFiles('**/*.nix', 'flake.lock') }}
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
-
       - name: Build Linux release
         run: nix develop -c ci/build_linux_artifacts.ts
 
@@ -203,10 +182,6 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Authorize private git repos
         run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-      - name: Print environment
-        run: |
-          uname -a
-          nix develop -c env
 
       - name: Check licenses
         run: |
