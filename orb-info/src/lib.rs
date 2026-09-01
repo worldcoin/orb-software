@@ -1,4 +1,6 @@
 #[cfg(feature = "orb-id")]
+#[cfg_attr(target_os = "linux", path = "orb_id_linux.rs")]
+#[cfg_attr(target_os = "android", path = "orb_id_android.rs")]
 pub mod orb_id;
 #[cfg(feature = "orb-jabil-id")]
 pub mod orb_jabil_id;
