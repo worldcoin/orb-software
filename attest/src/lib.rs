@@ -11,7 +11,10 @@ use eyre::{self, bail, WrapErr};
 use futures::{FutureExt, StreamExt};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_dogd::{DogstatsdClient, MetricEmitter};
-use orb_info::OrbId;
+use orb_info::{
+    orb_os_release::{OrbOsPlatform, OrbOsRelease},
+    OrbId,
+};
 use prelude::connectivity::tracker::ConnectivityTracker;
 use secrecy::ExposeSecret;
 use std::default::Default;
@@ -37,6 +40,10 @@ pub async fn main() -> eyre::Result<()> {
     info!("Version: {}", BUILD_INFO.version);
 
     let orb_id = OrbId::read().await?;
+    let platform = OrbOsRelease::read()
+        .await
+        .wrap_err("failed to determine Orb platform")?
+        .orb_os_platform_type;
     let config = config::Config::new(config::default_backend(), orb_id.as_str());
 
     let force_refresh_token = Arc::new(Notify::new());
@@ -45,14 +52,18 @@ pub async fn main() -> eyre::Result<()> {
         .await
         .wrap_err("Initialization failed")?;
 
-    // Determine which SE050 key set is active before starting the token loop.
-    let new_keys_active = startup_key_selection(
-        orb_id.as_str(),
-        &config.auth_url,
-        &config.keys_challenge_url,
-        &config.keys_proof_url,
-    )
-    .await;
+    // SE050 key migration is Diamond-only; Pearl uses legacy keys.
+    let new_keys_active = if platform == OrbOsPlatform::Pearl {
+        false
+    } else {
+        startup_key_selection(
+            orb_id.as_str(),
+            &config.auth_url,
+            &config.keys_challenge_url,
+            &config.keys_proof_url,
+        )
+        .await
+    };
 
     if new_keys_active {
         info!("using {MIGRATED_IRIS_CODE_PUBKEY} as a signup key");
