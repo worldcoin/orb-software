@@ -354,6 +354,29 @@ impl Challenge {
         })
     }
 
+    fn sign_with_recovery(&self, binary: &str) -> Result<Signature, SignError> {
+        let result = match self.sign_with_binary(binary) {
+            Err(SignError::NotProvisioned) => {
+                info!(binary, "SE050 is not provisioned, attempting recovery");
+                if let Err(error) = recover_se050_pub_key() {
+                    error!(%error, binary, "failed to recover SE050 keys");
+                    Err(SignError::NotProvisioned)
+                } else {
+                    info!(binary, "recovered SE050 keys, retrying signing");
+                    self.sign_with_binary(binary)
+                }
+            }
+            result => result,
+        };
+        handle_security_mcu_sign_result(&result);
+        result
+    }
+
+    #[tracing::instrument]
+    fn sign_with_migrated_key(&self) -> Result<Signature, SignError> {
+        self.sign_with_recovery("orb-sign-attestation-migrated")
+    }
+
     /// Try to sign the challenge using SE050. Could fail for multiple reasons,
     /// it is probably a good idea to retry signing.
     ///
@@ -361,17 +384,7 @@ impl Challenge {
     /// powercycle to recover the stuck SE050.
     #[tracing::instrument]
     pub fn sign(&self) -> Result<Signature, SignError> {
-        let result = self.sign_with_binary("orb-sign-attestation");
-        if matches!(&result, Err(SignError::NotProvisioned)) {
-            info!("SE050 is not provisioned, retry to recover it");
-            if let Err(error) = recover_se050_pub_key() {
-                error!(%error, "failed to recover SE050 keys");
-            } else {
-                info!("recovered SE050 keys");
-            }
-        }
-        handle_security_mcu_sign_result(&result);
-        result
+        self.sign_with_recovery("orb-sign-attestation")
     }
 }
 
@@ -760,25 +773,6 @@ struct ProofPayload {
     signature: String,
 }
 
-fn sign_with_migrated_key(challenge: &Challenge) -> Result<Signature, SignError> {
-    let result = match challenge.sign_with_binary("orb-sign-attestation-migrated") {
-        Err(SignError::NotProvisioned) => {
-            info!("SE050 is not provisioned, attempting recovery");
-
-            if let Err(error) = recover_se050_pub_key() {
-                error!(%error, "failed to recover SE050 keys");
-                Err(SignError::NotProvisioned)
-            } else {
-                info!("recovered SE050 keys, retrying signing");
-                challenge.sign_with_binary("orb-sign-attestation-migrated")
-            }
-        }
-        result => result,
-    };
-    handle_security_mcu_sign_result(&result);
-    result
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MigratedKeyProbe {
     Accepted,
@@ -877,7 +871,7 @@ async fn migrated_key_token_once(
             }
 
             let challenge = challenge.clone();
-            tokio::task::spawn_blocking(move || sign_with_migrated_key(&challenge))
+            tokio::task::spawn_blocking(move || challenge.sign_with_migrated_key())
                 .await
                 .map_err(RefreshTokenError::JoinError)?
                 .map_err(RefreshTokenError::SignError)
