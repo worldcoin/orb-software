@@ -22,7 +22,7 @@ orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-dogd.workspace = true
 orb-endpoints.workspace = true
-orb-info = { workspace = true, features = ["async", "orb-id"] }
+orb-info = { workspace = true, features = ["async", "orb-id", "orb-os-release"] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
 prelude = { workspace = true, features = ["connectivity"] }
