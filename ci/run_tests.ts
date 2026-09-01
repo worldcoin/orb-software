@@ -58,8 +58,13 @@ const main = async (): Promise<void> => {
   }
 
   if (supported.length === 0) {
+    console.log("No affected packages; skipping Nextest.");
     return;
   }
+
+  console.log(
+    "Testing packages: " + supported.map((crate) => crate.name).join(", "),
+  );
 
   const packageArgs = cargoPackageArgs(supported);
   await $`cargo nextest run --all-features --all-targets ${packageArgs}`;

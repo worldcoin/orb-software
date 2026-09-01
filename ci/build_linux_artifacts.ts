@@ -41,8 +41,13 @@ const main = async (): Promise<void> => {
   const crates = base === undefined ? await workspaceCrates() : await affectedCrates(base);
 
   if (crates.length === 0) {
+    console.log("No affected packages; skipping release build.");
     return;
   }
+
+  console.log(
+    "Building packages: " + crates.map((crate) => crate.name).join(", "),
+  );
 
   const packageArgs = base === undefined
     ? ["--workspace"]
