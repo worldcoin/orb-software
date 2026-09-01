@@ -128,6 +128,7 @@ in
         awscli2
         bacon # better cargo-watch
         black # Python autoformatter
+        bun
         buf # Protobuf workflow
         cargo-binutils # Contains common native development utilities
         cargo-deb # Generates .deb packages for orb-os

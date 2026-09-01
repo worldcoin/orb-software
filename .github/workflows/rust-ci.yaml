@@ -131,6 +131,7 @@ jobs:
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
           lfs: true
+          fetch-depth: 2
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
         with:
           github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
@@ -150,26 +151,8 @@ jobs:
           uname -a
           nix develop -c env
 
-      - name: Configure cargo to exclude platform-specific crates
-        run: |
-          crates="$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name')"
-          EXCLUDES=""
-          while IFS= read -r c; do
-            status=0
-            cargo x crate-supported "$c" >/dev/null || status=$?
-            if [[ $status -eq 1 ]]; then
-              EXCLUDES+="--exclude ${c} "
-            elif [[ $status -ne 0 ]]; then
-              echo "cargo x crate-supported failed unexpectedly for '${c}' (exit ${status})" >&2
-              exit 1
-            fi
-          done <<<"$crates"
-          echo EXCLUDES="${EXCLUDES}" >>${GITHUB_ENV}
-          cat ${GITHUB_ENV}
       - name: Cargo Nextest
-        run: |
-          nix develop -c \
-            cargo nextest run --workspace --all-features --all-targets $EXCLUDES
+        run: nix develop -c ci/run_tests.ts
 
   build:
     name: Build
@@ -179,6 +162,7 @@ jobs:
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
           lfs: true
+          fetch-depth: 2
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
         with:
           github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
@@ -198,46 +182,8 @@ jobs:
           uname -a
           nix develop -c env
 
-      - name: Choose cargo profile
-        run: |
-          set -Eeuxo pipefail
-          if [[ ${{ github.event_name }} == "pull_request" || ${{ github.event_name }} == "push" ]]; then
-            CI_PROFILE="release"
-          else
-            CI_PROFILE="artifact"
-          fi
-          echo CI_PROFILE=${CI_PROFILE} >>${GITHUB_ENV}
-      - name: Build linux artifacts
-        run: |
-          nix develop -c ci/rust_ci_helper.py \
-            build_linux_artifacts \
-            --out_dir artifacts_linux \
-            --cargo_profile ${CI_PROFILE}
-          ls -aRsh artifacts_linux
-
-      - name: Bundle artifacts
-        run: |
-          set -Eeuxo pipefail
-          mkdir artifacts_bundled
-          for b in artifacts_linux/*; do
-            b="$(basename ${b})"
-            # We make sure that the tarball is idempotent:
-            # https://stackoverflow.com/a/54908072
-            tar --sort=name --owner=root:0 --group=root:0 --mtime='@0' \
-              -vahcf artifacts_bundled/${b}.tar.zst -C artifacts_linux/${b} .
-          done
-          ls -aRsh artifacts_bundled
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
-        with:
-          # upload v4 doesn't support writing multiple times to the same artifact name.
-          # so its important that we name it after the workflow and not something
-          # general like "artifacts"
-          name: rust
-          path: artifacts_bundled
-          if-no-files-found: error
-          retention-days: 14
+      - name: Build Linux release
+        run: nix develop -c ci/build_linux_artifacts.ts
 
   cargo-deny:
     name: Cargo Deny
