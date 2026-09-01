@@ -274,11 +274,15 @@ pub fn run_apex(args: ApexArgs) -> Result<Vec<PathBuf>> {
 /// `android-deploy` needs no fields beyond [`BuildArgs`]'s.
 pub type DeployArgs = BuildArgs;
 
-/// Substring apexd's `adb install` prints when the device has never seen
-/// this APEX package before - `adb install`/`--force-non-staged` can only
-/// update a package already recorded as part of a built-in partition, see
-/// docs/src/android.md.
-const APEX_NEW_PACKAGE_MARKER: &str = "INSTALL_FAILED_PACKAGE_CHANGED";
+/// Substrings apexd's `adb install` prints when there's no active version of
+/// this package on the device to install over - either because it's never
+/// been seen before, or because a previous seed never activated. `adb
+/// install`/`--force-non-staged` can only update a package already active as
+/// part of a built-in partition, see docs/src/android.md.
+const APEX_NEW_PACKAGE_MARKERS: &[&str] = &[
+    "INSTALL_FAILED_PACKAGE_CHANGED",
+    "No active version found for package",
+];
 
 /// `adb wait-for-device` only waits for the adb transport to come back, not
 /// for Android itself to finish booting - installing right after it returns
@@ -356,7 +360,10 @@ pub fn run_deploy(args: DeployArgs) -> Result<()> {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        if !text.contains(APEX_NEW_PACKAGE_MARKER) {
+        if !APEX_NEW_PACKAGE_MARKERS
+            .iter()
+            .any(|marker| text.contains(marker))
+        {
             return Err(eyre!("adb install exited with {}: {text}", output.status));
         }
 
