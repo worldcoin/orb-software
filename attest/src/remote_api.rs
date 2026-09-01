@@ -1012,28 +1012,89 @@ pub async fn submit_proof(
 
 #[cfg(test)]
 mod test {
+    use std::ffi::OsString;
     use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use crate::client;
 
     use super::{
-        AttestedKeysForSigning, ChallengeError, KeyInfoForSigning, RefreshTokenError,
-        SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
+        try_token_with_migrated_key, AttestedKeysForSigning, ChallengeError,
+        KeyInfoForSigning, RefreshTokenError, SignError, MAX_TOKEN_DELAY,
+        MIN_TOKEN_DELAY,
     };
     use data_encoding::BASE64;
     use reqwest::StatusCode;
     use secrecy::ExposeSecret;
+    use serial_test::serial;
     use wiremock::{
         matchers::{method, path},
-        Mock, MockServer, ResponseTemplate,
+        Mock, MockServer, Request, ResponseTemplate,
     };
 
-    const MOCK_ORB_SIGN_ATTESTATION: &str = r#"#!/bin/sh
-printf dmFsaWRzaWduYXR1cmU=
-"#;
+    const MIGRATED_MOCK_SIGNATURE: &[u8] = b"migrated-signature";
+    const LEGACY_MOCK_SIGNATURE: &[u8] = b"legacy-signature";
+
+    struct MockSigner {
+        _temp_dir: tempfile::TempDir,
+        original_path: OsString,
+    }
+
+    impl Drop for MockSigner {
+        fn drop(&mut self) {
+            // SAFETY: tests that modify PATH are serialized with `#[serial]`.
+            unsafe {
+                std::env::set_var("PATH", &self.original_path);
+            }
+        }
+    }
+
+    fn install_mock_signer(binary_name: &str, signature: &[u8]) -> MockSigner {
+        let original_path = std::env::var_os("PATH").unwrap_or_default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script = temp_dir.path().join(binary_name);
+        let script_contents =
+            format!("#!/bin/sh\nprintf '%s' '{}'\n", BASE64.encode(signature));
+        std::fs::write(&script, script_contents).unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+
+        let paths = std::iter::once(PathBuf::from(temp_dir.path()))
+            .chain(std::env::split_paths(&original_path));
+        let path = std::env::join_paths(paths).unwrap();
+        // SAFETY: tests that modify PATH are serialized with `#[serial]`.
+        unsafe {
+            std::env::set_var("PATH", path);
+        }
+
+        MockSigner {
+            _temp_dir: temp_dir,
+            original_path,
+        }
+    }
+
+    async fn mount_transport_failure_once(
+        mock_server: &MockServer,
+        endpoint: &'static str,
+        error_kind: std::io::ErrorKind,
+        error_message: &'static str,
+    ) {
+        Mock::given(method("POST"))
+            .and(path(endpoint))
+            .respond_with_err(move |_: &Request| {
+                std::io::Error::new(error_kind, error_message)
+            })
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(mock_server)
+            .await;
+    }
+
     // A happy path
     #[tokio::test]
+    #[serial]
     async fn get_token() {
         let _ = orb_telemetry::TelemetryConfig::new().init();
 
@@ -1085,20 +1146,8 @@ printf dmFsaWRzaWduYXR1cmU=
 
         let clone_of_challenge = challenge.clone();
 
-        // Create a mock signing script orb-sign-attestation that returns pre-defined challenge and
-        // add it to PATH
-        let mut path = std::env::var("PATH").unwrap();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let script = temp_dir.path().join("orb-sign-attestation");
-        std::fs::write(&script, MOCK_ORB_SIGN_ATTESTATION).unwrap();
-        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
-            .unwrap();
-        path.push(':');
-        path.push_str(temp_dir.path().to_str().unwrap());
-        // TODO: Find a better way
-        unsafe {
-            std::env::set_var("PATH", path);
-        }
+        let _mock_signer =
+            install_mock_signer("orb-sign-attestation", LEGACY_MOCK_SIGNATURE);
 
         // 2. sign challenge
         let signature = tokio::task::spawn_blocking(move || clone_of_challenge.sign())
@@ -1122,6 +1171,148 @@ printf dmFsaWRzaWduYXR1cmU=
         .await
         .unwrap();
         assert_eq!(server_token, token.token.expose_secret());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn try_token_with_migrated_key_happy_path() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "challenge": BASE64.encode(challenge.as_ref()),
+                "duration": 3600,
+                "expiryTime": "is not used by client",
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({
+                    "token": "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                    "duration": 36000,
+                    "expiryTime": "is not used by client",
+                }),
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _mock_signer = install_mock_signer(
+            "orb-sign-attestation-migrated",
+            MIGRATED_MOCK_SIGNATURE,
+        );
+
+        assert!(try_token_with_migrated_key(orb_id, &auth_url).await);
+    }
+
+    /// Regression test for ORBS-1788.
+    ///
+    /// Transient transport failures while fetching the challenge or submitting
+    /// its migrated-key signature must not be interpreted as backend rejection.
+    /// This test is expected to fail until the migrated-key probe retries both
+    /// transport failures.
+    #[tokio::test]
+    #[serial]
+    async fn migrated_key_transport_failures_must_not_select_legacy_signer() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge_response = serde_json::json!({
+            "challenge": BASE64.encode(challenge.as_ref()),
+            "duration": 3600,
+            "expiryTime": "is not used by client",
+        });
+
+        mount_transport_failure_once(
+            &mock_server,
+            "/api/v1/tokenchallenge",
+            std::io::ErrorKind::ConnectionReset,
+            "simulated connection reset by peer",
+        )
+        .await;
+
+        // This response is consumed by the migrated-key retry once implemented.
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_response))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let received_signature = Arc::new(Mutex::new(None::<String>));
+        let received_signature_for_server = Arc::clone(&received_signature);
+        mount_transport_failure_once(
+            &mock_server,
+            "/api/v1/token",
+            std::io::ErrorKind::ConnectionAborted,
+            "simulated connection aborted while submitting signed challenge",
+        )
+        .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(move |request: &Request| {
+                let body: serde_json::Value = request
+                    .body_json()
+                    .expect("token request must contain valid JSON");
+                *received_signature_for_server.lock().unwrap() = body
+                    .get("signature")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned);
+
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "token": "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                    "duration": 36000,
+                    "expiryTime": "is not used by client",
+                }))
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _migrated_signer = install_mock_signer(
+            "orb-sign-attestation-migrated",
+            MIGRATED_MOCK_SIGNATURE,
+        );
+        let mut migrated_key_selected =
+            try_token_with_migrated_key(orb_id, &auth_url).await;
+
+        assert!(
+            migrated_key_selected,
+            "transient challenge/token transport failure selected legacy keys"
+        );
+
+        let received_signature = received_signature
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("backend did not receive a token request");
+        let expected_migrated_signature = BASE64.encode(MIGRATED_MOCK_SIGNATURE);
+        assert_eq!(
+            received_signature, expected_migrated_signature,
+            "backend did not receive the migrated-key signature"
+        );
     }
 
     #[test]
