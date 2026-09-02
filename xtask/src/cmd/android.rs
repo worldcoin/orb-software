@@ -60,7 +60,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 /// [`crate::cmd::apex::run_apex`], which needs a fresh build of the same
 /// target before staging APEX payloads.
 pub(crate) fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<Vec<Package>> {
-    build_with(md, args.pkg, args.release, &["build"])
+    build_with(md, args.pkg, args.release, &["build"], &[])
 }
 
 /// CLI args for `android-test` - same as [`BuildArgs`] minus `out_dir`,
@@ -83,7 +83,23 @@ pub struct TestArgs {
 /// which `android-build` alone can't see.
 pub fn run_build_test(args: TestArgs) -> Result<()> {
     let md = MetadataCommand::new().no_deps().exec()?;
-    build_with(&md, args.pkg, args.release, &["build", "--tests"]).map(|_| ())
+    build_with(&md, args.pkg, args.release, &["build", "--tests"], &[]).map(|_| ())
+}
+
+/// Lints for `aarch64-linux-android` via `cargo clippy --all-targets`, same
+/// deny-warnings policy as the host clippy CI job. Catches lint issues in
+/// target-specific modules (e.g. `orb_id_android.rs`) that the host-only
+/// clippy run never compiles.
+pub fn run_clippy(args: TestArgs) -> Result<()> {
+    let md = MetadataCommand::new().no_deps().exec()?;
+    build_with(
+        &md,
+        args.pkg,
+        args.release,
+        &["clippy", "--all-targets"],
+        &["-D", "warnings"],
+    )
+    .map(|_| ())
 }
 
 fn build_with(
@@ -91,6 +107,7 @@ fn build_with(
     pkg: Option<Package>,
     release: bool,
     subcmd: &[&str],
+    trailing_args: &[&str],
 ) -> Result<Vec<Package>> {
     let excludes = unsupported_packages(md, TARGET);
 
@@ -121,6 +138,11 @@ fn build_with(
                 .collect()
         }
     };
+
+    if !trailing_args.is_empty() {
+        cmd_args.push("--");
+        cmd_args.extend_from_slice(trailing_args);
+    }
 
     cmd(&cmd_args)?;
 

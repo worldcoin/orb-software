@@ -22,6 +22,8 @@ enum Cmd {
     AndroidBuild(android::BuildArgs),
     /// Compiles test binaries for `aarch64-linux-android`
     AndroidTest(android::TestArgs),
+    /// Lints for `aarch64-linux-android` via `cargo clippy`, denying warnings
+    AndroidClippy(android::TestArgs),
     /// Build Android payload(s) and package each into a `<crate>.apex`
     AndroidApex(apex::ApexArgs),
     /// Build Android payload(s) into `.apex`(es) same as `android-apex`, then `adb install` each onto the device.
@@ -69,6 +71,7 @@ fn main() -> Result<()> {
         }
         Cmd::AndroidBuild(args) => android::run_build(args),
         Cmd::AndroidTest(args) => android::run_build_test(args),
+        Cmd::AndroidClippy(args) => android::run_clippy(args),
         Cmd::AndroidApex(args) => {
             std::fs::create_dir_all(&args.out_dir)?;
             apex::run_apex(args).map(|_| ())
