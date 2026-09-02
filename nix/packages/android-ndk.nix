@@ -33,4 +33,18 @@ in
   cxx = "${llvmBin}/aarch64-linux-android${toString apiLevel}-clang++";
   ar = "${llvmBin}/llvm-ar";
   ranlib = "${llvmBin}/llvm-ranlib";
+
+  # libsodium cross-built for Android via nixpkgs' own NDK cross stdenv, so
+  # crates that need it via pkg-config (e.g. `alkali`'s `use-pkg-config`
+  # feature in `deps-tests`) can find it - libsodium-sys-stable's own vendored
+  # build script doesn't cross-compile.
+  libsodium = pkgs.pkgsCross.aarch64-android-prebuilt.libsodium;
+
+  # Same idea for OpenSSL - lets `openssl-sys` find it via pkg-config instead
+  # of building it from source itself (the `vendored` feature), which is slow
+  # on every clean build. `no-ktls` works around openssl's kernel-TLS code
+  # assuming glibc socket headers that Android's Bionic libc doesn't have.
+  openssl = pkgs.pkgsCross.aarch64-android-prebuilt.openssl.overrideAttrs (old: {
+    configureFlags = (old.configureFlags or [ ]) ++ [ "no-ktls" ];
+  });
 }
