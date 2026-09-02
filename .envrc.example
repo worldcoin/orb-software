@@ -1,4 +1,4 @@
-# VENDORED_SEEK_PATH=~/P/wc/seek-thermal-sdk
+# VENDORED_SEEK_PATH=path:~/P/wc/seek-thermal-sdk
 # use flake . --override-input seekSdk $VENDORED_SEEK_PATH
 use flake
 
