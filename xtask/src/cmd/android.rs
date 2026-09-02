@@ -59,11 +59,45 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 /// instead of shelling out to `cargo metadata` again - shared with
 /// [`crate::cmd::apex::run_apex`], which needs a fresh build of the same
 /// target before staging APEX payloads.
-pub(crate) fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<()> {
-    let BuildArgs { release, pkg } = args;
+pub(crate) fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<Vec<Package>> {
+    build_with(md, args.pkg, args.release, &["build"])
+}
+
+/// CLI args for `android-test` - same as [`BuildArgs`] minus `out_dir`,
+/// which only matters when packaging an APEX.
+#[derive(ClapArgs, Debug, Clone)]
+pub struct TestArgs {
+    /// Crate to build. If omitted, applies to every Android-supported crate
+    /// in the workspace.
+    #[arg(value_parser = parse_package)]
+    pub pkg: Option<Package>,
+    /// Build in release mode.
+    #[arg(long)]
+    pub release: bool,
+}
+
+/// Compiles (but doesn't run - there's no Android device/emulator here)
+/// each crate's test binaries for Android via `cargo build --tests`. Catches
+/// API mismatches between target-specific modules (e.g.
+/// `orb_id_linux.rs`/`orb_id_android.rs`) that only show up in test code,
+/// which `android-build` alone can't see.
+pub fn run_build_test(args: TestArgs) -> Result<()> {
+    let md = MetadataCommand::new().no_deps().exec()?;
+    build_with(&md, args.pkg, args.release, &["build", "--tests"]).map(|_| ())
+}
+
+fn build_with(
+    md: &Metadata,
+    pkg: Option<Package>,
+    release: bool,
+    subcmd: &[&str],
+) -> Result<Vec<Package>> {
     let excludes = unsupported_packages(md, TARGET);
 
-    let mut cmd_args = vec!["cargo", "build", "--target", TARGET];
+    let mut cmd_args = vec!["cargo"];
+    cmd_args.extend_from_slice(subcmd);
+    cmd_args.push("--target");
+    cmd_args.push(TARGET);
     if release {
         cmd_args.push("--release");
     }

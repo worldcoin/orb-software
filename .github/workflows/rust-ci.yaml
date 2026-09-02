@@ -278,6 +278,11 @@ jobs:
           nix develop -c \
             cargo x android-apex
 
+      - name: Build Android test binaries
+        run: |
+          nix develop -c \
+            cargo x android-test
+
       - name: Upload APEX artifacts
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
         with:
