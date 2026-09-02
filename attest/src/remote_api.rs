@@ -211,6 +211,26 @@ fn recover_se050_pub_key() -> std::io::Result<()> {
     Ok(())
 }
 
+fn handle_security_mcu_sign_result(result: &Result<Signature, SignError>) {
+    match result {
+        Err(error) if error.requires_security_mcu_cooldown() => {
+            let mut failures = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
+            *failures += 1;
+            if *failures == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
+                if let Err(error) = powercycle_security_mcu() {
+                    error!(%error, "failed to powercycle Security MCU");
+                } else {
+                    info!("powercycled Security MCU to reset stuck SE050");
+                }
+            }
+        }
+        Ok(_) => {
+            *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = Saturating(0);
+        }
+        _ => {}
+    }
+}
+
 #[serde_as]
 #[derive(Deserialize, Clone)]
 #[allow(dead_code)]
@@ -334,6 +354,29 @@ impl Challenge {
         })
     }
 
+    fn sign_with_recovery(&self, binary: &str) -> Result<Signature, SignError> {
+        let result = match self.sign_with_binary(binary) {
+            Err(SignError::NotProvisioned) => {
+                info!(binary, "SE050 is not provisioned, attempting recovery");
+                if let Err(error) = recover_se050_pub_key() {
+                    error!(%error, binary, "failed to recover SE050 keys");
+                    Err(SignError::NotProvisioned)
+                } else {
+                    info!(binary, "recovered SE050 keys, retrying signing");
+                    self.sign_with_binary(binary)
+                }
+            }
+            result => result,
+        };
+        handle_security_mcu_sign_result(&result);
+        result
+    }
+
+    #[tracing::instrument]
+    fn sign_with_migrated_key(&self) -> Result<Signature, SignError> {
+        self.sign_with_recovery("orb-sign-attestation-migrated")
+    }
+
     /// Try to sign the challenge using SE050. Could fail for multiple reasons,
     /// it is probably a good idea to retry signing.
     ///
@@ -341,34 +384,7 @@ impl Challenge {
     /// powercycle to recover the stuck SE050.
     #[tracing::instrument]
     pub fn sign(&self) -> Result<Signature, SignError> {
-        let result = self.sign_with_binary("orb-sign-attestation");
-        match &result {
-            Err(SignError::NotProvisioned) => {
-                info!("SE050 is not provisioned, retry to recover it");
-                if let Err(err) = recover_se050_pub_key() {
-                    error!("Failed to recover SE050 keys: {err}")
-                } else {
-                    info!("Recovered SE050 keys");
-                }
-            }
-
-            Err(e) if e.requires_security_mcu_cooldown() => {
-                let mut lock = SIGNING_FAILURE_ERROR_COUNT.write().unwrap();
-                *lock += 1;
-                if *lock == SIGNING_FAILURE_ERROR_COUNT_THRESHOLD {
-                    if let Err(err) = powercycle_security_mcu() {
-                        error!("Failed to powercycle Security MCU: {err}")
-                    } else {
-                        info!("Powercycled Security MCU, trying to reset stuck se050.");
-                    }
-                }
-            }
-            Ok(_) => {
-                *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = Saturating(0);
-            }
-            _ => {}
-        }
-        result
+        self.sign_with_recovery("orb-sign-attestation")
     }
 }
 
@@ -757,82 +773,190 @@ struct ProofPayload {
     signature: String,
 }
 
-fn sign_with_migrated_key(challenge: &Challenge) -> Result<Signature, SignError> {
-    match challenge.sign_with_binary("orb-sign-attestation-migrated") {
-        Err(SignError::NotProvisioned) => {
-            info!("SE050 is not provisioned, attempting recovery");
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MigratedKeyProbe {
+    Accepted,
+    BackendRejected,
+    Inconclusive,
+}
 
-            if let Err(err) = recover_se050_pub_key() {
-                error!("Failed to recover SE050 keys: {err}");
-                return Err(SignError::NotProvisioned);
-            }
+#[cfg(not(test))]
+const MIGRATED_KEY_RETRY_DELAY: time::Duration = MIN_TOKEN_DELAY;
+#[cfg(test)]
+const MIGRATED_KEY_RETRY_DELAY: time::Duration = time::Duration::ZERO;
 
-            info!("Recovered SE050 keys, retrying signing");
-            challenge.sign_with_binary("orb-sign-attestation-migrated")
+fn is_retryable_backend_status(status: reqwest::StatusCode) -> bool {
+    status.is_server_error()
+        || matches!(
+            status,
+            reqwest::StatusCode::REQUEST_TIMEOUT
+                | reqwest::StatusCode::TOO_EARLY
+                | reqwest::StatusCode::TOO_MANY_REQUESTS
+        )
+}
+
+fn is_backend_communication_error(error: &RefreshTokenError) -> bool {
+    match error {
+        RefreshTokenError::ChallengeError(
+            ChallengeError::PostFailed(_) | ChallengeError::JsonParseFailed(_),
+        )
+        | RefreshTokenError::ChallengeExpired
+        | RefreshTokenError::TokenError(
+            TokenError::PostFailed(_)
+            | TokenError::JsonParseFailed(_)
+            | TokenError::EmptyResponse,
+        ) => true,
+        RefreshTokenError::ChallengeError(ChallengeError::ServerReturnedError(
+            status,
+            _,
+        ))
+        | RefreshTokenError::TokenError(TokenError::ServerReturnedError(status, _))
+            if is_retryable_backend_status(*status) =>
+        {
+            true
         }
-        result => result,
+        _ => false,
     }
 }
 
-/// Verify that the **backend** accepts the migrated SE050 key set for token
-/// issuance by performing a full challenge → sign (migrated) → token
-/// round-trip.
+fn is_backend_rejection(error: &RefreshTokenError) -> bool {
+    matches!(
+        error,
+        RefreshTokenError::TokenError(TokenError::ServerReturnedError(
+            reqwest::StatusCode::FORBIDDEN,
+            _
+        ))
+    )
+}
+
+fn is_se050_communication_error(error: &RefreshTokenError) -> bool {
+    matches!(
+        error,
+        RefreshTokenError::SignError(error)
+            if error.requires_security_mcu_cooldown()
+    )
+}
+
+async fn wait_before_migrated_key_retry(
+    error: &RefreshTokenError,
+    failure_class: &'static str,
+    delay: time::Duration,
+) {
+    warn!(
+        failure_class,
+        retry_delay_seconds = delay.as_secs(),
+        error = %error,
+        "migrated key probe failed; retrying"
+    );
+    sleep(delay).await;
+}
+
+async fn migrated_key_token_once(
+    orb_id: &str,
+    tokenchallenge_url: &Url,
+    token_url: &Url,
+) -> Result<Token, RefreshTokenError> {
+    let client = client::create();
+    let challenge = Challenge::request(&client, orb_id, tokenchallenge_url)
+        .await
+        .map_err(RefreshTokenError::ChallengeError)?;
+
+    let signature = retry(
+        NUMBER_OF_SIGNINIG_RETRIES,
+        MIGRATED_KEY_RETRY_DELAY,
+        "sign challenge with migrated key",
+        || async {
+            if challenge.expired() {
+                return Err(RefreshTokenError::ChallengeExpired);
+            }
+
+            let challenge = challenge.clone();
+            tokio::task::spawn_blocking(move || challenge.sign_with_migrated_key())
+                .await
+                .map_err(RefreshTokenError::JoinError)?
+                .map_err(RefreshTokenError::SignError)
+        },
+    )
+    .await?;
+
+    if challenge.expired() {
+        return Err(RefreshTokenError::ChallengeExpired);
+    }
+
+    Token::request(&client, token_url, orb_id, &challenge, &signature)
+        .await
+        .map_err(RefreshTokenError::TokenError)
+}
+
+/// Checks whether the backend accepts tokens signed with the migrated key.
 ///
-/// Returns `true` only if the backend returns a valid token. A `false` result
-/// may mean the backend hasn't registered the migrated key yet (proof not yet
-/// submitted or not yet processed), or that the SE050 hardware doesn't have
-/// the migrated key at all.
-///
-/// Does NOT update `SIGNING_FAILURE_ERROR_COUNT` or trigger an MCU powercycle.
+/// Communication failures are retried until the probe reaches the backend.
 #[tracing::instrument]
-pub async fn try_token_with_migrated_key(orb_id: &str, auth_url: &Url) -> bool {
+pub(crate) async fn try_token_with_migrated_key(
+    orb_id: &str,
+    auth_url: &Url,
+) -> MigratedKeyProbe {
     let tokenchallenge_url = match auth_url.join("tokenchallenge") {
-        Ok(u) => u,
-        Err(e) => {
-            warn!("migrated key probe: failed to build challenge URL: {e}");
-            return false;
+        Ok(url) => url,
+        Err(error) => {
+            warn!(%error, "migrated key probe failed to build challenge URL");
+            return MigratedKeyProbe::Inconclusive;
         }
     };
     let token_url = match auth_url.join("token") {
-        Ok(u) => u,
-        Err(e) => {
-            warn!("migrated key probe: failed to build token URL: {e}");
-            return false;
+        Ok(url) => url,
+        Err(error) => {
+            warn!(%error, "migrated key probe failed to build token URL");
+            return MigratedKeyProbe::Inconclusive;
         }
     };
 
-    let client = client::create();
-    let challenge = match Challenge::request(&client, orb_id, &tokenchallenge_url).await
-    {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("migrated key probe: challenge request failed: {e}");
-            return false;
-        }
-    };
+    let mut inconclusive_attempt = 0;
+    let mut retry_delay = MIGRATED_KEY_RETRY_DELAY;
 
-    let challenge_clone = challenge.clone();
-    let sig = match tokio::task::spawn_blocking(move || {
-        sign_with_migrated_key(&challenge_clone)
-    })
-    .await
-    {
-        Ok(Ok(sig)) => sig,
-        Ok(Err(e)) => {
-            warn!("migrated key probe: signing failed: {e}");
-            return false;
-        }
-        Err(e) => {
-            warn!("migrated key probe: spawn_blocking panicked: {e}");
-            return false;
-        }
-    };
+    loop {
+        match migrated_key_token_once(orb_id, &tokenchallenge_url, &token_url).await {
+            Ok(_) => return MigratedKeyProbe::Accepted,
+            Err(error) => {
+                if is_backend_rejection(&error) {
+                    return MigratedKeyProbe::BackendRejected;
+                }
 
-    match Token::request(&client, &token_url, orb_id, &challenge, &sig).await {
-        Ok(_) => true,
-        Err(e) => {
-            warn!("migrated key probe: token request failed (backend not yet activated): {e}");
-            false
+                if is_backend_communication_error(&error) {
+                    retry_delay = MIGRATED_KEY_RETRY_DELAY;
+                    wait_before_migrated_key_retry(
+                        &error,
+                        "backend_communication",
+                        retry_delay,
+                    )
+                    .await;
+                } else if is_se050_communication_error(&error) {
+                    // A communication failure only means the SE050 was temporarily unreachable.
+                    // Keep trying the migrated key; only a backend 403 selects the legacy key.
+                    wait_before_migrated_key_retry(
+                        &error,
+                        "se050_communication",
+                        MIGRATED_KEY_RETRY_DELAY,
+                    )
+                    .await;
+                } else {
+                    // Retry unknown failures for three full challenge/sign batches, then return
+                    // inconclusive so startup falls back to the legacy key.
+                    inconclusive_attempt += 1;
+                    if inconclusive_attempt >= NUMBER_OF_SIGNINIG_RETRIES {
+                        warn!(
+                            failure_class = "inconclusive",
+                            attempt = inconclusive_attempt,
+                            error = %error,
+                            "migrated key probe could not determine key state"
+                        );
+                        return MigratedKeyProbe::Inconclusive;
+                    }
+                    wait_before_migrated_key_retry(&error, "inconclusive", retry_delay)
+                        .await;
+                    retry_delay = (retry_delay * 2).min(MAX_TOKEN_DELAY);
+                }
+            }
         }
     }
 }
@@ -1012,28 +1136,127 @@ pub async fn submit_proof(
 
 #[cfg(test)]
 mod test {
+    use std::ffi::OsString;
     use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
     use std::time::Duration;
 
     use crate::client;
 
     use super::{
-        AttestedKeysForSigning, ChallengeError, KeyInfoForSigning, RefreshTokenError,
-        SignError, MAX_TOKEN_DELAY, MIN_TOKEN_DELAY,
+        try_token_with_migrated_key, AttestedKeysForSigning, ChallengeError,
+        KeyInfoForSigning, MigratedKeyProbe, RefreshTokenError, SignError,
+        MAX_TOKEN_DELAY, MIN_TOKEN_DELAY, SIGNING_FAILURE_ERROR_COUNT,
     };
     use data_encoding::BASE64;
     use reqwest::StatusCode;
     use secrecy::ExposeSecret;
+    use serial_test::serial;
     use wiremock::{
         matchers::{method, path},
-        Mock, MockServer, ResponseTemplate,
+        Mock, MockServer, Request, ResponseTemplate,
     };
 
-    const MOCK_ORB_SIGN_ATTESTATION: &str = r#"#!/bin/sh
-printf dmFsaWRzaWduYXR1cmU=
-"#;
+    const MIGRATED_MOCK_SIGNATURE: &[u8] = b"migrated-signature";
+    const LEGACY_MOCK_SIGNATURE: &[u8] = b"legacy-signature";
+
+    struct MockSigner {
+        _temp_dir: tempfile::TempDir,
+        original_path: OsString,
+    }
+
+    impl Drop for MockSigner {
+        fn drop(&mut self) {
+            // SAFETY: tests that modify PATH are serialized with `#[serial]`.
+            unsafe {
+                std::env::set_var("PATH", &self.original_path);
+            }
+        }
+    }
+
+    fn install_mock_signer(binary_name: &str, signature: &[u8]) -> MockSigner {
+        let original_path = std::env::var_os("PATH").unwrap_or_default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script = temp_dir.path().join(binary_name);
+        let script_contents =
+            format!("#!/bin/sh\nprintf '%s' '{}'\n", BASE64.encode(signature));
+        std::fs::write(&script, script_contents).unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+
+        let paths = std::iter::once(PathBuf::from(temp_dir.path()))
+            .chain(std::env::split_paths(&original_path));
+        let path = std::env::join_paths(paths).unwrap();
+        // SAFETY: tests that modify PATH are serialized with `#[serial]`.
+        unsafe {
+            std::env::set_var("PATH", path);
+        }
+
+        MockSigner {
+            _temp_dir: temp_dir,
+            original_path,
+        }
+    }
+
+    fn install_mock_signer_with_failures(
+        binary_name: &str,
+        exit_codes: &[i32],
+        signature: &[u8],
+    ) -> MockSigner {
+        let original_path = std::env::var_os("PATH").unwrap_or_default();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script = temp_dir.path().join(binary_name);
+        let mut script_contents = String::from("#!/bin/sh\n");
+
+        for (index, exit_code) in exit_codes.iter().enumerate() {
+            let marker = temp_dir.path().join(format!("attempt-{index}"));
+            script_contents.push_str(&format!(
+                "if [ ! -f '{}' ]; then touch '{}'; exit {exit_code}; fi\n",
+                marker.display(),
+                marker.display()
+            ));
+        }
+        script_contents
+            .push_str(&format!("printf '%s' '{}'\n", BASE64.encode(signature)));
+
+        std::fs::write(&script, script_contents).unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+
+        let paths = std::iter::once(PathBuf::from(temp_dir.path()))
+            .chain(std::env::split_paths(&original_path));
+        let path = std::env::join_paths(paths).unwrap();
+        // SAFETY: tests that modify PATH are serialized with `#[serial]`.
+        unsafe {
+            std::env::set_var("PATH", path);
+        }
+
+        MockSigner {
+            _temp_dir: temp_dir,
+            original_path,
+        }
+    }
+
+    async fn mount_transport_failure_once(
+        mock_server: &MockServer,
+        endpoint: &'static str,
+        error_kind: std::io::ErrorKind,
+        error_message: &'static str,
+    ) {
+        Mock::given(method("POST"))
+            .and(path(endpoint))
+            .respond_with_err(move |_: &Request| {
+                std::io::Error::new(error_kind, error_message)
+            })
+            .up_to_n_times(1)
+            .expect(1)
+            .mount(mock_server)
+            .await;
+    }
+
     // A happy path
     #[tokio::test]
+    #[serial]
     async fn get_token() {
         let _ = orb_telemetry::TelemetryConfig::new().init();
 
@@ -1085,20 +1308,8 @@ printf dmFsaWRzaWduYXR1cmU=
 
         let clone_of_challenge = challenge.clone();
 
-        // Create a mock signing script orb-sign-attestation that returns pre-defined challenge and
-        // add it to PATH
-        let mut path = std::env::var("PATH").unwrap();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let script = temp_dir.path().join("orb-sign-attestation");
-        std::fs::write(&script, MOCK_ORB_SIGN_ATTESTATION).unwrap();
-        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755))
-            .unwrap();
-        path.push(':');
-        path.push_str(temp_dir.path().to_str().unwrap());
-        // TODO: Find a better way
-        unsafe {
-            std::env::set_var("PATH", path);
-        }
+        let _mock_signer =
+            install_mock_signer("orb-sign-attestation", LEGACY_MOCK_SIGNATURE);
 
         // 2. sign challenge
         let signature = tokio::task::spawn_blocking(move || clone_of_challenge.sign())
@@ -1122,6 +1333,305 @@ printf dmFsaWRzaWduYXR1cmU=
         .await
         .unwrap();
         assert_eq!(server_token, token.token.expose_secret());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn try_token_with_migrated_key_happy_path() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "challenge": BASE64.encode(challenge.as_ref()),
+                "duration": 3600,
+                "expiryTime": "is not used by client",
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({
+                    "token": "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                    "duration": 36000,
+                    "expiryTime": "is not used by client",
+                }),
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _mock_signer = install_mock_signer(
+            "orb-sign-attestation-migrated",
+            MIGRATED_MOCK_SIGNATURE,
+        );
+
+        assert_eq!(
+            try_token_with_migrated_key(orb_id, &auth_url).await,
+            MigratedKeyProbe::Accepted
+        );
+    }
+
+    /// Regression test for ORBS-1788.
+    ///
+    /// Transient transport failures while fetching the challenge or submitting
+    /// its migrated-key signature must not be interpreted as backend rejection.
+    /// This test is expected to fail until the migrated-key probe retries both
+    /// transport failures.
+    #[tokio::test]
+    #[serial]
+    async fn migrated_key_transport_failures_must_not_select_legacy_signer() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let challenge_response = serde_json::json!({
+            "challenge": BASE64.encode(challenge.as_ref()),
+            "duration": 3600,
+            "expiryTime": "is not used by client",
+        });
+
+        mount_transport_failure_once(
+            &mock_server,
+            "/api/v1/tokenchallenge",
+            std::io::ErrorKind::ConnectionReset,
+            "simulated connection reset by peer",
+        )
+        .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(challenge_response))
+            .expect(2)
+            .mount(&mock_server)
+            .await;
+
+        mount_transport_failure_once(
+            &mock_server,
+            "/api/v1/token",
+            std::io::ErrorKind::ConnectionAborted,
+            "simulated connection aborted while submitting signed challenge",
+        )
+        .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(move |request: &Request| {
+                let body: serde_json::Value = request
+                    .body_json()
+                    .expect("token request must contain valid JSON");
+                let signature = body
+                    .get("signature")
+                    .and_then(serde_json::Value::as_str)
+                    .expect("token request must contain a signature");
+
+                if signature != BASE64.encode(MIGRATED_MOCK_SIGNATURE) {
+                    return ResponseTemplate::new(403);
+                }
+
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "token": "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                    "duration": 36000,
+                    "expiryTime": "is not used by client",
+                }))
+            })
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _migrated_signer = install_mock_signer(
+            "orb-sign-attestation-migrated",
+            MIGRATED_MOCK_SIGNATURE,
+        );
+        let migrated_key_probe = try_token_with_migrated_key(orb_id, &auth_url).await;
+
+        assert_eq!(
+            migrated_key_probe,
+            MigratedKeyProbe::Accepted,
+            "transient transport failures selected legacy keys"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn token_forbidden_definitively_rejects_migrated_key() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "challenge": BASE64.encode(challenge.as_ref()),
+                "duration": 3600,
+                "expiryTime": "is not used by client",
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(ResponseTemplate::new(403))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _migrated_signer = install_mock_signer(
+            "orb-sign-attestation-migrated",
+            MIGRATED_MOCK_SIGNATURE,
+        );
+
+        assert_eq!(
+            try_token_with_migrated_key(orb_id, &auth_url).await,
+            MigratedKeyProbe::BackendRejected
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn se050_communication_failures_retry_until_migrated_key_works() {
+        *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = std::num::Saturating(0);
+
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "challenge": BASE64.encode(challenge.as_ref()),
+                "duration": 3600,
+                "expiryTime": "is not used by client",
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({
+                    "token": "token_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+                    "duration": 36000,
+                    "expiryTime": "is not used by client",
+                }),
+            ))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _migrated_signer = install_mock_signer_with_failures(
+            "orb-sign-attestation-migrated",
+            &[7, 2],
+            MIGRATED_MOCK_SIGNATURE,
+        );
+
+        assert_eq!(
+            try_token_with_migrated_key(orb_id, &auth_url).await,
+            MigratedKeyProbe::Accepted
+        );
+        assert_eq!(
+            *SIGNING_FAILURE_ERROR_COUNT.read().unwrap(),
+            std::num::Saturating(0)
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn non_communication_se050_failures_are_bounded() {
+        let mock_server = MockServer::start().await;
+        let orb_id = "TEST_ORB";
+        let challenge =
+            "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/tokenchallenge"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "challenge": BASE64.encode(challenge.as_ref()),
+                "duration": 3600,
+                "expiryTime": "is not used by client",
+            })))
+            .expect(3)
+            .mount(&mock_server)
+            .await;
+
+        let auth_url = mock_server
+            .uri()
+            .parse::<url::Url>()
+            .unwrap()
+            .join("/api/v1/")
+            .unwrap();
+        let _migrated_signer = install_mock_signer_with_failures(
+            "orb-sign-attestation-migrated",
+            &[3; 9],
+            MIGRATED_MOCK_SIGNATURE,
+        );
+
+        assert_eq!(
+            try_token_with_migrated_key(orb_id, &auth_url).await,
+            MigratedKeyProbe::Inconclusive
+        );
+    }
+
+    #[test]
+    fn security_mcu_cooldown_errors_are_classified() {
+        for error in [
+            SignError::SignFailed,
+            SignError::Timeout,
+            SignError::CommunicationError,
+        ] {
+            assert!(error.requires_security_mcu_cooldown());
+        }
+
+        assert!(!SignError::NotProvisioned.requires_security_mcu_cooldown());
+    }
+
+    #[test]
+    fn backend_retry_statuses_are_not_key_rejections() {
+        for status in [
+            StatusCode::REQUEST_TIMEOUT,
+            StatusCode::TOO_EARLY,
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ] {
+            assert!(super::is_retryable_backend_status(status));
+        }
+
+        assert!(!super::is_retryable_backend_status(StatusCode::BAD_REQUEST));
+        assert!(!super::is_retryable_backend_status(StatusCode::FORBIDDEN));
     }
 
     #[test]

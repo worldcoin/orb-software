@@ -22,7 +22,7 @@ orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-dogd.workspace = true
 orb-endpoints.workspace = true
-orb-info = { workspace = true, features = ["async", "orb-id"] }
+orb-info = { workspace = true, features = ["async", "orb-id", "orb-os-release"] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
 prelude = { workspace = true, features = ["connectivity"] }
@@ -40,7 +40,6 @@ tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
 zenorb.workspace = true
-zbus_systemd = { workspace = true, features = ["systemd1"], optional = true }
 tempfile = "3.3"
 
 [build-dependencies]
@@ -57,4 +56,4 @@ systemd-units = [{ unit-name = "worldcoin-attest" }]
 
 [features]
 default = ["se050_key_migration"]
-se050_key_migration = ["dep:zbus_systemd"]
+se050_key_migration = []
