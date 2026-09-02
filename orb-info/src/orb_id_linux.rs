@@ -190,6 +190,11 @@ impl OrbId {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
+pub fn test_orb_id() -> OrbId {
+    "88888888".parse().unwrap()
+}
+
 impl From<OrbIdShort> for OrbId {
     fn from(value: OrbIdShort) -> Self {
         Self::Short(value)

@@ -1,4 +1,9 @@
-#[cfg(feature = "orb-id")]
+#[cfg(all(
+    feature = "orb-id",
+    not(any(target_os = "linux", target_os = "android"))
+))]
+compile_error!("`orb-id` feature is only supported on Linux and Android");
+
 #[cfg_attr(target_os = "linux", path = "orb_id_linux.rs")]
 #[cfg_attr(target_os = "android", path = "orb_id_android.rs")]
 pub mod orb_id;
