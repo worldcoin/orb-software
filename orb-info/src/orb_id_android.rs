@@ -8,7 +8,7 @@ use std::future;
 )]
 pub struct OrbId(pub(crate) u32);
 
-pub(crate) const UNKNOWN: OrbId = OrbId(4293702198);
+pub(crate) const UNKNOWN: OrbId = OrbId(2402075646);
 
 // Serialize/deserialize as a string, matching orb_id_linux's `OrbId` and the
 // backend API, which expects `orbId` to be a string on every platform.

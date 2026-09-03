@@ -65,7 +65,7 @@ impl OrbName {
 
     /// Sentinel value for when the real orb-name couldn't be read.
     pub fn unknown() -> Self {
-        Self(String::from("unknown"))
+        Self(String::from("NO_ORB_NAME"))
     }
 }
 
