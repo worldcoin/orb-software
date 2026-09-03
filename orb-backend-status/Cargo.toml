@@ -58,6 +58,7 @@ zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zenorb.workspace = true
 
 [dev-dependencies]
+orb-info = { workspace = true, features = ["testing"] }
 orb-security-utils = { workspace = true, features = [
 	"reqwest",
 	"dangerously-allow-http",

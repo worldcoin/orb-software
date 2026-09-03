@@ -1,7 +1,6 @@
 use eyre::{self, bail};
 use orb_endpoints::{v1, v2, Backend};
 use orb_info::OrbId;
-use std::str::FromStr;
 
 pub struct Config {
     pub auth_url: url::Url,
@@ -12,16 +11,10 @@ pub struct Config {
 
 impl Config {
     /// Create a new config for the given `backend` and `orb_id`.
-    ///
-    /// # Panics
-    ///  - If failed to parse the `orb_id`
     #[must_use]
-    pub fn new(backend: Backend, orb_id: &str) -> Self {
-        // Parse the orb_id string into an OrbId
-        let orb_id = OrbId::from_str(orb_id).expect("Invalid orb_id format");
-
-        let v1 = v1::Endpoints::new(backend, &orb_id);
-        let v2 = v2::Endpoints::new(backend, &orb_id);
+    pub fn new(backend: Backend, orb_id: &OrbId) -> Self {
+        let v1 = v1::Endpoints::new(backend, orb_id);
+        let v2 = v2::Endpoints::new(backend, orb_id);
 
         Config {
             auth_url: v1.auth,

@@ -17,7 +17,7 @@ pub struct Receiver<'a, Ctx>
 where
     Ctx: 'static + Clone + Send,
 {
-    orb_id: &'a str,
+    orb_id: &'a OrbId,
     service_name: &'a str,
     session: &'a zenoh::Session,
     ctx: Ctx,
@@ -42,7 +42,7 @@ where
         ctx: Ctx,
     ) -> Self {
         Self {
-            orb_id: orb_id.as_str(),
+            orb_id,
             service_name,
             session,
             ctx,
