@@ -51,6 +51,7 @@ tempfile = "3.3"
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
+orb-info = { workspace = true, features = ["testing"] }
 serial_test = "2.0"
 wiremock = "0.6"
 
