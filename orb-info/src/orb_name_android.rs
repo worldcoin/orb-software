@@ -91,6 +91,11 @@ impl Display for OrbName {
     }
 }
 
+#[cfg(any(test, feature = "testing"))]
+pub fn test_orb_name() -> OrbName {
+    OrbName(orb_id::test_orb_id())
+}
+
 #[cfg(feature = "serde")]
 impl serde::Serialize for OrbName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
