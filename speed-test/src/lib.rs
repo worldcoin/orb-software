@@ -3,6 +3,7 @@ use color_eyre::eyre::{Context, Result};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use orb_attest_dbus::AuthTokenManagerProxy;
+use orb_info::orb_id::OrbId;
 use orb_info::orb_os_release::OrbRelease;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
@@ -83,7 +84,7 @@ struct PresignedUrlResponse {
 #[derive(Debug, Serialize)]
 struct PackageRequest<'a> {
     #[serde(rename = "OrbID")]
-    orb_id: &'a str,
+    orb_id: &'a OrbId,
     #[serde(rename = "SessionId")]
     session_id: &'a str,
     #[serde(rename = "Checksum")]
@@ -210,15 +211,10 @@ pub async fn run_pcp_speed_test(
     let mut total_duration_ms = 0u64;
 
     for _ in 0..num_uploads {
-        let presigned_response = request_presigned_url(
-            orb_id.as_str(),
-            &session_id,
-            &checksum,
-            &token,
-            release_type,
-        )
-        .await
-        .context("Failed to request presigned URL")?;
+        let presigned_response =
+            request_presigned_url(orb_id, &session_id, &checksum, &token, release_type)
+                .await
+                .context("Failed to request presigned URL")?;
 
         let elapsed = upload_to_presigned_url(
             &presigned_response.url,
@@ -310,7 +306,7 @@ fn create_mock_pcp_targz(target_size: usize) -> Result<Vec<u8>> {
 }
 
 async fn request_presigned_url(
-    orb_id: &str,
+    orb_id: &OrbId,
     session_id: &str,
     checksum: &str,
     token: &str,
