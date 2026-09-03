@@ -15,6 +15,7 @@ pub enum ReadErr {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OrbName(pub String);
 
 impl OrbName {
@@ -50,6 +51,27 @@ impl OrbName {
     pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
+
+    /// Read the orb-name, if fail return the sentinel value from [`OrbName::unknown`].
+    #[cfg(feature = "async")]
+    pub async fn read_unfallable() -> Self {
+        Self::read().await.unwrap_or_else(|_| Self::unknown())
+    }
+
+    /// Read the orb-name, if fail return the sentinel value from [`OrbName::unknown`].
+    pub fn read_blocking_unfallable() -> Self {
+        Self::read_blocking().unwrap_or_else(|_| Self::unknown())
+    }
+
+    /// Sentinel value for when the real orb-name couldn't be read.
+    pub fn unknown() -> Self {
+        Self(String::from("unknown"))
+    }
+}
+
+#[cfg(any(test, feature = "testing"))]
+pub fn test_orb_name() -> OrbName {
+    OrbName("test-orb-name".into())
 }
 
 impl FromStr for OrbName {
