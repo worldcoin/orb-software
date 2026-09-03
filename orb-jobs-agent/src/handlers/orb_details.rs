@@ -6,16 +6,14 @@ use orb_relay_messages::jobs::v1::JobExecutionUpdate;
 /// command format: `orb_details`
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
-    let orb_name = OrbName::read()
-        .await
-        .unwrap_or(OrbName("NO_ORB_NAME".to_string()));
+    let orb_name = OrbName::read_unfallable().await;
 
     let jabil_id = OrbJabilId::read()
         .await
         .unwrap_or(OrbJabilId("NO_JABIL_ID".to_string()));
 
     let details = serde_json::json!({
-        "orb_name": orb_name.to_string(),
+        "orb_name": orb_name,
         "jabil_id": jabil_id.to_string(),
     });
 

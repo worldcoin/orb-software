@@ -168,6 +168,22 @@ impl OrbId {
         Ok(Self::from_str(&id).unwrap())
     }
 
+    /// Read the orb-id, if fail return the sentinel value from [`OrbId::unknown`].
+    #[cfg(feature = "async")]
+    pub async fn read_unfallable() -> Self {
+        Self::read().await.unwrap_or_else(|_| Self::unknown())
+    }
+
+    /// Read the orb-id, if fail return the sentinel value from [`OrbId::unknown`].
+    pub fn read_blocking_unfallable() -> Self {
+        Self::read_blocking().unwrap_or_else(|_| Self::unknown())
+    }
+
+    /// Sentinel value for when the real orb-id couldn't be read.
+    pub fn unknown() -> Self {
+        Self::Short(OrbIdShort::new([0; OrbIdShort::N_BYTES]))
+    }
+
     pub fn as_str(&self) -> &str {
         match self {
             Self::Short(id) => id.as_str(),

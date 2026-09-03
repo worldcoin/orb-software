@@ -97,6 +97,7 @@ axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bindgen = "0.72.0"
+bip39 = "2.2.2"
 bipatch = "1.0.0"
 bon = { version = "3.5.1", features = ["implied-bounds"] }
 bytes = "1.7.1"
