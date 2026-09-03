@@ -1137,6 +1137,7 @@ pub async fn submit_proof(
 
 #[cfg(test)]
 mod test {
+    use orb_info::orb_id::test_orb_id;
     use std::ffi::OsString;
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
@@ -1263,7 +1264,7 @@ mod test {
 
         let mock_server = MockServer::start().await;
 
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
@@ -1340,7 +1341,7 @@ mod test {
     #[serial]
     async fn try_token_with_migrated_key_happy_path() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1395,7 +1396,7 @@ mod test {
     #[serial]
     async fn migrated_key_transport_failures_must_not_select_legacy_signer() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
@@ -1475,7 +1476,7 @@ mod test {
     #[serial]
     async fn token_forbidden_definitively_rejects_migrated_key() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1520,7 +1521,7 @@ mod test {
         *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = std::num::Saturating(0);
 
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1574,7 +1575,7 @@ mod test {
     #[serial]
     async fn non_communication_se050_failures_are_bounded() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
