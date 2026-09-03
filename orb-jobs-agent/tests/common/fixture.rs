@@ -188,14 +188,14 @@ impl JobAgentFixture {
         let zenoh_port = portpicker::pick_unused_port().expect("No ports free");
         let zenoh_router = zenoh::open(zenorb::router_cfg(zenoh_port)).await.unwrap();
         let zenorb = Zenorb::from_cfg(zenorb::client_cfg(zenoh_port))
-            .orb_id(OrbId::Short(orb_id.parse().unwrap()))
+            .orb_id(orb_id.parse::<OrbId>().unwrap())
             .with_name("jobs-agent-test")
             .await
             .unwrap();
 
         let tempdir = TempDir::new().await.unwrap();
         let settings = Settings {
-            orb_id: OrbId::Short(orb_id.parse().unwrap()),
+            orb_id: orb_id.parse::<OrbId>().unwrap(),
             orb_platform: orb_info::orb_os_release::OrbOsPlatform::Diamond,
             auth,
             relay_host,

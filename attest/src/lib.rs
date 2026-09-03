@@ -44,7 +44,7 @@ pub async fn main() -> eyre::Result<()> {
         .await
         .wrap_err("failed to determine Orb platform")?
         .orb_os_platform_type;
-    let config = config::Config::new(config::default_backend(), orb_id.as_str());
+    let config = config::Config::new(config::default_backend(), &orb_id);
 
     let force_refresh_token = Arc::new(Notify::new());
 
@@ -57,7 +57,7 @@ pub async fn main() -> eyre::Result<()> {
         false
     } else {
         startup_key_selection(
-            orb_id.as_str(),
+            &orb_id,
             &config.auth_url,
             &config.keys_challenge_url,
             &config.keys_proof_url,
@@ -113,7 +113,7 @@ pub async fn main() -> eyre::Result<()> {
     };
 
     let run_fut = run(
-        orb_id.as_str(),
+        &orb_id,
         iface_ref,
         force_refresh_token.clone(),
         config.auth_url,
@@ -142,7 +142,7 @@ use se050_migration::startup_key_selection;
 /// SE050 key migration is compiled out: never attempt it, always use legacy keys.
 #[cfg(not(feature = "se050_key_migration"))]
 async fn startup_key_selection(
-    _orb_id: &str,
+    _orb_id: &OrbId,
     _auth_url: &Url,
     _keys_challenge_url: &Url,
     _keys_proof_url: &Url,
@@ -153,7 +153,7 @@ async fn startup_key_selection(
 /// Return proovenly working static token, or error if the token was rejected by the backend.
 #[tracing::instrument]
 async fn get_working_static_token(
-    orb_id: &str,
+    orb_id: &OrbId,
     ping_url: &Url,
 ) -> std::io::Result<crate::remote_api::Token> {
     let token = remote_api::Token::from_usr_persistent().await?;
@@ -201,7 +201,7 @@ async fn setup_dbus(
 }
 
 async fn run(
-    orb_id: &str,
+    orb_id: &OrbId,
     iface_ref: zbus::InterfaceRef<dbus::AuthTokenManagerIface>,
     force_refresh_token: Arc<Notify>,
     auth_url: Url,
