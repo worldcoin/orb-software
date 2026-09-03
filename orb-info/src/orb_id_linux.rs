@@ -1,9 +1,32 @@
 pub use hex::FromHexError;
 
+use std::io;
+use std::path::Path;
+use std::process::Output;
 use std::{fmt::Display, hash::Hash, str::FromStr};
 use thiserror::Error;
 
-use crate::from_binary_blocking;
+#[cfg(feature = "async")]
+async fn from_binary(path: impl AsRef<Path>) -> io::Result<String> {
+    let output = tokio::process::Command::new(path.as_ref()).output().await?;
+    from_binary_output(output, path)
+}
+
+fn from_binary_blocking(path: impl AsRef<Path>) -> io::Result<String> {
+    let output = std::process::Command::new(path.as_ref()).output()?;
+    from_binary_output(output, path)
+}
+
+fn from_binary_output(output: Output, path: impl AsRef<Path>) -> io::Result<String> {
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(std::io::Error::other(format!(
+            "{} binary failed",
+            path.as_ref().display()
+        )))
+    }
+}
 
 /// Boilerplate for OrbId*
 macro_rules! impl_orb_id {
@@ -128,8 +151,6 @@ pub enum ReadErr {
 impl OrbId {
     #[cfg(feature = "async")]
     pub async fn read() -> Result<Self, ReadErr> {
-        use crate::from_binary;
-
         let id = if let Ok(s) = std::env::var("ORB_ID") {
             Ok(s.trim().to_string())
         } else {
@@ -167,6 +188,11 @@ impl OrbId {
             OrbId::Long(_) => true,
         }
     }
+}
+
+#[cfg(any(test, feature = "testing"))]
+pub fn test_orb_id() -> OrbId {
+    "88888888".parse().unwrap()
 }
 
 impl From<OrbIdShort> for OrbId {
