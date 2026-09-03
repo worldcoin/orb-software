@@ -65,7 +65,7 @@ async fn it_werks() {
     let received_msgs: AsyncBag<Vec<Msg>> = AsyncBag::new(vec![]);
 
     apples
-        .receiver(received_msgs)
+        .receiver(received_msgs.clone())
         .subscriber("bananasvc/bytestopic", async |ctx, sample| {
             ctx.lock().await.push((&sample).into());
             Ok(())
@@ -115,6 +115,16 @@ async fn it_werks() {
         .encoding(Encoding::TEXT_PLAIN)
         .await
         .unwrap();
+
+    // put().await only confirms the message was sent, not that the remote
+    // subscriber callbacks ran; poll until both arrive before querying.
+    time::timeout(Duration::from_secs(5), async {
+        while received_msgs.read().await.len() < 2 {
+            time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
 
     let res = sender
         .querier("applesvc/get_msgs")
