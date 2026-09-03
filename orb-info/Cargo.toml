@@ -39,6 +39,9 @@ tokio-util = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 zbus = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "android")'.dependencies]
+bip39 = { workspace = true }
+
 [dev-dependencies]
 dbus-launch.workspace = true
 eyre.workspace = true
