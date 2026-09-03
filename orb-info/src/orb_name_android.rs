@@ -116,3 +116,72 @@ impl<'de> serde::Deserialize<'de> for OrbName {
         s.parse().map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn orb_name_from_id(id: u32) -> OrbName {
+        OrbName(OrbId(id))
+    }
+
+    #[test]
+    fn test_display_and_parse_roundtrip() {
+        for id in [0, 1, 1234, u32::MAX] {
+            let name = orb_name_from_id(id);
+            let parsed: OrbName = name.to_string().parse().unwrap();
+            assert_eq!(parsed, name);
+        }
+    }
+
+    #[test]
+    fn test_from_str_wrong_word_count() {
+        let err = "one-two".parse::<OrbName>().unwrap_err();
+        assert!(matches!(err, ParseOrbNameError::WordCount(2)));
+    }
+
+    #[test]
+    fn test_from_str_unknown_word() {
+        let err = "notaword-notaword-notaword".parse::<OrbName>().unwrap_err();
+        assert!(matches!(err, ParseOrbNameError::UnknownWord(_)));
+    }
+
+    #[test]
+    fn test_from_str_checksum_mismatch() {
+        let name = orb_name_from_id(1234);
+        let name_str = name.to_string();
+        let mut parts: Vec<&str> = name_str.split('-').collect();
+
+        let words = bip39::Language::English.word_list();
+        let first_index = bip39::Language::English.find_word(parts[0]).unwrap();
+        let flipped = words[(first_index ^ 1) as usize];
+        parts[0] = flipped;
+
+        let err = parts.join("-").parse::<OrbName>().unwrap_err();
+        assert!(matches!(err, ParseOrbNameError::ChecksumMismatch));
+    }
+
+    #[test]
+    fn test_test_orb_name_roundtrips() {
+        let name = test_orb_name();
+        let parsed: OrbName = name.to_string().parse().unwrap();
+        assert_eq!(parsed, name);
+    }
+
+    #[test]
+    fn test_test_orb_name_and_unknown_are_fixed() {
+        assert_eq!(test_orb_name().to_string(), "appear-fabric-abandon");
+        assert_eq!(UNKNOWN.to_string(), "zero-gravity-monkey");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_orb_name_roundtrip() {
+        let name = orb_name_from_id(1234);
+        let json = serde_json::to_value(&name).unwrap();
+        assert_eq!(json, serde_json::json!(name.to_string()));
+
+        let parsed: OrbName = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, name);
+    }
+}
