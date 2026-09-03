@@ -16,7 +16,7 @@ pub use crate::backend::BuildType;
 /// Safer way to assemble URLs involving `OrbId`
 fn concat_urls(prefix: &str, orb_id: &OrbId, suffix: &str) -> url::Url {
     url::Url::parse(prefix)
-        .and_then(|url| url.join(&format!("{}/", orb_id.as_str())))
+        .and_then(|url| url.join(&format!("{orb_id}/")))
         .and_then(|url| url.join(suffix))
         .expect("urls with validated orb ids should always parse")
 }

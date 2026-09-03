@@ -62,7 +62,7 @@ impl StatusClient {
         let (req_tx, req_rx) = flume::unbounded::<ReqTx>();
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            let orb_id = orb_id.as_str().to_string();
+            let orb_id = orb_id.to_string();
             let orb_name = orb_name.to_string();
             let jabil_id = jabil_id.to_string();
 
