@@ -6,7 +6,9 @@ use std::future;
 #[derive(
     Debug, Clone, Eq, PartialEq, Hash, derive_more::Display, derive_more::FromStr,
 )]
-pub struct OrbId(u32);
+pub struct OrbId(pub(crate) u32);
+
+pub(crate) const UNKNOWN: OrbId = OrbId(4293702198);
 
 // Serialize/deserialize as a string, matching orb_id_linux's `OrbId` and the
 // backend API, which expects `orbId` to be a string on every platform.
@@ -61,6 +63,17 @@ impl OrbId {
             .or_else(|_| from_file_blocking(SOC_SERIAL_NUMBER_PATH))?;
 
         Ok(s.parse()?)
+    }
+
+    /// Read the orb-id, if fail return UNKNOWN
+    #[cfg(feature = "async")]
+    pub async fn read_unfallable() -> Self {
+        Self::read().await.unwrap_or(UNKNOWN)
+    }
+
+    /// Read the orb-id, if fail return UNKNOWN
+    pub fn read_blocking_unfallable() -> Self {
+        Self::read_blocking().unwrap_or(UNKNOWN)
     }
 }
 

@@ -10,6 +10,8 @@ pub mod orb_id;
 #[cfg(feature = "orb-jabil-id")]
 pub mod orb_jabil_id;
 #[cfg(feature = "orb-name")]
+#[cfg_attr(target_os = "linux", path = "orb_name_linux.rs")]
+#[cfg_attr(target_os = "android", path = "orb_name_android.rs")]
 pub mod orb_name;
 #[cfg(feature = "orb-os-release")]
 pub mod orb_os_release;
