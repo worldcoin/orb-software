@@ -147,6 +147,7 @@ in
         nixfmt-tree # Nix autoformatter
         nushell # Cross platform shell for scripts
         protobuf # Needed for orb-messages and other protobuf dependencies
+        scrcpy # Mirror/control an Android device's screen over adb
         squashfsTools # mksquashfs
         sshpass # Needed for orb-software/scripts
         sshpass # Non-interactive ssh password auth
