@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use eyre::{bail, WrapErr as _};
+use eyre::{bail, ensure, WrapErr as _};
 use sha2::{Digest as _, Sha256};
 
 pub fn check_hash<P: AsRef<Path>>(
@@ -35,8 +35,23 @@ pub fn check_hash<P: AsRef<Path>>(
 /// Component file name in form of "{parent}/{name}-{hash}"
 ///
 /// Example: ```downloads/rootfs-bc4c24181ed3ce6666444deeb95e1f61940bffee70dd13972beb331f5d111e9b```
-pub fn make_component_path<P: AsRef<Path>>(parent: P, unique_name: &str) -> PathBuf {
-    parent.as_ref().join(unique_name)
+///
+/// `unique_name` is derived from the claim's unsigned `sources` entry, so it is rejected
+/// unless it is a single ordinary path component. Without that, a tampered claim could
+/// point the create/truncate/verify steps at a path outside `parent`. Claim parsing
+/// enforces the same rule; this is the defense at the point of use.
+pub fn make_component_path<P: AsRef<Path>>(
+    parent: P,
+    unique_name: &str,
+) -> eyre::Result<PathBuf> {
+    ensure!(
+        !unique_name.is_empty()
+            && unique_name != "."
+            && unique_name != ".."
+            && !unique_name.contains(['/', '\\', '\0']),
+        "component file name `{unique_name}` is not a single path component"
+    );
+    Ok(parent.as_ref().join(unique_name))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -110,6 +125,42 @@ impl std::fmt::Display for Range {
             f.write_fmt(format_args!("{}%", self.start * 100 / self.total_size))
         } else {
             f.write_fmt(format_args!("bytes={}-{}", self.start, self.end))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_component_path_joins_ordinary_names() {
+        for name in ["rootfs-abc", "main_mcu-abc", "edge-app-abc", "foo.bar-abc"] {
+            assert_eq!(
+                make_component_path("/downloads", name)
+                    .expect("ordinary component name should be accepted"),
+                PathBuf::from("/downloads").join(name),
+            );
+        }
+    }
+
+    #[test]
+    fn make_component_path_rejects_names_escaping_the_parent() {
+        for name in [
+            "",
+            ".",
+            "..",
+            "../x",
+            "a/b",
+            "/etc/x",
+            "a\\b",
+            "a\0b",
+            "..\\..\\x",
+        ] {
+            assert!(
+                make_component_path("/downloads", name).is_err(),
+                "component name `{name:?}` should be rejected"
+            );
         }
     }
 }
