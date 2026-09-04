@@ -65,11 +65,11 @@ pub struct FxHandle {
     zenorb: Zenorb,
     zenoh_router_socket: PathBuf,
 
-    dbus: zbus::Connection,
+    pub dbus: zbus::Connection,
     pub nm: NetworkManager,
 
     pub secure_storage: SecureStorage,
-    secure_storage_cancel_token: CancellationToken,
+    pub secure_storage_cancel_token: CancellationToken,
 
     pub dogstatsd: Agent,
     dogstatsd_tempdir: TempDir,
