@@ -2,7 +2,9 @@
 use fixture::Fixture;
 use futures::TryStreamExt;
 use orb_connd::{
-    network_manager::WifiSec, service::zoci::WifiProfileDto, OrbCapabilities,
+    network_manager::{WifiProfile, WifiSec},
+    service::zoci::WifiProfileDto,
+    OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
@@ -246,6 +248,81 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
     }
 
     assert!(dir.is_empty())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Prod)
+        .build()
+        .await;
+
+    let profiles: Vec<_> = (0..4)
+        .map(|n| WifiProfile {
+            id: format!("saved-{n}"),
+            uuid: uuid::Uuid::new_v4().to_string(),
+            ssid: format!("saved-{n}"),
+            sec: WifiSec::Wpa2Psk,
+            psk: "1234567890".into(),
+            autoconnect: true,
+            priority: n,
+            hidden: false,
+            path: String::new(),
+        })
+        .collect();
+    let mut bytes = Vec::new();
+    ciborium::ser::into_writer(&profiles, &mut bytes).unwrap();
+    let (secure_storage, secure_storage_cancel_token) = fx.run_secure_storage().await;
+    secure_storage
+        .put("nmprofiles".into(), bytes)
+        .await
+        .unwrap();
+
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    fs::create_dir_all(&varlib).await.unwrap();
+    // Contents total less than 1 MiB, but their allocated space exceeds the limit.
+    for n in 0..160 {
+        fs::write(varlib.join(format!("{n}.lease")), [1; 4097])
+            .await
+            .unwrap();
+    }
+    fs::write(varlib.join("secret_key"), "preserve-identity")
+        .await
+        .unwrap();
+
+    let handle = fx
+        .run_with()
+        .secure_storage(secure_storage)
+        .secure_storage_cancel_token(secure_storage_cancel_token)
+        .call()
+        .await;
+
+    let nm_profiles = handle.nm.list_wifi_profiles().await.unwrap();
+    assert_eq!(nm_profiles.len(), profiles.len() + 1);
+    for profile in &profiles {
+        assert!(nm_profiles.iter().any(|p| p.ssid == profile.ssid));
+    }
+    let bytes = handle
+        .secure_storage
+        .get("nmprofiles".into())
+        .await
+        .unwrap()
+        .unwrap();
+    let stored: Vec<WifiProfile> = ciborium::de::from_reader(bytes.as_slice()).unwrap();
+    assert_eq!(stored.len(), profiles.len() + 1);
+    for profile in &profiles {
+        assert!(stored.iter().any(|p| p.ssid == profile.ssid));
+    }
+
+    for n in 0..160 {
+        assert!(!fs::try_exists(varlib.join(format!("{n}.lease")))
+            .await
+            .unwrap());
+    }
+    assert_eq!(
+        fs::read_to_string(varlib.join("secret_key")).await.unwrap(),
+        "preserve-identity"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

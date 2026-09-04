@@ -27,6 +27,7 @@ use wpa_conf::LegacyWpaConfig;
 mod dbus;
 mod mecard;
 mod netconfig;
+mod nm_state;
 mod wifi;
 mod wpa_conf;
 pub mod zoci;
@@ -76,7 +77,7 @@ impl ConndService {
     const DEFAULT_WIFI_PSK: &str = "easytotypehardtoguess";
     const DEFAULT_WIFI_IFACE: &str = "wlan0";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
-    const NM_STATE_MAX_SIZE_KB: u64 = 1024;
+    const NM_STATE_MAX_SIZE_BYTES: u64 = 1024 * 1024;
     const SECURE_STORAGE_KEY: &str = "nmprofiles";
 
     #[allow(clippy::too_many_arguments)]
@@ -369,60 +370,43 @@ impl ConndService {
         Ok(())
     }
 
-    /// returns true if anything was deleted because state was too big
     pub async fn ensure_nm_state_below_max_size(
         &self,
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
         let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
-        let dir_size_kib = async || -> Result<u64> {
-            let mut total_bytes = 0u64;
-            let mut stack = vec![nm_dir.clone()];
-
-            while let Some(dir) = stack.pop() {
-                let mut dir = fs::read_dir(&dir).await?;
-
-                while let Some(e) = dir.next_entry().await? {
-                    let ft = e.file_type().await?;
-
-                    if ft.is_file() {
-                        total_bytes += e.metadata().await?.len();
-                    } else if ft.is_dir() {
-                        stack.push(e.path());
-                    }
-                }
-            }
-
-            Ok(total_bytes / 1024)
-        };
-
-        let get_state_size = async || -> Result<u64> {
-            let dir_size = dir_size_kib().await?;
-            let ss_size = match &self.profile_storage {
-            ProfileStorage::NetworkManager => 0,
-            ProfileStorage::SecureStorage(ss) => ss
-                .get(Self::SECURE_STORAGE_KEY.to_owned())
-                .await
-                .inspect_err(|e| error!("failed to read from secure storage when trying to calculate size: {e}"))
-                .ok()
-                .flatten()
-                .map(|bytes|bytes.len() / 1024)
-                .unwrap_or_default() as u64,
-            };
-
-            Ok(dir_size + ss_size)
-        };
-
-        let state_size = get_state_size().await?;
-        if state_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("{nm_dir:?} plus SecureStorage-{} is below 1024KiB. current size {state_size}KiB", Self::SECURE_STORAGE_KEY);
+        let state_size = self.nm_state_size(&nm_dir).await?;
+        if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
             return Ok(());
         }
 
-        warn!("{nm_dir:?} plus SecureStorage-{} is above 1024KiB. current size {state_size}KiB. attempting to reduce size", Self::SECURE_STORAGE_KEY);
+        warn!(
+            path = %nm_dir.display(),
+            state_bytes = state_size,
+            max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
+            "NM state exceeds limit; removing DHCP leases and seen-bssids"
+        );
+
+        // A partial cleanup must not fall through to deleting saved networks.
+        nm_state::remove_disposable_files(&nm_dir.join("varlib")).await?;
+        let state_size = self.nm_state_size(&nm_dir).await?;
+        if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
+            return Ok(());
+        }
+
+        warn!(
+            path = %nm_dir.display(),
+            state_bytes = state_size,
+            max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
+            "NM state still exceeds limit after file cleanup; removing excess Wi-Fi profiles"
+        );
 
         // remove excess wifi profiles
-        let mut wifi_profiles = self.nm.list_wifi_profiles().await?;
+        let mut wifi_profiles = self
+            .nm
+            .list_wifi_profiles()
+            .await
+            .wrap_err("failed to list Wi-Fi profiles during NM state cleanup")?;
         wifi_profiles.sort_by_key(|p| p.priority);
 
         let profiles_to_keep = 2;
@@ -433,43 +417,45 @@ impl ConndService {
                 continue;
             }
 
-            self.nm.remove_profile(&profile.id).await?;
+            self.nm
+                .remove_profile(&profile.uuid)
+                .await
+                .wrap_err_with(|| {
+                    format!(
+                        "failed to remove NM profile {} during cleanup",
+                        profile.uuid
+                    )
+                })?;
         }
 
-        self.commit_profiles_to_storage().await?;
+        self.commit_profiles_to_storage()
+            .await
+            .wrap_err("failed to persist Wi-Fi profiles after NM state cleanup")?;
 
-        // remove dhcp leases and seen-bssids
-        let varlib = usr_persistent.as_ref().join(Self::NM_FOLDER).join("varlib");
-
-        let seen_bssids = varlib.join("seen-bssids");
-        let mut to_delete = vec![seen_bssids];
-
-        let mut varlib = fs::read_dir(&varlib).await?;
-        while let Some(entry) = varlib.next_entry().await? {
-            let ft = entry.file_type().await?;
-            if !ft.is_file() {
-                continue;
-            }
-
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "lease") {
-                to_delete.push(path);
-            }
-        }
-
-        for filepath in to_delete {
-            fs::remove_file(filepath).await?;
-        }
-
-        let dir_size = get_state_size().await?;
-        if dir_size < Self::NM_STATE_MAX_SIZE_KB {
-            info!("successfully reduced nm state size to {dir_size}kB");
+        let state_size = self.nm_state_size(&nm_dir).await?;
+        if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
             Ok(())
         } else {
             Err(eyre!(
-                "directory too big even after wiping files. size: {dir_size}kB"
+                "NM state at {} still exceeds limit after cleanup: {state_size} bytes, limit {} bytes",
+                nm_dir.display(),
+                Self::NM_STATE_MAX_SIZE_BYTES,
             ))
         }
+    }
+
+    async fn nm_state_size(&self, nm_dir: &Path) -> Result<u64> {
+        let allocated_bytes = nm_state::allocated_size(nm_dir).await?;
+        let stored_bytes = match &self.profile_storage {
+            ProfileStorage::NetworkManager => 0,
+            ProfileStorage::SecureStorage(ss) => ss
+                .get(Self::SECURE_STORAGE_KEY.to_owned())
+                .await
+                .wrap_err("failed to read nmprofiles from secure storage while measuring NM state")?
+                .map_or(0, |bytes| bytes.len() as u64),
+        };
+
+        Ok(allocated_bytes + stored_bytes)
     }
 
     async fn connect_to_wifi(&self, ssid: &str) -> Result<AccessPoint> {
