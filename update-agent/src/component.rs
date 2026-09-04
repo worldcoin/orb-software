@@ -80,6 +80,8 @@ pub enum Error {
     MimeUnknown { name: String, actual_type: String },
     #[error("failed post processing downloaded components: {0}")]
     Process(eyre::Report),
+    #[error("invalid component path: {0}")]
+    InvalidComponentPath(eyre::Report),
 }
 
 pub struct Component {
@@ -114,6 +116,12 @@ impl Component {
     ) -> eyre::Result<()> {
         let uncompressed_path =
             util::make_component_path(dst_dir, &self.source.unique_name())
+                .wrap_err_with(|| {
+                    format!(
+                        "failed constructing extraction path for component `{}`",
+                        self.manifest_component.name(),
+                    )
+                })?
                 .with_extension("uncompressed");
 
         match check_existing_component(
@@ -510,7 +518,8 @@ pub fn download<P: AsRef<Path>>(
     update_iface: Option<&InterfaceRef<UpdateAgentManager<UpdateProgress>>>,
     download_delay: Duration,
 ) -> Result<PathBuf, Error> {
-    let component_path = util::make_component_path(dst_dir, unique_name);
+    let component_path = util::make_component_path(dst_dir, unique_name)
+        .map_err(Error::InvalidComponentPath)?;
     let component_file_len = match metadata(&component_path)
         .map(|metadata| metadata.len())
     {

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize, Serializer};
@@ -19,6 +19,10 @@ pub enum Error {
     ManifestVerification(#[from] crate::signatures::ManifestVerificationError),
     #[error("missing manifest signature")]
     ManifestSignatureMissing,
+    #[error("claim contained sources whose name is not a single path component: [{}]", .0.join(", "))]
+    SourcesWithInvalidNames(Vec<String>),
+    #[error("claim contained sources whose hash is not a sha256 hex digest: [{}]", .0.join(", "))]
+    SourcesWithInvalidHashes(Vec<String>),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -60,7 +64,32 @@ impl Source {
     pub fn unique_name(&self) -> String {
         format!("{}-{}", self.name, self.hash)
     }
+
+    /// Whether `name` is a single ordinary path component.
+    ///
+    /// `sources` is not covered by the manifest signature, and [`Self::unique_name`] is
+    /// used as an on-disk file name relative to the downloads directory. A name
+    /// carrying separators or `..` would therefore let a tampered claim direct writes
+    /// outside of it.
+    fn has_valid_name(&self) -> bool {
+        !self.name.is_empty()
+            && self.name != "."
+            && self.name != ".."
+            && !self.name.contains(['/', '\\', '\0'])
+    }
+
+    /// Whether `hash` is a sha256 digest in hex, i.e. exactly 64 ASCII hex digits.
+    ///
+    /// Besides being the shape the rest of the agent expects, this keeps the hash half
+    /// of [`Self::unique_name`] from contributing path separators of its own.
+    fn has_valid_hash(&self) -> bool {
+        self.hash.len() == SHA256_HEX_LEN
+            && self.hash.bytes().all(|b| b.is_ascii_hexdigit())
+    }
 }
+
+/// Length of a sha256 digest in hex characters.
+const SHA256_HEX_LEN: usize = 64;
 
 pub struct ClaimBuilder {
     pub manifest: Option<crate::Manifest>,
@@ -146,6 +175,18 @@ impl ClaimBuilder {
 
         let sources = self.sources;
 
+        // `sources` is outside the signed manifest, so its strings are validated before
+        // anything else consumes them.
+        let invalid_names = collect_sources_matching(&sources, |s| !s.has_valid_name());
+        if !invalid_names.is_empty() {
+            return Err(Error::SourcesWithInvalidNames(invalid_names));
+        }
+        let invalid_hashes =
+            collect_sources_matching(&sources, |s| !s.has_valid_hash());
+        if !invalid_hashes.is_empty() {
+            return Err(Error::SourcesWithInvalidHashes(invalid_hashes));
+        }
+
         let components_without_sources =
             find_components_without_sources(manifest.components(), &sources);
         if !components_without_sources.is_empty() {
@@ -177,6 +218,8 @@ impl ClaimBuilder {
                 manifest_raw.as_bytes(),
             )?;
         }
+
+        warn_on_source_name_mismatches(manifest.components(), &sources);
 
         Ok(Claim {
             manifest,
@@ -319,6 +362,55 @@ fn find_components_not_in_system(
             }
         })
         .collect()
+}
+
+/// Collects the `name` of every source matching `predicate`, quoted so that empty names
+/// and control characters stay visible in the error message.
+fn collect_sources_matching(
+    sources: &HashMap<String, Source>,
+    predicate: impl Fn(&Source) -> bool,
+) -> Vec<String> {
+    let mut matching: Vec<String> = sources
+        .values()
+        .filter(|s| predicate(s))
+        .map(|s| format!("{:?}", s.name))
+        .collect();
+    // `sources` is a hash map, so sort to keep the message deterministic.
+    matching.sort_unstable();
+    matching
+}
+
+/// Logs claims whose `sources` do not line up with the signed manifest.
+///
+/// Called only after the manifest signature has been verified, so unauthenticated
+/// claims cannot generate these warnings. Neither condition is rejected yet: this only
+/// collects fleet data for enforcing the binding later. Keys that match no manifest
+/// component are attacker-influenced and unvalidated, so only their count is logged.
+fn warn_on_source_name_mismatches(
+    components: &[crate::ManifestComponent],
+    sources: &HashMap<String, Source>,
+) {
+    let manifest_names: HashSet<&str> =
+        components.iter().map(|c| c.name.as_str()).collect();
+    let mut extra_sources = 0usize;
+    for (key, source) in sources {
+        if !manifest_names.contains(key.as_str()) {
+            extra_sources += 1;
+        } else if source.name != *key {
+            warn!(
+                manifest_component = %key,
+                // `?` so control characters in the unsigned name are escaped
+                source_name = ?source.name,
+                "claim source name differs from the manifest component it is keyed by"
+            );
+        }
+    }
+    if extra_sources > 0 {
+        warn!(
+            count = extra_sources,
+            "claim contained sources entries matching no manifest component"
+        );
+    }
 }
 
 fn find_components_without_sources<V>(
@@ -494,3 +586,187 @@ mod serde_imp {
     }
 }
 pub use serde_imp::UncheckedClaim;
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use base64::Engine as _;
+    use ed25519_dalek::{Signer as _, SigningKey};
+    use serde::de::DeserializeSeed as _;
+
+    use super::*;
+
+    const VALID_HASH: &str =
+        "bc4c24181ed3ce6666444deeb95e1f61940bffee70dd13972beb331f5d111e9b";
+
+    fn source(name: &str, hash: &str) -> Source {
+        Source {
+            hash: hash.to_owned(),
+            mime_type: MimeType::OctetStream,
+            name: name.to_owned(),
+            size: 4,
+            url: LocalOrRemote::Local(PathBuf::from("blob")),
+        }
+    }
+
+    #[test]
+    fn ordinary_source_names_are_accepted() {
+        for name in ["rootfs", "main_mcu", "edge-app", "foo.bar"] {
+            assert!(
+                source(name, VALID_HASH).has_valid_name(),
+                "name `{name}` should be a valid component name"
+            );
+        }
+    }
+
+    #[test]
+    fn source_names_that_are_not_a_single_path_component_are_rejected() {
+        for name in ["../x", "a/b", "/etc/x", "..", ".", "", "a\\b", "a\0b"] {
+            assert!(
+                !source(name, VALID_HASH).has_valid_name(),
+                "name `{name:?}` should be rejected as a component name"
+            );
+        }
+    }
+
+    #[test]
+    fn sha256_hex_hashes_are_accepted() {
+        assert!(source("rootfs", VALID_HASH).has_valid_hash());
+        assert!(source("rootfs", &VALID_HASH.to_uppercase()).has_valid_hash());
+    }
+
+    #[test]
+    fn hashes_that_are_not_sha256_hex_are_rejected() {
+        let too_short = &VALID_HASH[..63];
+        let too_long = format!("{VALID_HASH}a");
+        let with_slash = format!("../{}", &VALID_HASH[3..]);
+        let with_dots = format!("..{}", &VALID_HASH[2..]);
+        let with_non_hex = format!("G{}", &VALID_HASH[1..]);
+        for hash in [
+            "",
+            too_short,
+            too_long.as_str(),
+            with_slash.as_str(),
+            with_dots.as_str(),
+            with_non_hex.as_str(),
+        ] {
+            assert!(
+                !source("rootfs", hash).has_valid_hash(),
+                "hash `{hash}` should be rejected"
+            );
+        }
+    }
+
+    /// Fixed, test-only signing key; it is never a production key.
+    fn signing_key() -> SigningKey {
+        SigningKey::from_bytes(&[7u8; 32])
+    }
+
+    fn manifest_json(component_name: &str) -> String {
+        format!(
+            r#"{{"magic":"test-magic","type":"normal","components":[{{"name":"{component_name}","version-assert":"1.0.0","version":"1.0.1","size":4,"hash":"{VALID_HASH}","installation_phase":"normal"}}]}}"#
+        )
+    }
+
+    fn sources_json(key: &str, name: &str) -> String {
+        format!(
+            r#"{{"{key}":{{"hash":"{VALID_HASH}","mime_type":"application/octet-stream","name":"{name}","size":4,"url":"https://example.com/blob"}}}}"#
+        )
+    }
+
+    fn system_components_json(key: &str) -> String {
+        format!(
+            r#"{{"{key}":{{"type":"raw","value":{{"device":"emmc","offset":0,"size":4,"redundancy":"single"}}}}}}"#
+        )
+    }
+
+    /// Assembles a claim, signing `manifest_raw` and embedding it verbatim: the
+    /// signature covers exactly the raw JSON substring `RawValue` captures, so the
+    /// bytes signed and the bytes embedded must be identical.
+    fn claim_json(
+        manifest_raw: &str,
+        sources: &str,
+        system_components: &str,
+    ) -> String {
+        let signature = base64::prelude::BASE64_STANDARD
+            .encode(signing_key().sign(manifest_raw.as_bytes()).to_bytes());
+        format!(
+            r#"{{"version":"1.0.1","manifest":{manifest_raw},"manifest-sig":"{signature}","sources":{sources},"system_components":{system_components}}}"#
+        )
+    }
+
+    fn parse_claim(json: &str) -> Result<Claim, serde_json::Error> {
+        let pubkey = signing_key().verifying_key();
+        let mut de = serde_json::Deserializer::from_str(json);
+        ClaimVerificationContext(&pubkey).deserialize(&mut de)
+    }
+
+    #[test]
+    fn honest_signed_claim_parses() {
+        let json = claim_json(
+            &manifest_json("rootfs"),
+            &sources_json("rootfs", "rootfs"),
+            &system_components_json("rootfs"),
+        );
+        let claim = parse_claim(&json).expect("honest claim should parse");
+        assert_eq!(claim.num_components(), 1);
+        assert_eq!(claim.sources()["rootfs"].name, "rootfs");
+    }
+
+    #[test]
+    fn signed_claim_with_traversing_source_name_is_rejected() {
+        let json = claim_json(
+            &manifest_json("rootfs"),
+            &sources_json("rootfs", "../../etc/cron.d/x"),
+            &system_components_json("rootfs"),
+        );
+        let err = parse_claim(&json)
+            .expect_err("traversing source name should be rejected")
+            .to_string();
+        assert!(
+            err.contains("SourcesWithInvalidNames"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn signed_claim_with_non_hex_source_hash_is_rejected() {
+        let sources = r#"{"rootfs":{"hash":"deadbeef","mime_type":"application/octet-stream","name":"rootfs","size":4,"url":"https://example.com/blob"}}"#;
+        let json = claim_json(
+            &manifest_json("rootfs"),
+            sources,
+            &system_components_json("rootfs"),
+        );
+        let err = parse_claim(&json)
+            .expect_err("short source hash should be rejected")
+            .to_string();
+        assert!(
+            err.contains("SourcesWithInvalidHashes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// Control for the two tests above: they must fail on the source strings, not
+    /// because the fixture's signature was bogus all along.
+    #[cfg(not(feature = "skip-manifest-signature-verification"))]
+    #[test]
+    fn claim_with_tampered_manifest_is_rejected() {
+        let signed = manifest_json("rootfs");
+        let tampered = signed.replace("test-magic", "othermagic");
+        assert_ne!(signed, tampered, "tampering must change the manifest");
+        let json = claim_json(
+            &signed,
+            &sources_json("rootfs", "rootfs"),
+            &system_components_json("rootfs"),
+        )
+        .replace(&signed, &tampered);
+        let err = parse_claim(&json)
+            .expect_err("tampered manifest should be rejected")
+            .to_string();
+        assert!(
+            err.contains("ManifestVerification"),
+            "unexpected error: {err}"
+        );
+    }
+}
