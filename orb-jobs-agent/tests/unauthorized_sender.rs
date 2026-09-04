@@ -80,6 +80,36 @@ async fn rejects_job_execution_from_job_server_id_with_wrong_entity_type() {
     assert_only_legit_updates(&fx, &legit.exec_id).await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn job_notify_flow_survives_rejected_job_execution() {
+    let capture = capture();
+    let fx = JobAgentFixture::with_namespace("rejection_then_notify").await;
+    spawn_agent(&fx);
+
+    let attacker =
+        attacker_client(&fx, "unexpected-service-before-notify", EntityType::Service);
+    send_job_execution(&attacker, &fx, "exec-before-notify").await;
+    capture
+        .wait_for_rejection(&["unexpected-service-before-notify"])
+        .await;
+
+    let legit = fx
+        .job_queue
+        .enqueue(JobExecution {
+            job_id: LEGIT_CMD.to_string(),
+            job_execution_id: "exec-after-rejection".to_string(),
+            job_document: LEGIT_CMD.to_string(),
+            should_cancel: false,
+        })
+        .await;
+    fx.send_notify().await;
+    time::timeout(Duration::from_secs(60), legit.wait_for_completion())
+        .await
+        .expect("legit job never completed");
+
+    assert_only_legit_updates(&fx, &legit.exec_id).await;
+}
+
 fn spawn_agent(fx: &JobAgentFixture) {
     let deps = fx.deps(Host);
 

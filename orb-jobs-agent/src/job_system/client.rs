@@ -12,23 +12,49 @@ use orb_relay_messages::{
     prost_types::Any,
     relay::{entity::EntityType, Entity},
 };
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use tracing::{error, info, warn};
 
-/// Sender labels are attacker controlled and unbounded; truncate before logging.
-const MAX_LOGGED_LABEL_CHARS: usize = 128;
+#[derive(Debug, Default)]
+struct UnexpectedSenders {
+    count: AtomicU64,
+}
 
-/// Log the first few unexpected senders, then only every
-/// `UNEXPECTED_SENDER_LOG_EVERY`-th one, so warn volume never scales 1:1 with
-/// unsolicited traffic. NOTE: the counter is global, not per-sender -- a noisy
-/// unexpected sender can delay first-log evidence of a second distinct one;
-/// accepted for the shadow window (a per-sender map would grow unbounded on
-/// attacker-chosen keys).
-const UNEXPECTED_SENDER_LOG_BURST: u64 = 10;
-const UNEXPECTED_SENDER_LOG_EVERY: u64 = 100;
+impl UnexpectedSenders {
+    const LOG_BURST: u64 = 10;
+    const LOG_EVERY: u64 = 100;
+    const MAX_LOGGED_LABEL_CHARS: usize = 128;
 
-/// Process-local count of inbound messages from unexpected senders.
-static UNEXPECTED_SENDERS: AtomicU64 = AtomicU64::new(0);
+    fn record(&self, from: &Entity) {
+        let unexpected_total = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+
+        if !Self::should_log(unexpected_total) {
+            return;
+        }
+
+        warn!(
+            // `?` so control characters in the attacker-chosen labels are escaped
+            sender_id = ?Self::truncate_label(&from.id),
+            sender_namespace = ?Self::truncate_label(&from.namespace),
+            sender_entity_type = ?EntityType::try_from(from.entity_type),
+            unexpected_total,
+            "rejected relay message from unexpected sender"
+        );
+    }
+
+    fn should_log(count: u64) -> bool {
+        count <= Self::LOG_BURST || count.is_multiple_of(Self::LOG_EVERY)
+    }
+
+    /// Truncates by chars: byte slicing would panic mid-codepoint and let a sender
+    /// take down the recv loop.
+    fn truncate_label(label: &str) -> String {
+        label.chars().take(Self::MAX_LOGGED_LABEL_CHARS).collect()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct JobClient {
@@ -37,6 +63,7 @@ pub struct JobClient {
     relay_namespace: String,
     job_registry: JobRegistry,
     job_config: JobConfig,
+    unexpected_senders: Arc<UnexpectedSenders>,
 }
 
 impl JobClient {
@@ -53,6 +80,7 @@ impl JobClient {
             relay_namespace: relay_namespace.to_string(),
             job_registry,
             job_config,
+            unexpected_senders: Arc::new(UnexpectedSenders::default()),
         }
     }
 
@@ -74,11 +102,11 @@ impl JobClient {
                 &self.target_service_id,
                 &self.relay_namespace,
             ) {
-                log_unexpected_sender(&msg.from);
+                self.unexpected_senders.record(&msg.from);
                 continue;
             }
 
-            match classify_inbound(&msg.payload) {
+            match InboundDecision::from(msg.payload.as_slice()) {
                 InboundDecision::Notify(job_notify) => {
                     info!("received JobNotify: {:?}", job_notify);
                     let _ = self.request_next_job().await;
@@ -261,72 +289,47 @@ fn is_authorized_sender(
         && from.namespace == relay_namespace
 }
 
-/// Decodes an inbound relay message and classifies it by payload type.
-fn classify_inbound(payload: &[u8]) -> InboundDecision {
-    let any = match Any::decode(payload) {
-        Ok(any) => any,
-        Err(err) => {
-            return InboundDecision::Undecodable {
-                msg_name: "message",
-                err,
+impl From<&[u8]> for InboundDecision {
+    /// Decodes an inbound relay message and classifies it by payload type.
+    fn from(payload: &[u8]) -> Self {
+        let any = match Any::decode(payload) {
+            Ok(any) => any,
+            Err(err) => {
+                return Self::Undecodable {
+                    msg_name: "message",
+                    err,
+                }
             }
-        }
-    };
+        };
 
-    if any.type_url == JobNotify::type_url() {
-        match JobNotify::decode(any.value.as_slice()) {
-            Ok(job_notify) => InboundDecision::Notify(job_notify),
-            Err(err) => InboundDecision::Undecodable {
-                msg_name: "JobNotify",
-                err,
-            },
+        if any.type_url == JobNotify::type_url() {
+            match JobNotify::decode(any.value.as_slice()) {
+                Ok(job_notify) => Self::Notify(job_notify),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobNotify",
+                    err,
+                },
+            }
+        } else if any.type_url == JobExecution::type_url() {
+            match JobExecution::decode(any.value.as_slice()) {
+                Ok(job) => Self::Execution(job),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobExecution",
+                    err,
+                },
+            }
+        } else if any.type_url == JobCancel::type_url() {
+            match JobCancel::decode(any.value.as_slice()) {
+                Ok(job_cancel) => Self::Cancel(job_cancel),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobCancel",
+                    err,
+                },
+            }
+        } else {
+            Self::UnknownType(any.type_url)
         }
-    } else if any.type_url == JobExecution::type_url() {
-        match JobExecution::decode(any.value.as_slice()) {
-            Ok(job) => InboundDecision::Execution(job),
-            Err(err) => InboundDecision::Undecodable {
-                msg_name: "JobExecution",
-                err,
-            },
-        }
-    } else if any.type_url == JobCancel::type_url() {
-        match JobCancel::decode(any.value.as_slice()) {
-            Ok(job_cancel) => InboundDecision::Cancel(job_cancel),
-            Err(err) => InboundDecision::Undecodable {
-                msg_name: "JobCancel",
-                err,
-            },
-        }
-    } else {
-        InboundDecision::UnknownType(any.type_url)
     }
-}
-
-/// Logs a rejected message -- never its payload -- and only for the first few
-/// occurrences plus every `UNEXPECTED_SENDER_LOG_EVERY`-th one thereafter.
-fn log_unexpected_sender(from: &Entity) {
-    let unexpected_total = UNEXPECTED_SENDERS.fetch_add(1, Ordering::Relaxed) + 1;
-
-    if unexpected_total > UNEXPECTED_SENDER_LOG_BURST
-        && !unexpected_total.is_multiple_of(UNEXPECTED_SENDER_LOG_EVERY)
-    {
-        return;
-    }
-
-    warn!(
-        // `?` so control characters in the attacker-chosen labels are escaped
-        sender_id = ?truncate_label(&from.id),
-        sender_namespace = ?truncate_label(&from.namespace),
-        sender_entity_type = ?EntityType::try_from(from.entity_type),
-        unexpected_total,
-        "rejected relay message from unexpected sender"
-    );
-}
-
-/// Truncates by chars: byte slicing would panic mid-codepoint and let a sender
-/// take down the recv loop.
-fn truncate_label(label: &str) -> String {
-    label.chars().take(MAX_LOGGED_LABEL_CHARS).collect()
 }
 
 #[cfg(test)]
@@ -443,17 +446,13 @@ mod tests {
         .encode_to_vec()
     }
 
-    fn classify(payload: &[u8]) -> InboundDecision {
-        classify_inbound(payload)
-    }
-
     fn authorized(from: &Entity) -> bool {
         is_authorized_sender(from, TARGET_SERVICE_ID, RELAY_NAMESPACE)
     }
 
     #[test]
     fn job_server_execution_is_accepted() {
-        let decision = classify(&execution_payload());
+        let decision = InboundDecision::from(execution_payload().as_slice());
 
         let InboundDecision::Execution(job) = decision else {
             panic!("expected Execution, got {decision:?}");
@@ -467,7 +466,10 @@ mod tests {
             .unwrap()
             .encode_to_vec();
 
-        assert!(matches!(classify(&payload), InboundDecision::Notify(_)));
+        assert!(matches!(
+            InboundDecision::from(payload.as_slice()),
+            InboundDecision::Notify(_)
+        ));
     }
 
     #[test]
@@ -478,7 +480,7 @@ mod tests {
         .unwrap()
         .encode_to_vec();
 
-        let decision = classify(&payload);
+        let decision = InboundDecision::from(payload.as_slice());
 
         let InboundDecision::Cancel(cancel) = decision else {
             panic!("expected Cancel, got {decision:?}");
@@ -489,7 +491,7 @@ mod tests {
     #[test]
     fn job_server_garbage_payload_is_undecodable() {
         assert!(matches!(
-            classify(&[0xff, 0xff, 0xff, 0xff]),
+            InboundDecision::from([0xff, 0xff, 0xff, 0xff].as_slice()),
             InboundDecision::Undecodable { .. }
         ));
     }
@@ -556,8 +558,24 @@ mod tests {
     fn logged_sender_labels_are_truncated_char_safely() {
         // multi-byte chars: byte slicing at 128 would panic mid-codepoint
         let label = "é".repeat(200);
-        let truncated = truncate_label(&label);
+        let truncated = UnexpectedSenders::truncate_label(&label);
 
-        assert_eq!(truncated.chars().count(), MAX_LOGGED_LABEL_CHARS);
+        assert_eq!(
+            truncated.chars().count(),
+            UnexpectedSenders::MAX_LOGGED_LABEL_CHARS
+        );
+    }
+
+    #[test]
+    fn unexpected_sender_log_throttle() {
+        assert!(UnexpectedSenders::should_log(1));
+        assert!(UnexpectedSenders::should_log(UnexpectedSenders::LOG_BURST));
+        assert!(!UnexpectedSenders::should_log(
+            UnexpectedSenders::LOG_BURST + 1
+        ));
+        assert!(UnexpectedSenders::should_log(UnexpectedSenders::LOG_EVERY));
+        assert!(!UnexpectedSenders::should_log(
+            UnexpectedSenders::LOG_EVERY + 1
+        ));
     }
 }
