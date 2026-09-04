@@ -3,11 +3,12 @@ use fixture::Fixture;
 use futures::TryStreamExt;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
-    service::zoci::WifiProfileDto,
+    service::{zoci::WifiProfileDto, ConndService, ProfileStorage},
     OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
+use std::time::Duration;
 use tokio::fs;
 use tokio_stream::wrappers::ReadDirStream;
 use zenorb::zoci::ReplyExt;
@@ -252,6 +253,7 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
+    // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
         .release(OrbRelease::Prod)
         .build()
@@ -290,6 +292,7 @@ async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
         .await
         .unwrap();
 
+    // Act
     let handle = fx
         .run_with()
         .secure_storage(secure_storage)
@@ -297,6 +300,7 @@ async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
         .call()
         .await;
 
+    // Assert
     let nm_profiles = handle.nm.list_wifi_profiles().await.unwrap();
     assert_eq!(nm_profiles.len(), profiles.len() + 1);
     for profile in &profiles {
@@ -323,6 +327,102 @@ async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
         fs::read_to_string(varlib.join("secret_key")).await.unwrap(),
         "preserve-identity"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_cleans_leases_without_evicting_profiles_when_secure_storage_fails() {
+    // Arrange
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Prod)
+        .build()
+        .await;
+    let handle = fx.run().await;
+    for n in 0..4 {
+        handle
+            .zenoh()
+            .command(
+                "connd/job/wifi_add",
+                json!({
+                    "ssid": format!("saved-{n}"),
+                    "sec": "Wpa2Psk",
+                    "pwd": "1234567890"
+                }),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    let connd = ConndService::new(
+        handle.dbus.clone(),
+        handle.nm.clone(),
+        OrbRelease::Prod,
+        OrbCapabilities::WifiOnly,
+        Duration::from_secs(1),
+        &fx.usr_persistent,
+        ProfileStorage::SecureStorage(handle.secure_storage.clone()),
+    )
+    .await
+    .unwrap();
+    let mut before: Vec<_> = handle
+        .nm
+        .list_wifi_profiles()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|p| p.uuid)
+        .collect();
+    before.sort();
+    assert_eq!(before.len(), 5);
+
+    handle.secure_storage_cancel_token.cancel();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while handle.secure_storage.get("nmprofiles".into()).await.is_ok() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("stopped secure storage must return an error");
+
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    fs::create_dir_all(&varlib).await.unwrap();
+    let lease = varlib.join("old.lease");
+    fs::write(&lease, vec![1; 2 * 1024 * 1024]).await.unwrap();
+    // Keep local state above the limit after lease deletion to exercise the
+    // guard against profile eviction when secure storage cannot be measured.
+    let other_state = varlib.join("NetworkManager.state");
+    fs::write(&other_state, vec![1; 2 * 1024 * 1024])
+        .await
+        .unwrap();
+
+    // Act
+    let error = tokio::time::timeout(
+        Duration::from_secs(5),
+        connd.ensure_nm_state_below_max_size(&fx.usr_persistent),
+    )
+    .await
+    .expect("local cleanup must finish despite the secure-storage failure")
+    .unwrap_err();
+
+    // Assert
+    assert!(
+        format!("{error:?}").contains("failed to read nmprofiles from secure storage")
+    );
+    assert!(!fs::try_exists(&lease).await.unwrap());
+    assert_eq!(
+        fs::read(&other_state).await.unwrap(),
+        vec![1; 2 * 1024 * 1024]
+    );
+    let mut after: Vec<_> = handle
+        .nm
+        .list_wifi_profiles()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|p| p.uuid)
+        .collect();
+    after.sort();
+    assert_eq!(before, after);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

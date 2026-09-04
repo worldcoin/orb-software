@@ -375,8 +375,20 @@ impl ConndService {
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
         let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
-        let state_size = self.nm_state_size(&nm_dir).await?;
+        let allocated_bytes = nm_state::allocated_size(&nm_dir).await?;
+        // Reclaim oversized local state even when secure storage is unavailable.
+        let state_size = if allocated_bytes >= Self::NM_STATE_MAX_SIZE_BYTES {
+            allocated_bytes
+        } else {
+            allocated_bytes + self.stored_profile_size().await?
+        };
         if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
+            tracing::trace!(
+                "NM state at {} is below limit ({state_size} bytes < {} bytes); skipping cleanup",
+                nm_dir.display(),
+                Self::NM_STATE_MAX_SIZE_BYTES,
+            );
+
             return Ok(());
         }
 
@@ -384,13 +396,21 @@ impl ConndService {
             path = %nm_dir.display(),
             state_bytes = state_size,
             max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
-            "NM state exceeds limit; removing DHCP leases and seen-bssids"
+            "NM state at {} exceeds limit ({state_size} bytes >= {} bytes); removing DHCP leases and seen-bssids",
+            nm_dir.display(),
+            Self::NM_STATE_MAX_SIZE_BYTES,
         );
 
         // A partial cleanup must not fall through to deleting saved networks.
         nm_state::remove_disposable_files(&nm_dir.join("varlib")).await?;
         let state_size = self.nm_state_size(&nm_dir).await?;
         if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
+            tracing::trace!(
+                "NM state cleanup at {} succeeded after removing disposable files ({state_size} bytes < {} bytes); keeping saved Wi-Fi profiles",
+                nm_dir.display(),
+                Self::NM_STATE_MAX_SIZE_BYTES,
+            );
+
             return Ok(());
         }
 
@@ -398,7 +418,9 @@ impl ConndService {
             path = %nm_dir.display(),
             state_bytes = state_size,
             max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
-            "NM state still exceeds limit after file cleanup; removing excess Wi-Fi profiles"
+            "NM state at {} still exceeds limit after file cleanup ({state_size} bytes >= {} bytes); removing excess Wi-Fi profiles",
+            nm_dir.display(),
+            Self::NM_STATE_MAX_SIZE_BYTES,
         );
 
         // remove excess wifi profiles
@@ -434,6 +456,12 @@ impl ConndService {
 
         let state_size = self.nm_state_size(&nm_dir).await?;
         if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
+            tracing::trace!(
+                "NM state cleanup at {} succeeded after removing excess Wi-Fi profiles ({state_size} bytes < {} bytes)",
+                nm_dir.display(),
+                Self::NM_STATE_MAX_SIZE_BYTES,
+            );
+
             Ok(())
         } else {
             Err(eyre!(
@@ -446,6 +474,11 @@ impl ConndService {
 
     async fn nm_state_size(&self, nm_dir: &Path) -> Result<u64> {
         let allocated_bytes = nm_state::allocated_size(nm_dir).await?;
+
+        Ok(allocated_bytes + self.stored_profile_size().await?)
+    }
+
+    async fn stored_profile_size(&self) -> Result<u64> {
         let stored_bytes = match &self.profile_storage {
             ProfileStorage::NetworkManager => 0,
             ProfileStorage::SecureStorage(ss) => ss
@@ -455,7 +488,7 @@ impl ConndService {
                 .map_or(0, |bytes| bytes.len() as u64),
         };
 
-        Ok(allocated_bytes + stored_bytes)
+        Ok(stored_bytes)
     }
 
     async fn connect_to_wifi(&self, ssid: &str) -> Result<AccessPoint> {

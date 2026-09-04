@@ -139,15 +139,20 @@ mod tests {
 
     #[tokio::test]
     async fn it_counts_allocated_space_without_following_symlinks() {
+        // Arrange
         let dir = TempDir::new().await.unwrap();
         let state = dir.join("state");
         fs::create_dir(&state).await.unwrap();
         fs::write(state.join("small.lease"), [1; 4097])
             .await
             .unwrap();
+        // Act
         let allocated = allocated_size(&state).await.unwrap();
+
+        // Assert
         assert!(allocated > 4097);
 
+        // Arrange
         let outside = dir.join("outside");
         fs::create_dir(&outside).await.unwrap();
         fs::write(outside.join("large"), vec![1; 2 * 1024 * 1024])
@@ -160,12 +165,17 @@ mod tests {
             .await
             .unwrap();
 
+        // Act
+        let allocated = allocated_size(&state).await.unwrap();
+
+        // Assert
         // Directory allocation can grow when adding entries; the target must not count.
-        assert!(allocated_size(&state).await.unwrap() < 1024 * 1024);
+        assert!(allocated < 1024 * 1024);
     }
 
     #[tokio::test]
     async fn it_removes_leases_without_seen_bssids_and_preserves_other_state() {
+        // Arrange
         let dir = TempDir::new().await.unwrap();
         for name in [
             "old.lease",
@@ -182,9 +192,11 @@ mod tests {
             .await
             .unwrap();
 
+        // Act
         remove_disposable_files(dir.as_ref()).await.unwrap();
         remove_disposable_files(dir.as_ref()).await.unwrap();
 
+        // Assert
         assert!(!fs::try_exists(dir.join("old.lease")).await.unwrap());
         for name in ["secret_key", "NetworkManager.state", "timestamps"] {
             assert_eq!(fs::read_to_string(dir.join(name)).await.unwrap(), name);
@@ -198,39 +210,50 @@ mod tests {
             .unwrap()
             .is_symlink());
 
+        // Arrange
         fs::write(dir.join("seen-bssids"), "history").await.unwrap();
+
+        // Act
         remove_disposable_files(dir.as_ref()).await.unwrap();
+
+        // Assert
         assert!(!fs::try_exists(dir.join("seen-bssids")).await.unwrap());
     }
 
     #[tokio::test]
     async fn it_handles_missing_files_and_not_aborts() {
+        // Arrange
         let dir = TempDir::new().await.unwrap();
         let lease = dir.join("old.lease");
         fs::write(&lease, "lease").await.unwrap();
 
+        // Act
         remove_files(vec![dir.join("already-removed.lease"), lease.clone()])
             .await
             .unwrap();
-
-        assert!(!fs::try_exists(lease).await.unwrap());
         remove_disposable_files(&dir.join("missing-varlib"))
             .await
             .unwrap();
+
+        // Assert
+        assert!(!fs::try_exists(lease).await.unwrap());
     }
 
     #[tokio::test]
     async fn it_reports_context_on_failure_and_continues_deletion() {
+        // Arrange
         let dir = TempDir::new().await.unwrap();
         let invalid = dir.join("not-a-file.lease");
         fs::create_dir(&invalid).await.unwrap();
         let lease = dir.join("old.lease");
         fs::write(&lease, "lease").await.unwrap();
 
+        // Act
         let error = remove_files(vec![invalid.clone(), lease.clone()])
             .await
             .unwrap_err();
 
+        // Assert
         let error = format!("{error:?}");
         assert!(
             error.contains("1 files removed, 1 deletions failed"),
@@ -245,14 +268,26 @@ mod tests {
     #[tokio::test]
 
     async fn it_reports_invalid_state_dir_path() {
+        // Arrange
         let dir = TempDir::new().await.unwrap();
         let missing = dir.join("missing");
+
+        // Act
         let error = allocated_size(&missing).await.unwrap_err();
+
+        // Assert
         assert!(format!("{error:?}").contains(missing.to_str().unwrap()));
 
+        // Arrange
         let link = dir.join("linked-varlib");
         fs::symlink(dir.as_ref(), &link).await.unwrap();
-        assert!(allocated_size(&link).await.is_err());
-        assert!(remove_disposable_files(&link).await.is_err());
+
+        // Act
+        let size_result = allocated_size(&link).await;
+        let cleanup_result = remove_disposable_files(&link).await;
+
+        // Assert
+        assert!(size_result.is_err());
+        assert!(cleanup_result.is_err());
     }
 }
