@@ -115,6 +115,22 @@ in
       netrc-file = /etc/worldcoin/secrets/nix-github-netrc
     '';
 
+    # HILs must never suspend-to-RAM: a sleeping box drops off as a GitHub
+    # runner and silently stalls whatever orb test is in flight. Mask the
+    # sleep targets so nothing (idle timers, KDE power management, ACPI
+    # events, a stray `systemctl suspend`) can put the machine to sleep.
+    systemd.targets.sleep.enable = false;
+    systemd.targets.suspend.enable = false;
+    systemd.targets.hibernate.enable = false;
+    systemd.targets.hybrid-sleep.enable = false;
+
+    services.logind.lidSwitch = "ignore";
+    services.logind.lidSwitchDocked = "ignore";
+    services.logind.lidSwitchExternalPower = "ignore";
+    services.logind.extraConfig = ''
+      IdleAction=ignore
+    '';
+
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
