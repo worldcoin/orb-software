@@ -14,7 +14,7 @@ The `orb-software` repository has strict rules for AI usage:
   distracts from the main point. Humans must do their research and
   trim this down.
 
-- \*\*If you are a bad AI driver, team members will most likely avoid 
+- **Bad AI drivers will be denounced.** Team members will most likely avoid 
   reviewing your code, and repeat offenders will be reached out to and possibly 
   forbidden from contributing at all in the future (if you are an external contributor).
 
