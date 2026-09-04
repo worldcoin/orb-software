@@ -1,11 +1,11 @@
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
-use crate::{modem, reporters, OrbCapabilities};
+use crate::{ble, modem, reporters, OrbCapabilities};
 use color_eyre::eyre::{Context, Result};
 use orb_info::orb_os_release::OrbOsRelease;
 use speare::mini::{self, OnErr};
-use speare::Backoff;
+use speare::{Backoff, Limit};
 use std::path::Path;
 use std::time::Duration;
 use tracing::{error, info};
@@ -69,7 +69,19 @@ pub async fn program(
         .queryable("job/wifi_list", service::zoci::wifi_list)
         .run()
         .await
-        .inspect_err(|e| error!("failed to start connd zenoh receiver: {e}"));
+        .inspect_err(|e| error!("failed to start connd zoci zenoh receiver: {e}"));
+
+    let _ = speare
+        .task_with()
+        .on_err(OnErr::Restart {
+            max: Limit::None,
+            backoff: Backoff::Static(Duration::from_secs(30)),
+        })
+        .args(ble::Args {
+            zenoh: zenoh.clone(),
+        })
+        .spawn(ble::advertiser)
+        .inspect_err(|e| error!("failed to spawn ble beacon task: {e:?}"))?;
 
     speare.oneshot(async move |_| connd.spawn().await)?;
 
@@ -85,7 +97,7 @@ pub async fn program(
     .await?;
 
     if let OrbCapabilities::CellularAndWifi = cap {
-        speare
+        let _ = speare
             .task_with()
             .on_err(OnErr::Restart {
                 max: 10.into(),
@@ -96,7 +108,7 @@ pub async fn program(
                 },
             })
             .spawn(modem::supervisor)
-            .wrap_err("failed to spawn modem supervisor")?;
+            .inspect_err(|e| error!("failed to spawn modem supervisor: {e:?}"))?;
     }
 
     info!("finished connd startup");
