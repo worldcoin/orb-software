@@ -9,5 +9,6 @@
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJhIceAkzVz/D0+T71tVCfjZj3YNkAkqbFP2NMCp3QBI cyril.fougeray@Cyril-Fougeray.local"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKx6pwMug4h2zv5sZSzCtcK7TNGuxD57rt5ypoZdd1Qi athanasios.varis@toolsforhumanity.com"
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFBgsmZAz9bwKxXHM6i8AiYzMufSgPbblbayxl7bq6MB vlad-agievich@vlad-agievich-thinkpad"
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIX+tH7uNlFSO9DwU+axL35UalBTcoZxlh/l4BPjLDww aleksei.fedotov@toolsforhumanity.com"
 
 ]
