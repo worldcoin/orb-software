@@ -32,6 +32,8 @@ the orb's software. The most important applications on the orb are as follows:
 
 ## Contributing
 
+Reaad our [AI policy](./AI_POLICY.md) before contributing.
+
 See the [mdbook][mdbook] for development documentation.
 
 Note: We plan to accept contributions at a later date, but do not have
