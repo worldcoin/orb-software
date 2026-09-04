@@ -138,6 +138,14 @@ in
     hostname = "worldcoin-hil-sf-1";
     timezone = "America/Los_Angeles";
   };
+  nixosConfigurations."worldcoin-hil-sf-2" = hilConfig {
+    hostname = "worldcoin-hil-sf-2";
+    timezone = "America/Los_Angeles";
+  };
+  nixosConfigurations."worldcoin-hil-sf-3" = hilConfig {
+    hostname = "worldcoin-hil-sf-3";
+    timezone = "America/Los_Angeles";
+  };
   nixosConfigurations."liveusb" = nixosConfig {
     system = "x86_64-linux";
     hostname = "liveusb";
