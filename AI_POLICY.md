@@ -14,7 +14,9 @@ The `orb-software` repository has strict rules for AI usage:
   distracts from the main point. Humans must do their research and
   trim this down.
 
-- \*\*If you are a bad AI driver, team members will most likely avoid reviewing your code, and repeat offenders will be reached out to and possibly forbidden from contributing at all in the future (if you are an external contributor).
+- \*\*If you are a bad AI driver, team members will most likely avoid 
+  reviewing your code, and repeat offenders will be reached out to and possibly 
+  forbidden from contributing at all in the future (if you are an external contributor).
 
 ## There are Humans Here
 
@@ -25,6 +27,11 @@ humans (and sometimes machines, too). It is a boundary point at which
 people interact with each other and the work done. It is rude and
 disrespectful to approach this boundary with low-effort, unqualified
 work, since it puts the burden of validation on the maintainer.
+
+Every pull request you create or merge is ultimately your responsibility. 
+AI is only a tool. Using it does not transfer accountability. If the code is 
+wrong, unsafe, or poorly understood, the human who submitted or approved it 
+is still responsible for the outcome.
 
 In a perfect world, AI would produce high-quality, accurate work
 every time. But today, that reality depends on the driver of the AI.
