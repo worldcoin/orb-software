@@ -15,3 +15,6 @@ gstreamer-app.workspace = true
 gstreamer-video.workspace = true
 license-stub-gstreamer.workspace = true
 tracing.workspace = true
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]

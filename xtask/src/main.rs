@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::Result;
-use x::cmd::{build, deb, deploy, pre_commit, target, test, test_watch};
+use x::cmd::{android, apex, build, deb, deploy, pre_commit, target, test, test_watch};
 
 #[derive(Parser, Debug)]
 pub struct Cli {
@@ -16,6 +16,18 @@ enum Cmd {
     /// Checks whether a crate is excluded via `[package.metadata.orb].unsupported_targets`.
     /// Exit code: 0 = supported, 1 = unsupported, 2 = no such crate (or other error).
     CrateSupported(target::SupportedArgs),
+    /// Builds the whole workspace for `aarch64-linux-android`, skipping
+    /// crates marked unsupported via `[package.metadata.orb]
+    /// unsupported_targets`.
+    AndroidBuild(android::BuildArgs),
+    /// Compiles test binaries for `aarch64-linux-android`
+    AndroidTest(android::TestArgs),
+    /// Lints for `aarch64-linux-android` via `cargo clippy`, denying warnings
+    AndroidClippy(android::TestArgs),
+    /// Build Android payload(s) and package each into a `<crate>.apex`
+    AndroidApex(apex::ApexArgs),
+    /// Build Android payload(s) into `.apex`(es) same as `android-apex`, then `adb install` each onto the device.
+    AndroidDeploy(apex::DeployArgs),
     /// Build the select crate using `cargo zigbuild --release`, then package it into a `.deb` using
     /// `cargo deb`
     Deb(deb::Args),
@@ -57,6 +69,14 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Cmd::AndroidBuild(args) => android::run_build(args),
+        Cmd::AndroidTest(args) => android::run_build_test(args),
+        Cmd::AndroidClippy(args) => android::run_clippy(args),
+        Cmd::AndroidApex(args) => {
+            std::fs::create_dir_all(&args.out_dir)?;
+            apex::run_apex(args).map(|_| ())
+        }
+        Cmd::AndroidDeploy(args) => apex::run_deploy(args),
         Cmd::Deb(args) => deb::run(args),
         Cmd::PreCommit => pre_commit::run(),
         Cmd::Deploy(args) => deploy::run(args),
