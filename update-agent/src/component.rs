@@ -272,8 +272,8 @@ impl Component {
         )
         .wrap_err_with(|| {
             format!(
-                "component `{}` at `{}` does not match the size and hash recorded in the \
-                 signed manifest",
+                "failed verifying component `{}` at `{}` against the size and hash \
+                 recorded in the signed manifest",
                 self.manifest_component.name(),
                 self.on_disk.display(),
             )
@@ -282,20 +282,7 @@ impl Component {
 
     pub fn process(&mut self, dst: &Path, current_slot: Slot) -> eyre::Result<()> {
         match self.source.mime_type {
-            // OBSERVE MODE: mismatches are logged, not rejected, until fleet data
-            // confirms every legitimate octet-stream claim satisfies this invariant.
-            // The follow-up enforcement change propagates this error instead.
-            MimeType::OctetStream => {
-                if let Err(e) = self.octet_stream_matches_manifest() {
-                    warn!(
-                        component = %self.manifest_component.name(),
-                        error = format!("{e:#}"),
-                        "octet-stream component does not match the signed manifest \
-                         (observe mode; enforcement pending)"
-                    );
-                }
-                Ok(())
-            }
+            MimeType::OctetStream => self.octet_stream_matches_manifest(),
             MimeType::XZ => self.process_compressed(dst),
             MimeType::ZstdBidiff => self.process_bidiff(dst, current_slot),
         }
@@ -894,18 +881,17 @@ mod tests {
         );
     }
 
-    /// OBSERVE MODE: a mismatch is logged but must not fail the update. The follow-up
-    /// enforcement change inverts this test to assert rejection.
     #[test]
-    fn octet_stream_mismatch_is_not_rejected_in_observe_mode() {
+    fn octet_stream_mismatch_fails_the_update() {
         let (dir, path) = write_payload();
         let mut component = octet_stream_component(
             path,
             PAYLOAD.len() as u64,
             &sha256_hex(OTHER_PAYLOAD),
         );
-        component
-            .process(dir.path(), Slot::A)
-            .expect("observe mode must not reject a mismatching blob");
+        assert!(
+            component.process(dir.path(), Slot::A).is_err(),
+            "a blob not matching the signed manifest must fail the update"
+        );
     }
 }
