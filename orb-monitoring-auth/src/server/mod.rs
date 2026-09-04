@@ -147,6 +147,7 @@ impl Dependencies {
             token_endpoint: "todo".into(),
             server_socket_path: DEFAULT_SOCKET.into(),
             dd_agent_uid: crate::DD_AGENT_UID,
+            #[allow(clippy::default_constructed_unit_structs)]
             clock: Clock::default(),
             dbus: zbus::Connection::session().await?,
             refresh_token_interval: Duration::from_hours(4),
