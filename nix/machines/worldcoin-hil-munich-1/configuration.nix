@@ -19,6 +19,7 @@
 
   worldcoin.orbId = "muc1mini";
   worldcoin.orbPlatform = "mini";
+  worldcoin.flashingRig.enable = true;
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
