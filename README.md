@@ -32,7 +32,7 @@ the orb's software. The most important applications on the orb are as follows:
 
 ## Contributing
 
-Reaad our [AI policy](./AI_POLICY.md) before contributing.
+Read our [AI policy](./AI_POLICY.md) before contributing.
 
 See the [mdbook][mdbook] for development documentation.
 
