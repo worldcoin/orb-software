@@ -25,6 +25,7 @@ orb-token = [
 	"dep:zbus",
 ]
 serde = ["dep:serde"]
+testing = []
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "from_str"] }
