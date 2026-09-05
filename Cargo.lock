@@ -7505,6 +7505,7 @@ dependencies = [
  "dbus-launch",
  "derive_more 2.1.1",
  "eyre",
+ "futures",
  "hex 0.4.3",
  "orb-attest-dbus",
  "serde",
