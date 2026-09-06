@@ -152,6 +152,7 @@ impl Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             state: UiState::Booting,
+            ambient_light_blackout_until: None,
             gimbal: None,
             operating_mode: OperatingMode::default(),
         }
@@ -226,6 +227,7 @@ impl EventHandler for Runner<PEARL_RING_LED_COUNT, PEARL_CENTER_LED_COUNT> {
                     self.state = UiState::Running(*mode);
                 }
             }
+            Event::AmbientLightSample { .. } => {}
             Event::Beacon => {
                 let master_volume = self.sound.volume();
                 self.sound.set_master_volume(50);
