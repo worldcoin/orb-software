@@ -287,8 +287,8 @@ in
       "d /opt/worldcoin 0755 root root - -"
       "d /opt/worldcoin/rts 0777 root root - -"
       "d /run/hil-agent 0777 root root - -"
-      "d /var/lib/github-runner 0755 root root - -"
-      "d /var/lib/github-runner/${hostname} 0755 ${ghRunnerUser} ${ghRunnerUser} - -"
+      "d /opt/worldcoin/github-runner-workdir 0755 root root - -"
+      "d /opt/worldcoin/github-runner-workdir/${hostname} 0755 ${ghRunnerUser} ${ghRunnerUser} - -"
     ];
     users.groups = {
       "${ghRunnerUser}" = {
@@ -413,7 +413,7 @@ in
         replace = true;
         user = ghRunnerUser;
         runnerGroup = "hardware-in-the-loop-server";
-        workDir = "/var/lib/github-runner/${hostname}";
+        workDir = "/opt/worldcoin/github-runner-workdir/${hostname}";
 
         serviceOverrides = {
           Environment = [
