@@ -17,13 +17,26 @@
     ../orb-mini-runner.nix
   ];
 
-  worldcoin.orbId = "sf1mini1";
+  worldcoin.orbId = "a8516a15";
   worldcoin.orbPlatform = "mini";
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''
       orb_id: ${config.worldcoin.orbId}
       platform: ${config.worldcoin.orbPlatform}
+      has_relay: true
+      cameras:
+        rgb_ir: og05d1s
+        birefringence: og05d1b
+        iris_left: og05d2b_left
+        iris_right: og05d2b_right
+        tof: sif2618rm
+        thermal: eco160
+      displays:
+        - id: 0
+          type: back
+        - id: 2
+          type: front
     '';
     mode = "0644";
   };
