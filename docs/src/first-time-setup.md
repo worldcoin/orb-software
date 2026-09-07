@@ -84,8 +84,12 @@ depends on if you are officially affiliated with Worldcoin.
 3. Extract its contents, and note down the dir that *contains* the
    `Seek_Thermal_SDK_4.1.0.0` dir.
 4. modify your `.envrc` like this: `use flake . --override-input seekSdk
-   "PATH_FROM_STEP_3"`. If you don't yet have access to the SDK, just provide
-   a path to an empty directory.
+   "path:PATH_FROM_STEP_3"`. If you don't yet have access to the SDK, just
+   provide a path to an empty directory.
+
+   Use the `path:` prefix. Without it, if `PATH_FROM_STEP_3` sits inside a
+   git repo (e.g. `.devcontainer/` in this repo), Nix silently resolves to
+   that repo's root instead, and `SEEK_SDK_PATH` ends up missing the SDK.
 
 [WSL2]: https://learn.microsoft.com/en-us/windows/wsl/install
 [direnv]: https://direnv.net/
