@@ -278,7 +278,13 @@ fn ensure_sources_match_claim(
             continue;
         }
         let path =
-            util::make_component_path(&settings.downloads, &source.unique_name());
+            util::make_component_path(&settings.downloads, &source.unique_name())
+                .wrap_err_with(|| {
+                    format!(
+                        "failed constructing on-disk path for component source {}",
+                        source.name
+                    )
+                })?;
         ensure_source_matches_record(&path, source).wrap_err_with(|| {
             format!("source for component {} does not match record", source.name)
         })?;
