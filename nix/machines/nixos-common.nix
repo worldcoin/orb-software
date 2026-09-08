@@ -44,9 +44,6 @@ in
       "plugdev" # usb access
       "wheel" # sudo powers
     ];
-    # For now, we only hard-code @thebutlah's keys. This allows remote access in case
-    # teleport isn't working or is misconfigured.
-    # Added @pophilpo's SSH Key for collaboration with @thebutlah
     openssh.authorizedKeys.keys = import ./ssh-keys.nix;
 
     shell = pkgs.zsh;

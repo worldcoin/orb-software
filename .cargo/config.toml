@@ -16,5 +16,20 @@ runner = "docker/nix-cargo-runner.sh"
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-Clinker-features=-lld"] # dont use lld, it has issues with fenix rn
 
+[target.aarch64-linux-android]
+rustflags = [
+	"-C",
+	"debuginfo=line-tables-only",
+	"-C",
+	"strip=debuginfo",
+	# The NDK's static libc++ (`libc++_static.a`) references
+	# `__gxx_personality_v0`, which lives in `libc++abi.a` - rustc's built-in
+	# Android link args pull in `libc++_static`/`libunwind` but not this, so
+	# any crate statically linking C++ code (e.g. `oboe` for audio) fails to
+	# link without it.
+	"-C",
+	"link-arg=-lc++abi",
+]
+
 [alias]
 x = "run -q --package x --"

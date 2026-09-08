@@ -18,4 +18,8 @@ color-eyre.workspace = true
 convert_case = "0.6"
 
 [package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+unsupported_targets = [
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"aarch64-linux-android",
+]

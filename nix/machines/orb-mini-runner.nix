@@ -26,6 +26,12 @@ let
   ++ lib.optional config.worldcoin.jenkinsAgent.enable "jenkins-agent-user";
 in
 {
+  options.worldcoin.flashingRig.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = "Whether to run the QDL flashing rig service on this HIL.";
+  };
+
   config = lib.mkIf (config.worldcoin.orbPlatform == "mini") {
     services.displayManager.autoLogin = {
       enable = true;
@@ -73,7 +79,7 @@ in
       ];
     });
 
-    systemd.user.services.flashing-rig = {
+    systemd.user.services.flashing-rig = lib.mkIf config.worldcoin.flashingRig.enable {
       description = "QDL Flashing Rig";
       after = [ "graphical-session.target" ];
       wants = [ "graphical-session.target" ];

@@ -24,3 +24,6 @@ tinybmp = "0.5.0"
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]

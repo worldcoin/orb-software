@@ -20,6 +20,11 @@ SupplementaryGroups=worldcoin-dbus netdev tee
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 Environment=RUST_BACKTRACE=1
 SyslogIdentifier=worldcoin-connd
+# NetworkManager creates these directories as root:root 0700. Repair directory
+# access before each start so connd can measure state and remove stale leases.
+# Keep file ownership and modes intact, including credentials and secret_key.
+ExecStartPre=+/usr/bin/install -d -o root -g orb-connd -m 0750 /usr/persistent/network-manager /usr/persistent/network-manager/connections
+ExecStartPre=+/usr/bin/install -d -o root -g orb-connd -m 0770 /usr/persistent/network-manager/varlib
 ExecStart=/usr/local/bin/orb-connd
 Restart=always
 RestartSec=3

@@ -32,7 +32,19 @@ in
         username
       ];
     };
+    extraOptions = ''
+      netrc-file = /run/nix-github-netrc
+    '';
   };
+
+  # Empty placeholder so nix.conf's netrc-file always resolves to something;
+  # curl hard-fails (even on unrelated public fetches) if the file is missing
+  # entirely, but is fine with it being empty. disko-install fills it in.
+  systemd.tmpfiles.rules = [ "f /run/nix-github-netrc 0600 root root -" ];
+
+  # crates.io blocks the default curl User-Agent used by fetchurl.
+  environment.variables.NIX_CURL_FLAGS = "--user-agent orb-software-nix-fetcher";
+  systemd.services.nix-daemon.environment.NIX_CURL_FLAGS = "--user-agent orb-software-nix-fetcher";
 
   # use the latest Linux kernel
   boot = {
@@ -141,7 +153,33 @@ in
       wget
     ]
     ++ [
-      inputs.disko.packages.${system}.disko-install
+      # Wraps the real disko-install: prompts once for a GitHub token (needed
+      # to fetch private flake inputs like seekSdk) and feeds it to Nix via
+      # NIX_USER_CONF_FILES. The token only ever lives in /run (tmpfs), never
+      # on persistent disk or in the image itself.
+      (pkgs.writeShellApplication {
+        name = "disko-install";
+        text = ''
+          conf=/run/nix-github-access.conf
+          netrc=/run/nix-github-netrc
+          if [ ! -f "$conf" ]; then
+            read -rs -p "GitHub token for private flake inputs (Enter to skip): " token
+            echo
+            if [ -n "$token" ]; then
+              install -m 600 /dev/null "$conf"
+              printf 'access-tokens = github.com=%s\n' "$token" > "$conf"
+
+              printf 'machine github.com\n  login x-access-token\n  password %s\n' "$token" > "$netrc"
+            fi
+          fi
+          # Set explicitly (not just via environment.variables) since sudo
+          # doesn't reliably inherit ambient/PAM-sourced environment here.
+          exec env \
+            NIX_USER_CONF_FILES="$conf" \
+            NIX_CURL_FLAGS="--user-agent orb-software-nix-fetcher" \
+            ${inputs.disko.packages.${system}.disko-install}/bin/disko-install "$@"
+        '';
+      })
       inputs.disko.packages.${system}.disko
     ];
 

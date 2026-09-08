@@ -17,9 +17,8 @@
     ../orb-mini-runner.nix
   ];
 
-  worldcoin.orbId = "muc1mini";
+  worldcoin.orbId = "sf2mini1";
   worldcoin.orbPlatform = "mini";
-  worldcoin.flashingRig.enable = true;
 
   environment.etc."worldcoin/orb.yaml" = {
     text = ''

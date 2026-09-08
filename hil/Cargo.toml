@@ -51,3 +51,6 @@ zbus.workspace = true
 
 [build-dependencies]
 orb-build-info = { path = "../build-info", features = ["build-script"] }
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]

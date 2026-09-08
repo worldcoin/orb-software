@@ -12,7 +12,7 @@ on:
 
 env:
   ORBS_TARGETS: '["worldcoin-hil-munich-0","worldcoin-hil-munich-2","worldcoin-hil-munich-3","worldcoin-hil-munich-4","worldcoin-hil-munich-5", "worldcoin-hil-munich-6","worldcoin-hil-munich-8","worldcoin-hil-munich-9","worldcoin-hil-munich-10","worldcoin-hil-munich-11"]'
-  MINI_TARGETS: '["worldcoin-hil-munich-1","worldcoin-hil-sf-1"]'
+  MINI_TARGETS: '["worldcoin-hil-munich-1","worldcoin-hil-sf-1","worldcoin-hil-sf-2","worldcoin-hil-sf-3"]'
 
 jobs:
   prepare:

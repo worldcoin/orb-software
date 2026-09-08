@@ -115,6 +115,22 @@ in
       netrc-file = /etc/worldcoin/secrets/nix-github-netrc
     '';
 
+    # HILs must never suspend-to-RAM: a sleeping box drops off as a GitHub
+    # runner and silently stalls whatever orb test is in flight. Mask the
+    # sleep targets so nothing (idle timers, KDE power management, ACPI
+    # events, a stray `systemctl suspend`) can put the machine to sleep.
+    systemd.targets.sleep.enable = false;
+    systemd.targets.suspend.enable = false;
+    systemd.targets.hibernate.enable = false;
+    systemd.targets.hybrid-sleep.enable = false;
+
+    services.logind.lidSwitch = "ignore";
+    services.logind.lidSwitchDocked = "ignore";
+    services.logind.lidSwitchExternalPower = "ignore";
+    services.logind.extraConfig = ''
+      IdleAction=ignore
+    '';
+
     # Install test-related packages
     environment.systemPackages = with pkgs; [
       orb-hil
@@ -271,6 +287,8 @@ in
       "d /opt/worldcoin 0755 root root - -"
       "d /opt/worldcoin/rts 0777 root root - -"
       "d /run/hil-agent 0777 root root - -"
+      "d /opt/worldcoin/github-runner-workdir 0755 root root - -"
+      "d /opt/worldcoin/github-runner-workdir/${hostname} 0755 ${ghRunnerUser} ${ghRunnerUser} - -"
     ];
     users.groups = {
       "${ghRunnerUser}" = {
@@ -395,6 +413,7 @@ in
         replace = true;
         user = ghRunnerUser;
         runnerGroup = "hardware-in-the-loop-server";
+        workDir = "/opt/worldcoin/github-runner-workdir/${hostname}";
 
         serviceOverrides = {
           Environment = [

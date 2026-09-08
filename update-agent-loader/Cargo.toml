@@ -44,4 +44,8 @@ ed25519-dalek = "2.1.1"
 rand = "0.8.5"
 
 [package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+unsupported_targets = [
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"aarch64-linux-android",
+]
