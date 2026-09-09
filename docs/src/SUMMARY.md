@@ -11,8 +11,6 @@
   - [Binary Diffing](./ota/binary-diffing.md) 
 - [Hardware In The Loop](./hil/README.md)
   - [Orb-HIL CLI](./hil/cli.md)
-  - [Setting Up NixOS](./hil/nixos-setup.md)
-  - [Hardware Setup](./hil/hardware-setup.md)
 - [Software Components](./components/README.md)
   - [Orb Core](./components/orb-core/README.md)
 - [Orb Management](./orb-management/orb-management.md)
