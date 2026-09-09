@@ -1,7 +1,7 @@
 FROM debian:bullseye-slim
 
 # Install fsck and filesystem tools
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -o Acquire::Check-Valid-Until=false && apt-get install -y \
     e2fsprogs \
     && rm -rf /var/lib/apt/lists/*
 
