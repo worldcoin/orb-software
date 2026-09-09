@@ -417,6 +417,9 @@ event_enum! {
         /// Resume sending messages to the MCU.
         #[event_enum(method = resume)]
         Resume,
+        /// Temporarily blank front LEDs; zero cancels. Capped at five seconds.
+        #[event_enum(method = ambient_light_sample)]
+        AmbientLightSample { duration_ms: u32 },
 
         /// In recovery image
         #[event_enum(method = recovery)]
@@ -605,6 +608,7 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
     state: UiState,
+    ambient_light_blackout_until: Option<std::time::Instant>,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
 }
