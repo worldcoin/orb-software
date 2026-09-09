@@ -20,9 +20,6 @@ on:
     tags:
       - '**'
 
-env: 
-  CI_NIXOS_HOSTNAMES: ryan-worldcoin-hil worldcoin-hil-munich-0 worldcoin-hil-munich-1 worldcoin-hil-munich-2 worldcoin-hil-jabil-0
-
 concurrency:
   # PRs coalesce per-PR (and cancel superseded runs); every push/tag/release
   # gets a unique group so it is never queued-out or cancelled under load.
@@ -84,78 +81,3 @@ jobs:
           set -Eeux -o pipefail
           OUTPUT="$(nix develop --print-build-logs --command -- echo testoutput)"
           [[ "${OUTPUT}" == "testoutput" ]]
-
-  nixos:
-    name: Build NixOS Machines
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
-        with:
-          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
-        with:
-          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # pin@v17
-        continue-on-error: true
-        with:
-          name: worldcoin
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-
-      - name: Build NixOS configurations
-        run: |
-          set -Eeux -o pipefail
-          # TODO: Build *all* configurations.
-          for hostname in ${CI_NIXOS_HOSTNAMES}; do
-            nix build --print-build-logs .#nixosConfigurations.${hostname}.config.system.build.toplevel
-          done
-
-  liveusb:
-    name: Build NixOS Installer
-    runs-on: public-ubuntu-24.04-8core
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
-        with:
-          token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
-        with:
-          github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # pin@v17
-        continue-on-error: true
-        with:
-          name: worldcoin
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Authorize private git repos
-        run: git config --global url."https://${{ secrets.ORB_GIT_HUB_TOKEN }}@github.com".insteadOf https://github.com
-
-      - name: Build Disko Image Script
-        run: |
-          set -Eeuxo pipefail
-          nix build --print-build-logs .#nixosConfigurations.liveusb.config.system.build.diskoImagesScript
-          ls -alhR ./result
-      - name: Run Disko Image Script
-        run: |
-          set -Eeuxo pipefail
-          sudo prlimit --pid $$ --nofile=500000:500000
-          ./result --build-memory 1024
-          ls -lh *.raw
-      - name: Compress artifact
-        run: |
-          set -Eeuxo pipefail
-          mkdir -p artifacts
-          gzip --stdout liveusb.raw > artifacts/liveusb.raw.gz
-          ls -aRsh artifacts
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # pin@v4.3.3
-        if: github.event_name == 'workflow_dispatch' || format('refs/heads/{0}', github.event.repository.default_branch) == github.ref
-        with:
-          # upload v4 doesn't support writing multiple times to the same artifact name.
-          # so its important that we name it after the workflow and not something
-          # general like "artifacts"
-          name: nix
-          path: artifacts/*
-          compression-level: 0
-          if-no-files-found: error
-          retention-days: 14
