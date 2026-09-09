@@ -1,5 +1,6 @@
 use data_encoding::BASE64;
 use orb_dogd::MetricEmitter;
+use orb_info::OrbId;
 use reqwest::Client;
 use ring::{digest, digest::digest};
 use secrecy::SecretString;
@@ -254,7 +255,7 @@ impl Challenge {
     #[tracing::instrument(skip(client))]
     pub async fn request(
         client: &Client,
-        orb_id: &str,
+        orb_id: &OrbId,
         url: &url::Url,
     ) -> Result<Self, ChallengeError> {
         let req = serde_json::json!({
@@ -455,7 +456,7 @@ impl Token {
     pub async fn request(
         client: &Client,
         url: &url::Url,
-        orb_id: &str,
+        orb_id: &OrbId,
         challenge: &Challenge,
         signature: &Signature,
     ) -> Result<Self, TokenError> {
@@ -558,7 +559,7 @@ where
 /// Try to refresh the token once, if it succeeds, return the new token.
 #[tracing::instrument]
 async fn get_token_inner(
-    orb_id: &str,
+    orb_id: &OrbId,
     token_challenge: &url::Url,
     token_fetch: &url::Url,
 ) -> Result<Token, RefreshTokenError> {
@@ -627,7 +628,7 @@ async fn get_token_inner(
 /// if fails to construct API URL
 #[tracing::instrument(skip(metrics, conn_tracker))]
 pub async fn get_token(
-    orb_id: &str,
+    orb_id: &OrbId,
     base_url: &Url,
     metrics: &impl MetricEmitter,
     conn_tracker: &ConnectivityTracker,
@@ -767,7 +768,7 @@ struct AttestedKeysForSigning {
 
 #[derive(serde::Serialize)]
 struct ProofPayload {
-    orb_id: String,
+    orb_id: OrbId,
     server_nonce: String,
     attested_keys: AttestedKeysForSigning,
     signature: String,
@@ -852,7 +853,7 @@ async fn wait_before_migrated_key_retry(
 }
 
 async fn migrated_key_token_once(
-    orb_id: &str,
+    orb_id: &OrbId,
     tokenchallenge_url: &Url,
     token_url: &Url,
 ) -> Result<Token, RefreshTokenError> {
@@ -893,7 +894,7 @@ async fn migrated_key_token_once(
 /// Communication failures are retried until the probe reaches the backend.
 #[tracing::instrument]
 pub(crate) async fn try_token_with_migrated_key(
-    orb_id: &str,
+    orb_id: &OrbId,
     auth_url: &Url,
 ) -> MigratedKeyProbe {
     let tokenchallenge_url = match auth_url.join("tokenchallenge") {
@@ -995,7 +996,7 @@ fn extract_key_info(
 /// 4. POST `keys_proof_url` with the assembled payload
 #[tracing::instrument]
 pub async fn submit_proof(
-    orb_id: &str,
+    orb_id: &OrbId,
     keys_challenge_url: &Url,
     keys_proof_url: &Url,
 ) -> Result<(), ProofError> {
@@ -1112,7 +1113,7 @@ pub async fn submit_proof(
 
     // 4. Submit proof
     let payload = ProofPayload {
-        orb_id: orb_id.to_string(),
+        orb_id: orb_id.clone(),
         server_nonce,
         attested_keys,
         signature: sig_b64,
@@ -1136,6 +1137,7 @@ pub async fn submit_proof(
 
 #[cfg(test)]
 mod test {
+    use orb_info::orb_id::test_orb_id;
     use std::ffi::OsString;
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
@@ -1262,7 +1264,7 @@ mod test {
 
         let mock_server = MockServer::start().await;
 
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
@@ -1339,7 +1341,7 @@ mod test {
     #[serial]
     async fn try_token_with_migrated_key_happy_path() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1394,7 +1396,7 @@ mod test {
     #[serial]
     async fn migrated_key_transport_failures_must_not_select_legacy_signer() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         let challenge_response = serde_json::json!({
@@ -1474,7 +1476,7 @@ mod test {
     #[serial]
     async fn token_forbidden_definitively_rejects_migrated_key() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1519,7 +1521,7 @@ mod test {
         *SIGNING_FAILURE_ERROR_COUNT.write().unwrap() = std::num::Saturating(0);
 
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -1573,7 +1575,7 @@ mod test {
     #[serial]
     async fn non_communication_se050_failures_are_bounded() {
         let mock_server = MockServer::start().await;
-        let orb_id = "TEST_ORB";
+        let orb_id = &test_orb_id();
         let challenge =
             "challenge_token_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
