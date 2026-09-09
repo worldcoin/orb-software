@@ -11,8 +11,8 @@ use crate::orb::revision::OrbRevision;
 use crate::orb::{dfu, BatteryStatus};
 use crate::orb::{Board, OrbInfo};
 use crate::{
-    Camera, GimbalHomeOpts, IrWavelength, Leds, PolarizerOpts, RebootBehavior,
-    SignupOpts,
+    Camera, GimbalHomeOpts, IrLedMode, IrWavelength, Leds, PolarizerOpts,
+    RebootBehavior, SignupOpts,
 };
 use orb_mcu_interface::can::canfd::CanRawMessaging;
 use orb_mcu_interface::can::isotp::{CanIsoTpMessaging, IsoTpNodeIdentifier};
@@ -227,7 +227,12 @@ impl MainBoard {
         }
     }
 
-    pub async fn trigger_camera(&mut self, cam: Camera, fps: u32) -> Result<()> {
+    pub async fn trigger_camera(
+        &mut self,
+        cam: Camera,
+        fps: u32,
+        irleds: IrLedMode,
+    ) -> Result<()> {
         // set FPS to provided value
         match self
             .send(McuPayload::ToMain(
@@ -248,42 +253,46 @@ impl MainBoard {
             }
         }
 
-        // set on-duration to 300us
-        match self
-            .send(McuPayload::ToMain(
-                main_messaging::jetson_to_mcu::Payload::LedOnTime(
-                    main_messaging::LedOnTimeUs {
-                        on_duration_us: 300,
-                    },
-                ),
-            ))
-            .await
-        {
-            Ok(CommonAckError::Success) => {
-                info!("💡 LED on duration set to 300us");
+        if irleds == IrLedMode::On {
+            // set on-duration to 300us
+            match self
+                .send(McuPayload::ToMain(
+                    main_messaging::jetson_to_mcu::Payload::LedOnTime(
+                        main_messaging::LedOnTimeUs {
+                            on_duration_us: 300,
+                        },
+                    ),
+                ))
+                .await
+            {
+                Ok(CommonAckError::Success) => {
+                    info!("💡 LED on duration set to 300us");
+                }
+                Ok(ack_err) => {
+                    return Err(eyre!("Error setting on-duration: ack: {:?}", ack_err));
+                }
+                Err(e) => {
+                    return Err(eyre!("Error setting on-duration: {:?}", e));
+                }
             }
-            Ok(ack_err) => {
-                return Err(eyre!("Error setting on-duration: ack: {:?}", ack_err));
-            }
-            Err(e) => {
-                return Err(eyre!("Error setting on-duration: {:?}", e));
-            }
-        }
 
-        // enable wavelength 850nm
-        match self.send(McuPayload::ToMain(
-            main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
-                wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
-            }))).await {
-            Ok(CommonAckError::Success) => {
-                info!("⚡️ 850nm infrared LEDs enabled");
+            // enable wavelength 850nm
+            match self.send(McuPayload::ToMain(
+                main_messaging::jetson_to_mcu::Payload::InfraredLeds(main_messaging::InfraredLeDs {
+                    wavelength: orb_messages::main::infrared_le_ds::Wavelength::Wavelength850nm as i32,
+                }))).await {
+                Ok(CommonAckError::Success) => {
+                    info!("⚡️ 850nm infrared LEDs enabled");
+                }
+                Ok(ack_err) => {
+                    return Err(eyre!("Error enabling infrared LEDs: ack: {:?}", ack_err));
+                }
+                Err(e) => {
+                    return Err(eyre!("Error enabling infrared LEDs: {:?}", e));
+                }
             }
-            Ok(ack_err) => {
-                return Err(eyre!("Error enabling infrared leds: ack: {:?}", ack_err));
-            }
-            Err(e) => {
-                return Err(eyre!("Error enabling infrared leds: {:?}", e));
-            }
+        } else {
+            info!("💡 IR LEDs left unchanged");
         }
 
         // enable camera trigger

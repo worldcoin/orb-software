@@ -298,6 +298,12 @@ enum PolarizerOpts {
     },
 }
 
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrLedMode {
+    On,
+    Off,
+}
+
 #[derive(Parser, Debug, Clone, Copy)]
 enum Camera {
     #[clap(action)]
@@ -305,19 +311,25 @@ enum Camera {
         /// Frames per second
         #[clap(default_value = "30")]
         fps: u32,
+        /// Whether to enable IR LEDs while triggering the camera
+        #[clap(long, value_enum, default_value = "on")]
+        irleds: IrLedMode,
     },
     #[clap(action)]
     Face {
         /// Frames per second
         #[clap(default_value = "30")]
         fps: u32,
+        /// Whether to enable IR LEDs while triggering the camera
+        #[clap(long, value_enum, default_value = "on")]
+        irleds: IrLedMode,
     },
 }
 
 /// Optics tests options
 #[derive(Parser, Debug, Clone, Copy)]
 enum UiOpts {
-    /// Test front leds for 3 seconds
+    /// Test front LEDs for 3 seconds
     #[clap(subcommand)]
     Front(Leds),
 }
@@ -475,11 +487,13 @@ async fn execute(args: Args) -> Result<()> {
                     .await?
             }
             OpticsOpts::TriggerCamera(camera) => {
-                let fps = match camera {
-                    Camera::Eye { fps } => fps,
-                    Camera::Face { fps } => fps,
+                let (fps, irleds) = match camera {
+                    Camera::Eye { fps, irleds } => (fps, irleds),
+                    Camera::Face { fps, irleds } => (fps, irleds),
                 };
-                orb.main_board_mut().trigger_camera(camera, fps).await?
+                orb.main_board_mut()
+                    .trigger_camera(camera, fps, irleds)
+                    .await?
             }
             OpticsOpts::Signup(opts) => {
                 orb.main_board_mut().signup_capture(opts).await?
