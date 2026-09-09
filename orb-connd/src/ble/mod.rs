@@ -2,7 +2,7 @@ use bluer::adv::{Advertisement, Type};
 use color_eyre::{eyre::eyre, Result};
 use serde::{Deserialize, Serialize};
 use speare::mini;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 use zenorb::Zenorb;
@@ -59,7 +59,7 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
     let subscriber = ctx
         .zenoh
-        .declare_subscriber("ble_beacon")
+        .declare_subscriber("*/ble_beacon")
         .await
         .map_err(|e| eyre!("{e}"))?;
 
@@ -87,10 +87,12 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
         match advert.payload {
             None => {
+                info!("removing ble advert from service: {}", advert.service_id);
                 service_data.remove(&advert.service_id);
             }
 
             Some(payload) => {
+                info!("adding ble advert for service: {}", advert.service_id);
                 service_data.insert(advert.service_id, payload);
             }
         }
@@ -99,6 +101,7 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
             (true, None) => (),
 
             (true, Some(_)) => {
+                info!("removing all ble advertisements");
                 _advertisement_handle = None;
             }
 
@@ -111,6 +114,7 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
                     service_data: service_data.clone(),
+                    timeout: Some(Duration::ZERO),
                     ..Default::default()
                 };
 
