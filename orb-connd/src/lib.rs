@@ -15,6 +15,7 @@ pub mod service;
 pub mod systemd;
 pub mod wpa_ctrl;
 
+mod ble;
 mod utils;
 
 #[derive(Display, Debug, PartialEq, Copy, Clone)]

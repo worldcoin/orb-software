@@ -48,6 +48,7 @@ let
       ]
       ++ p.lib.lists.optionals p.stdenv.isLinux [
         "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
+        "${p.dbus.dev}/lib/pkgconfig" # for libdbus-sys (via bluer)
         "${p.nixpkgs-23_11.libcap.dev}/lib/pkgconfig" # for minijail-sys
         "${p.nixpkgs-23_11.minijail}/lib/pkgconfig" # for minijail-sys (libminijail)
         "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
