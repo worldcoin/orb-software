@@ -113,7 +113,7 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
-                    local_name: Some(format!("ORB-{}", ctx.zenoh.orb_id())),
+                    local_name: Some("Orb".to_owned()),
                     service_data: service_data.clone(),
                     timeout: Some(Duration::ZERO),
                     ..Default::default()

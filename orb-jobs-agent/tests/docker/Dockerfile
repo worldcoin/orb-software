@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # Install fsck and filesystem tools
 RUN apt-get update && apt-get install -y \

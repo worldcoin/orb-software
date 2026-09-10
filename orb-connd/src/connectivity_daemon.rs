@@ -2,7 +2,7 @@ use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
 use crate::{ble, modem, reporters, OrbCapabilities};
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::Result;
 use orb_info::orb_os_release::OrbOsRelease;
 use speare::mini::{self, OnErr};
 use speare::{Backoff, Limit};
@@ -71,7 +71,7 @@ pub async fn program(
         .await
         .inspect_err(|e| error!("failed to start connd zoci zenoh receiver: {e}"));
 
-    let _ = speare
+    speare
         .task_with()
         .on_err(OnErr::Restart {
             max: Limit::None,
@@ -97,7 +97,7 @@ pub async fn program(
     .await?;
 
     if let OrbCapabilities::CellularAndWifi = cap {
-        let _ = speare
+        speare
             .task_with()
             .on_err(OnErr::Restart {
                 max: 10.into(),
