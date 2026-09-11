@@ -6,14 +6,16 @@ pub mod sender;
 
 use crate::{
     backend::boot_id::orb_boot_id,
-    orb_event_stream::{reroute::OesReroute, Event, OrbEventStream, Payload},
+    orb_event_stream::{Event, OrbEventStream, Payload},
     sender::BackendSender,
 };
 use backend::client::StatusClient;
 use chrono::Utc;
 use collectors::{
     connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states, net_stats, oes_collector,
+    core_signups, front_als, hardware_states,
+    linux::reroute::OesReroute,
+    net_stats,
     token::TokenWatcher,
     update_progress, ZenorbCtx,
 };
@@ -76,7 +78,6 @@ pub async fn program(
     let token_receiver =
         TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
 
-    // Build unified zenorb context and single receiver
     let (connectivity_tx, connectivity_receiver) =
         watch::channel(GlobalConnectivity::NotConnected);
 
@@ -131,7 +132,7 @@ pub async fn program(
         oes: oes.clone(),
     };
 
-    let zenorb_tasks = zsession
+    let mut zenorb_tasks = zsession
         .receiver(zenorb_ctx)
         .querying_subscriber(
             "connd/oes/active_connections",
@@ -148,7 +149,6 @@ pub async fn program(
             Duration::from_millis(100),
             front_als::handle_front_als_event,
         )
-        .subscriber(orb_event_stream::KEY_EXPR, oes_collector::handler)
         .oes_reroute(
             "core/config",
             Duration::from_millis(100),
@@ -156,6 +156,17 @@ pub async fn program(
         )
         .run()
         .await?;
+
+    zenorb_tasks.extend(
+        zsession
+            .receiver(oes.clone())
+            .subscriber(
+                orb_event_stream::KEY_EXPR,
+                orb_event_stream::collector::handler,
+            )
+            .run()
+            .await?,
+    );
 
     let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
     sender

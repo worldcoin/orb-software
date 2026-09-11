@@ -1,5 +1,4 @@
 pub mod linux;
-pub mod oes_collector;
 
 pub(crate) use linux::ZenorbCtx;
 pub use linux::{
