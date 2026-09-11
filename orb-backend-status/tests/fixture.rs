@@ -1,3 +1,5 @@
+#![cfg(feature = "linux-collectors")]
+
 use async_tempfile::TempDir;
 use color_eyre::Result;
 use dbus_launch::BusType;

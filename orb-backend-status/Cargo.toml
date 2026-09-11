@@ -12,8 +12,22 @@ rust-version.workspace = true
 
 [features]
 default = ["linux-collectors"]
-linux-collectors = []
+linux-collectors = [
+	"dep:orb-backend-status-dbus",
+	"dep:orb-connd-dbus",
+	"dep:orb-endpoints",
+	"dep:orb-messages",
+	"dep:orb-telemetry",
+	"dep:orb-update-agent-dbus",
+	"dep:zbus",
+	"orb-info/orb-token",
+]
 android-collectors = []
+
+[[bin]]
+name = "orb-backend-status"
+path = "src/main.rs"
+required-features = ["linux-collectors"]
 
 [dependencies]
 bon.workspace = true
@@ -24,23 +38,22 @@ flume.workspace = true
 futures-util = { version = "0.3.31" }
 eyre.workspace = true
 oes.workspace = true
-orb-backend-status-dbus.workspace = true
+orb-backend-status-dbus = { workspace = true, optional = true }
 orb-build-info.workspace = true
-orb-connd-dbus.workspace = true
-orb-endpoints.workspace = true
-orb-messages.workspace = true
+orb-connd-dbus = { workspace = true, optional = true }
+orb-endpoints = { workspace = true, optional = true }
+orb-messages = { workspace = true, optional = true }
 orb-info = { workspace = true, features = [
 	"async",
 	"orb-id",
 	"orb-jabil-id",
 	"orb-name",
 	"orb-os-release",
-	"orb-token",
 ] }
 orb-dogd.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
-orb-telemetry = { workspace = true, features = ["otel", "zbus-tracing"] }
-orb-update-agent-dbus.workspace = true
+orb-telemetry = { workspace = true, optional = true, features = ["otel", "zbus-tracing"] }
+orb-update-agent-dbus = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { version = "0.4.1", features = ["json"] }
 reqwest-tracing = { version = "0.5.6", features = ["opentelemetry_0_27"] }
@@ -59,11 +72,12 @@ tokio = { workspace = true, features = [
 ] }
 tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
-zbus = { workspace = true, default-features = false, features = ["tokio"] }
+zbus = { workspace = true, optional = true, default-features = false, features = ["tokio"] }
 zenorb.workspace = true
 
 [dev-dependencies]
 orb-info = { workspace = true, features = ["testing"] }
+orb-dogd = { workspace = true, features = ["testing"] }
 orb-security-utils = { workspace = true, features = [
 	"reqwest",
 	"dangerously-allow-http",

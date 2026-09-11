@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod collectors;
+#[cfg(feature = "linux-collectors")]
 pub mod dbus;
 pub mod orb_event_stream;
 pub mod sender;

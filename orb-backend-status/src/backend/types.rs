@@ -1,6 +1,5 @@
 use crate::orb_event_stream::Event;
 use chrono::{DateTime, Utc};
-use orb_update_agent_dbus::UpdateAgentState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -191,7 +190,19 @@ pub struct UpdateProgressApiV2 {
     pub install_progress: u64,
     pub total_progress: u64,
     pub error: Option<String>,
-    pub state: UpdateAgentState,
+    pub state: UpdateAgentStateApiV2,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpdateAgentStateApiV2 {
+    None,
+    Downloading,
+    Fetched,
+    Processed,
+    Installing,
+    Installed,
+    Rebooting,
+    NoNewVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

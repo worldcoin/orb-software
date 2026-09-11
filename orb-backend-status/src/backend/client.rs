@@ -89,7 +89,7 @@ impl StatusClient {
             let mut client = make_client()
                 .inspect_err(|e| error!("failed to create http client: {e:?}"))?;
 
-            let mut attest_token = String::new();
+            let mut attest_token = attest_token_rx.borrow_and_update().clone();
             let mut connectivity = connectivity_rx.borrow_and_update().clone();
 
             info!("client with connectivity: {connectivity:?}");
