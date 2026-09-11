@@ -180,10 +180,7 @@ impl TryFrom<Sample> for Payload {
                 _ => None,
             });
 
-        let created_at = headers
-            .created_at
-            .filter(|&at| chrono::DateTime::from_timestamp_millis(at).is_some())
-            .unwrap_or_else(|| Utc::now().timestamp_millis());
+        let created_at = Utc::now().timestamp_millis();
 
         let event = Event {
             name,
@@ -237,89 +234,6 @@ fn extract_event_name(key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use proptest::prelude::*;
-    use zenorb::zenoh::sample::SampleBuilder;
-
-    #[test]
-    fn buffered_events_keep_occurrence_time_through_envelope_conversion() {
-        let occurrence = 1788653350123;
-        for (topic, payload) in [
-            ("service_started", serde_json::json!({})),
-            (
-                "bootstrap",
-                serde_json::json!({"state": "failed", "stage": "configuration"}),
-            ),
-            ("bootstrap", serde_json::json!({"state": "succeeded"})),
-            ("operator_qr_restored", serde_json::json!({})),
-            (
-                "qr_scan",
-                serde_json::json!({"phase": "operator", "state": {"success": {"kind": "operator"}}, "origin": "camera"}),
-            ),
-        ] {
-            let key = zenorb::zenoh::key_expr::OwnedKeyExpr::try_from(format!(
-                "bfd00a01/core/oes/{topic}"
-            ))
-            .unwrap();
-            let sample: Sample =
-                SampleBuilder::put(key, serde_json::to_vec(&payload).unwrap())
-                    .encoding(Encoding::APPLICATION_JSON)
-                    .attachment(oes::Headers::default().created_at(occurrence))
-                    .into();
-            let converted = Payload::try_from(sample).unwrap();
-            assert_eq!(converted.event.created_at, occurrence);
-            assert_eq!(converted.event.name, format!("core/{topic}"));
-            assert_eq!(converted.event.payload, Some(payload));
-            assert_eq!(converted.headers.mode, oes::Mode::Normal);
-        }
-    }
-
-    #[test]
-    fn legacy_and_out_of_range_timestamps_use_receipt_time() {
-        for attachment in [
-            None,
-            Some(r#"{"mode":"Sticky"}"#),
-            Some(r#"{"mode":"Normal","created_at":9223372036854775807}"#),
-        ] {
-            let before = Utc::now().timestamp_millis();
-            let key = zenorb::zenoh::key_expr::OwnedKeyExpr::try_from(
-                "bfd00a01/core/oes/service_started",
-            )
-            .unwrap();
-            let sample: Sample = SampleBuilder::put(key, "{}")
-                .encoding(Encoding::APPLICATION_JSON)
-                .attachment(attachment.map(str::as_bytes))
-                .into();
-            let converted = Payload::try_from(sample).unwrap();
-            let after = Utc::now().timestamp_millis();
-            assert!((before..=after).contains(&converted.event.created_at));
-            if attachment == Some(r#"{"mode":"Sticky"}"#) {
-                assert_eq!(converted.headers.mode, oes::Mode::Sticky);
-            }
-        }
-    }
-
-    #[test]
-    fn malformed_occurrence_time_preserves_cache_delivery_mode() {
-        for mode in [oes::Mode::Sticky, oes::Mode::CacheOnly] {
-            let key = zenorb::zenoh::key_expr::OwnedKeyExpr::try_from(
-                "bfd00a01/core/oes/config",
-            )
-            .unwrap();
-            let sample: Sample = SampleBuilder::put(key, "{}")
-                .encoding(Encoding::APPLICATION_JSON)
-                .attachment(
-                    serde_json::to_vec(
-                        &serde_json::json!({"mode": mode, "created_at": "invalid"}),
-                    )
-                    .unwrap(),
-                )
-                .into();
-            let before = Utc::now().timestamp_millis();
-            let converted = Payload::try_from(sample).unwrap();
-            assert_eq!(converted.headers.mode, mode);
-            assert!((before..=Utc::now().timestamp_millis())
-                .contains(&converted.event.created_at));
-        }
-    }
 
     #[test]
     fn test_extract_event_name_smoke() {

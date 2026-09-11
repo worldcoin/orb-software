@@ -43,14 +43,6 @@ zsender
     .await
 ```
 
-Buffered publishers should capture the event's Unix-millisecond occurrence time
-before enqueueing and attach it with
-`oes::Headers::default().created_at(occurrence_ms)`. Keep that timestamp unchanged
-across retries. `orb-backend-status` uses it as the envelope's `created_at`; absent
-or out-of-range timestamps retain the legacy receipt-time behavior. Deploy this
-receiver support before enabling buffered producers so replayed startup events
-do not appear newer than subsequent lifecycle evidence.
-
 
 ### Rerouting existing non-OES topics to the OES
 This can be done *only* in the main `zenoh::Receiver` in `orb-backend-status`. Simply call the extension method `oes_reroute` 
@@ -212,14 +204,16 @@ Published by `orb-core` when the service starts. Empty payload.
 See [src/core.rs](src/core.rs).
 
 ### `core/bootstrap`
-- **Frequency**: bootstrap failure state changes and successful bootstrap
+- **Frequency**: each failed bootstrap attempt (existing five-second retry loop), and once after successful bootstrap
 - **Mode**: `oes::Normal`
 
 Reports initialization before the operator/user QR flow. Failure identifies a
 bounded stage (`network`, `token`, `configuration`, or `warmup`); it carries no
 raw error, URL, token, or credential. A successful bootstrap clears a preceding
 bootstrap error but does not assert readiness for a signup. Existing QR phase
-events establish whether core is waiting for an operator or a user.
+events establish whether core is waiting for an operator or a user. These events
+use the existing best-effort Zenoh publisher; delivery is not guaranteed while it
+is disconnected. `orb-backend-status` assigns event timestamps on receipt.
 
 ```json
 {"state": "failed", "stage": "configuration"}
