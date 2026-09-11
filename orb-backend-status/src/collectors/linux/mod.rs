@@ -7,13 +7,13 @@ pub(crate) mod reroute;
 pub mod token;
 pub mod update_progress;
 
+use super::GlobalConnectivity;
 use crate::backend::types::OrbStatusApiV2;
 use crate::{
     dbus::{intf_impl::BackendStatusImpl, setup_dbus},
     orb_event_stream::OrbEventStream,
 };
 use color_eyre::Result;
-use connectivity::GlobalConnectivity;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
 use reroute::OesReroute;
