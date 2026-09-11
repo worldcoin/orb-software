@@ -4,6 +4,27 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct ServiceStartedEvent {}
 
+/// Bootstrap outcome published to `oes/bootstrap`, before the signup flow starts.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum BootstrapEvent {
+    Failed { stage: BootstrapStage },
+    Succeeded,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapStage {
+    Network,
+    Token,
+    Configuration,
+    Warmup,
+}
+
+/// A validated persisted operator credential was adopted, not merely read.
+#[derive(Serialize, Deserialize)]
+pub struct OperatorQrRestoredEvent {}
+
 /// A QR scan event, recording the current phase and outcome.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -13,6 +34,18 @@ pub struct QrScanEvt {
     phase: QrScanPhase,
     /// The outcome of the scan attempt.
     state: QrScanState,
+    /// How an accepted operator QR was supplied. Legacy events omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin: Option<QrScanOrigin>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QrScanOrigin {
+    Camera,
+    Cli,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Outcome of a QR scan attempt.
@@ -119,4 +152,59 @@ pub struct PublishableConfig {
     /// Whether the thermal camera is required for signup.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thermal_camera_required: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{from_value, json, to_value};
+
+    #[test]
+    fn operator_qr_origin_is_optional_and_forward_compatible() {
+        let legacy = json!({
+            "phase": "operator",
+            "state": {"success": {"kind": "operator"}}
+        });
+        let event: QrScanEvt = from_value(legacy.clone()).unwrap();
+        assert_eq!(event.origin, None);
+        assert_eq!(to_value(event).unwrap(), legacy);
+
+        for (origin, expected) in [
+            ("camera", QrScanOrigin::Camera),
+            ("cli", QrScanOrigin::Cli),
+            ("future_input", QrScanOrigin::Unknown),
+        ] {
+            let mut payload = legacy.clone();
+            payload["origin"] = json!(origin);
+            let event: QrScanEvt = from_value(payload).unwrap();
+            assert_eq!(event.origin, Some(expected));
+        }
+    }
+
+    #[test]
+    fn bootstrap_failure_requires_a_bounded_stage() {
+        for stage in ["network", "token", "configuration", "warmup"] {
+            let payload = json!({"state": "failed", "stage": stage});
+            let event: BootstrapEvent = from_value(payload.clone()).unwrap();
+            assert_eq!(to_value(event).unwrap(), payload);
+        }
+        assert!(from_value::<BootstrapEvent>(json!({"state": "failed"})).is_err());
+        assert!(from_value::<BootstrapEvent>(
+            json!({"state": "failed", "stage": "unexpected"})
+        )
+        .is_err());
+        let recovered = json!({"state": "succeeded"});
+        assert_eq!(
+            from_value::<BootstrapEvent>(recovered.clone()).unwrap(),
+            BootstrapEvent::Succeeded
+        );
+        assert_eq!(to_value(BootstrapEvent::Succeeded).unwrap(), recovered);
+    }
+
+    #[test]
+    fn restoration_has_no_credential_payload() {
+        assert_eq!(to_value(OperatorQrRestoredEvent {}).unwrap(), json!({}));
+        assert!(from_value::<OperatorQrRestoredEvent>(json!({})).is_ok());
+        assert!(from_value::<OperatorQrRestoredEvent>(json!("credential")).is_err());
+    }
 }
