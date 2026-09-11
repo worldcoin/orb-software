@@ -10,7 +10,7 @@ use color_eyre::{
     Result,
 };
 use orb_s3_helpers::S3Uri;
-use testcontainers::{runners::AsyncRunner as _, ContainerAsync};
+use testcontainers::{runners::AsyncRunner as _, ContainerAsync, ImageExt as _};
 use testcontainers_modules::minio::MinIO;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _},
@@ -27,7 +27,7 @@ pub struct TestCtx {
 
 impl TestCtx {
     pub async fn new() -> Result<Self> {
-        let minio = MinIO::default();
+        let minio = MinIO::default().with_name("quay.io/minio/minio");
         let container = minio.start().await?;
 
         let host_port = container.get_host_port_ipv4(9000).await?;
