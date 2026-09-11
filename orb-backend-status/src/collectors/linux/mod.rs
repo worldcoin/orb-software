@@ -8,13 +8,17 @@ pub mod token;
 pub mod update_progress;
 
 use crate::backend::types::OrbStatusApiV2;
-use crate::{dbus::intf_impl::BackendStatusImpl, orb_event_stream::OrbEventStream};
+use crate::{
+    dbus::{intf_impl::BackendStatusImpl, setup_dbus},
+    orb_event_stream::OrbEventStream,
+};
 use color_eyre::Result;
 use connectivity::GlobalConnectivity;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
 use reroute::OesReroute;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use token::TokenWatcher;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use zenorb::Zenorb;
@@ -30,11 +34,34 @@ pub(crate) struct ZenorbCtx {
 
 pub struct Collectors {
     state: BackendStatusImpl,
+    connectivity_tx: watch::Sender<GlobalConnectivity>,
 }
 
 impl Collectors {
-    pub fn new(state: BackendStatusImpl) -> Self {
-        Self { state }
+    pub async fn new(
+        dbus: &zbus::Connection,
+        shutdown_token: CancellationToken,
+    ) -> Result<(
+        Self,
+        watch::Receiver<String>,
+        watch::Receiver<GlobalConnectivity>,
+    )> {
+        let state = BackendStatusImpl::new();
+        setup_dbus(dbus, state.clone()).await?;
+
+        let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token).await;
+
+        let (connectivity_tx, connectivity_receiver) =
+            watch::channel(GlobalConnectivity::NotConnected);
+
+        Ok((
+            Self {
+                state,
+                connectivity_tx,
+            },
+            token_receiver,
+            connectivity_receiver,
+        ))
     }
 
     pub(crate) fn spawn_reporters(
@@ -63,12 +90,11 @@ impl Collectors {
     pub(crate) async fn subscribe(
         &self,
         zsession: &Zenorb,
-        connectivity_tx: watch::Sender<GlobalConnectivity>,
         oes: OrbEventStream,
     ) -> Result<Vec<JoinHandle<()>>> {
         let ctx = ZenorbCtx {
             backend_status: self.state.clone(),
-            connectivity_tx,
+            connectivity_tx: self.connectivity_tx.clone(),
             hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             front_als: Arc::new(tokio::sync::Mutex::new(None)),
             oes,

@@ -11,15 +11,12 @@ use crate::{
 };
 use backend::client::StatusClient;
 use chrono::Utc;
-use collectors::{connectivity::GlobalConnectivity, token::TokenWatcher};
 use color_eyre::eyre::Result;
-use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_dogd::MetricEmitter;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{path::PathBuf, time::Duration};
-use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use zenorb::Zenorb as ZSession;
@@ -64,15 +61,8 @@ pub async fn program(
         .inspect_err(|e| warn!("failed to read boot-id: {e:?}"))
         .ok();
 
-    let backend_status_impl = BackendStatusImpl::new();
-
-    setup_dbus(&dbus, backend_status_impl.clone()).await?;
-
-    let token_receiver =
-        TokenWatcher::spawn(dbus.clone(), shutdown_token.clone()).await;
-
-    let (connectivity_tx, connectivity_receiver) =
-        watch::channel(GlobalConnectivity::NotConnected);
+    let (collectors, token_receiver, connectivity_receiver) =
+        collectors::Collectors::new(&dbus, shutdown_token.clone()).await?;
 
     let status_client = StatusClient::builder()
         .metrics(metrics)
@@ -88,8 +78,6 @@ pub async fn program(
         .connectivity_rx(connectivity_receiver.clone())
         .build();
 
-    let collectors = collectors::Collectors::new(backend_status_impl);
-
     let mut tasks = collectors.spawn_reporters(
         dbus,
         net_stats_poll_interval,
@@ -104,9 +92,7 @@ pub async fn program(
         warn!("failed to cache boot-id OES event: {e:?}");
     }
 
-    let mut zenorb_tasks = collectors
-        .subscribe(zsession, connectivity_tx, oes.clone())
-        .await?;
+    let mut zenorb_tasks = collectors.subscribe(zsession, oes.clone()).await?;
 
     zenorb_tasks.extend(
         zsession
