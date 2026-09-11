@@ -32,14 +32,20 @@ pub(crate) struct ZenorbCtx {
     pub oes: OrbEventStream,
 }
 
+pub struct Config {
+    pub dbus: zbus::Connection,
+    pub net_stats_poll_interval: Duration,
+}
+
 pub struct Collectors {
+    config: Config,
     state: BackendStatusImpl,
     connectivity_tx: watch::Sender<GlobalConnectivity>,
 }
 
 impl Collectors {
     pub async fn new(
-        dbus: &zbus::Connection,
+        config: Config,
         shutdown_token: CancellationToken,
     ) -> Result<(
         Self,
@@ -47,15 +53,17 @@ impl Collectors {
         watch::Receiver<GlobalConnectivity>,
     )> {
         let state = BackendStatusImpl::new();
-        setup_dbus(dbus, state.clone()).await?;
+        setup_dbus(&config.dbus, state.clone()).await?;
 
-        let token_receiver = TokenWatcher::spawn(dbus.clone(), shutdown_token).await;
+        let token_receiver =
+            TokenWatcher::spawn(config.dbus.clone(), shutdown_token).await;
 
         let (connectivity_tx, connectivity_receiver) =
             watch::channel(GlobalConnectivity::NotConnected);
 
         Ok((
             Self {
+                config,
                 state,
                 connectivity_tx,
             },
@@ -66,24 +74,26 @@ impl Collectors {
 
     pub(crate) fn spawn_reporters(
         &self,
-        dbus: zbus::Connection,
-        net_stats_poll_interval: Duration,
         procfs: PathBuf,
         shutdown_token: CancellationToken,
     ) -> Vec<JoinHandle<()>> {
         vec![
             net_stats::spawn_reporter(
                 self.state.clone(),
-                net_stats_poll_interval,
+                self.config.net_stats_poll_interval,
                 procfs,
                 shutdown_token.clone(),
             ),
             update_progress::spawn_reporter(
-                dbus.clone(),
+                self.config.dbus.clone(),
                 self.state.clone(),
                 shutdown_token.clone(),
             ),
-            core_signups::spawn_reporter(dbus, self.state.clone(), shutdown_token),
+            core_signups::spawn_reporter(
+                self.config.dbus.clone(),
+                self.state.clone(),
+                shutdown_token,
+            ),
         ]
     }
 

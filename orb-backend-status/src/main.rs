@@ -54,7 +54,10 @@ async fn main() -> Result<()> {
 
     let result = orb_backend_status::program()
         .metrics(DogstatsdClient::default())
-        .dbus(zbus::Connection::session().await?)
+        .collector_config(orb_backend_status::collectors::Config {
+            dbus: zbus::Connection::session().await?,
+            net_stats_poll_interval: Duration::from_secs(30),
+        })
         .zsession(&zsession)
         .endpoint(endpoint)
         .orb_os_version(OrbOsRelease::read().await?.platform_version())
@@ -62,7 +65,6 @@ async fn main() -> Result<()> {
         .orb_name(orb_name)
         .orb_jabil_id(orb_jabil_id)
         .procfs("/proc")
-        .net_stats_poll_interval(Duration::from_secs(30))
         .sender_interval(Duration::from_secs(30))
         .req_timeout(Duration::from_secs(2))
         .req_min_retry_interval(Duration::from_millis(100))

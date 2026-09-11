@@ -38,14 +38,13 @@ fn boot_id_payload(boot_id: String) -> Result<Payload> {
 #[bon::builder(finish_fn = run)]
 pub async fn program(
     metrics: impl MetricEmitter,
-    dbus: zbus::Connection,
+    collector_config: collectors::Config,
     zsession: &ZSession,
     endpoint: Url,
     orb_os_version: String,
     orb_id: OrbId,
     orb_name: OrbName,
     orb_jabil_id: OrbJabilId,
-    net_stats_poll_interval: Duration,
     sender_interval: Duration,
     req_timeout: Duration,
     req_min_retry_interval: Duration,
@@ -62,7 +61,7 @@ pub async fn program(
         .ok();
 
     let (collectors, token_receiver, connectivity_receiver) =
-        collectors::Collectors::new(&dbus, shutdown_token.clone()).await?;
+        collectors::Collectors::new(collector_config, shutdown_token.clone()).await?;
 
     let status_client = StatusClient::builder()
         .metrics(metrics)
@@ -78,12 +77,7 @@ pub async fn program(
         .connectivity_rx(connectivity_receiver.clone())
         .build();
 
-    let mut tasks = collectors.spawn_reporters(
-        dbus,
-        net_stats_poll_interval,
-        procfs,
-        shutdown_token.clone(),
-    );
+    let mut tasks = collectors.spawn_reporters(procfs, shutdown_token.clone());
 
     let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
     if let Some(boot_id) = boot_id

@@ -221,7 +221,10 @@ impl Fixture {
         let task = task::spawn(async move {
             let program = orb_backend_status::program()
                 .metrics(DogstatsdClient::default())
-                .dbus(dbus)
+                .collector_config(orb_backend_status::collectors::Config {
+                    dbus,
+                    net_stats_poll_interval: netstats_poll_interval,
+                })
                 .zsession(&zsession)
                 .endpoint(endpoint)
                 .orb_os_version(orb_os_version)
@@ -229,7 +232,6 @@ impl Fixture {
                 .orb_name(orb_name)
                 .orb_jabil_id(orb_jabil_id)
                 .procfs(procfs)
-                .net_stats_poll_interval(netstats_poll_interval)
                 .sender_interval(sender_interval)
                 .req_timeout(req_timeout)
                 .req_min_retry_interval(req_min_retry_interval)
