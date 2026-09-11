@@ -170,7 +170,10 @@ pub async fn program(
 
     let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
     sender
-        .run_loop(backend_status_impl, shutdown_token.clone())
+        .run_loop(
+            collectors::Collectors::new(backend_status_impl),
+            shutdown_token.clone(),
+        )
         .await;
 
     // Spawn a single shutdown task for all zenorb subscribers
