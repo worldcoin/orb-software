@@ -1,20 +1,40 @@
-use crate::cmd::cmd;
 use crate::cmd::target::unsupported_packages;
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use crate::cmd::{args, cmd};
+use cargo_metadata::{semver::Version, Metadata, MetadataCommand, Package};
 use clap::Args as ClapArgs;
 use color_eyre::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) const TARGET: &str = "aarch64-linux-android";
 pub(crate) const DEFAULT_APEX_OUT_DIR: &str = "target/android-apex";
+pub(crate) const ZENOHD_VERSION: &str = "1.7.2";
+
+#[derive(Debug, Clone)]
+pub enum BuildPackage {
+    Workspace(Box<Package>),
+    Zenohd,
+}
+
+pub(crate) struct BuiltPackage {
+    pub name: String,
+    pub version: Version,
+    pub binaries: Vec<(String, PathBuf)>,
+}
+
+fn parse_build_package(name: &str) -> std::result::Result<BuildPackage, String> {
+    match name {
+        "zenohd" => Ok(BuildPackage::Zenohd),
+        _ => parse_package(name).map(|pkg| BuildPackage::Workspace(Box::new(pkg))),
+    }
+}
 
 /// Shared by `android-build`/`android-apex`/`android-deploy`
 #[derive(ClapArgs, Debug, Clone)]
 pub struct BuildArgs {
-    /// Crate to build/package/install. If omitted, applies to every
-    /// Android-supported crate in the workspace.
-    #[arg(value_parser = parse_package)]
-    pub pkg: Option<Package>,
+    /// Workspace crate or upstream `zenohd` to build/package/install.
+    /// If omitted, applies only to Android-supported workspace crates.
+    #[arg(value_parser = parse_build_package)]
+    pub pkg: Option<BuildPackage>,
     /// Build in release mode.
     #[arg(long)]
     pub release: bool,
@@ -59,8 +79,77 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 /// instead of shelling out to `cargo metadata` again - shared with
 /// [`crate::cmd::apex::run_apex`], which needs a fresh build of the same
 /// target before staging APEX payloads.
-pub(crate) fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<Vec<Package>> {
-    build_with(md, args.pkg, args.release, &["build"], &[])
+pub(crate) fn run_build_with(
+    md: &Metadata,
+    args: BuildArgs,
+) -> Result<Vec<BuiltPackage>> {
+    let pkg = match args.pkg {
+        Some(BuildPackage::Zenohd) => {
+            return build_zenohd(md.target_directory.as_std_path(), args.release)
+                .map(|pkg| vec![pkg]);
+        }
+        Some(BuildPackage::Workspace(pkg)) => Some(*pkg),
+        None => None,
+    };
+    let profile = if args.release { "release" } else { "debug" };
+    let binary_dir = md.target_directory.join(TARGET).join(profile);
+    Ok(build_with(md, pkg, args.release, &["build"], &[])?
+        .into_iter()
+        .map(|pkg| BuiltPackage {
+            name: pkg.name.to_string(),
+            version: pkg.version,
+            binaries: pkg
+                .targets
+                .iter()
+                .filter(|target| target.is_bin())
+                .map(|target| {
+                    (target.name.clone(), binary_dir.join(&target.name).into())
+                })
+                .collect(),
+        })
+        .collect())
+}
+
+fn zenohd_install_root(target_dir: &Path, release: bool) -> PathBuf {
+    target_dir
+        .join("android-tools/zenohd")
+        .join(ZENOHD_VERSION)
+        .join(if release { "release" } else { "debug" })
+}
+
+fn build_zenohd(target_dir: &Path, release: bool) -> Result<BuiltPackage> {
+    let install_root = zenohd_install_root(target_dir, release);
+    let build_dir = target_dir.join("android-tools/zenohd/build");
+    let mut command = args![
+        "cargo",
+        "install",
+        "zenohd",
+        "--version",
+        ZENOHD_VERSION,
+        "--locked",
+        "--no-default-features",
+        "--features",
+        "zenoh/transport_unixsock-stream",
+        "--target",
+        TARGET,
+        "--target-dir",
+        &build_dir,
+        "--root",
+        &install_root,
+        "--force",
+    ]
+    .to_vec();
+    if !release {
+        command.push("--debug".as_ref());
+    }
+    cmd(&command)?;
+    let binary = install_root.join("bin/zenohd");
+    println!("Android zenohd: {}", binary.display());
+    Ok(BuiltPackage {
+        name: "zenohd".to_owned(),
+        version: ZENOHD_VERSION.parse()?,
+        binaries: vec![("zenohd".to_owned(), binary)],
+    })
 }
 
 /// CLI args for `android-test` - same as [`BuildArgs`] minus `out_dir`,
@@ -147,4 +236,38 @@ fn build_with(
     cmd(&cmd_args)?;
 
     Ok(built)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_upstream_router_without_workspace_membership() {
+        assert!(matches!(
+            parse_build_package("zenohd"),
+            Ok(BuildPackage::Zenohd)
+        ));
+    }
+
+    #[test]
+    fn router_version_matches_workspace_lock() {
+        let lock = include_str!("../../../Cargo.lock");
+        assert!(
+            lock.contains(&format!("name = \"zenoh\"\nversion = \"{ZENOHD_VERSION}\""))
+        );
+    }
+
+    #[test]
+    fn router_install_is_isolated_by_version_and_profile() {
+        let target = Path::new("/tmp/target");
+        assert_eq!(
+            zenohd_install_root(target, false),
+            target.join("android-tools/zenohd/1.7.2/debug")
+        );
+        assert_eq!(
+            zenohd_install_root(target, true),
+            target.join("android-tools/zenohd/1.7.2/release")
+        );
+    }
 }

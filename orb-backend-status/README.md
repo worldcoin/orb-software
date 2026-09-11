@@ -49,5 +49,6 @@ version can be supplied as shown above.
 Logging uses stderr on Android, without journald. Metrics require a local
 DogStatsD agent at the configured socket; without it, metrics are not delivered.
 The Zenoh router must run separately and listen on the configured UDS path.
-Router packaging, orb-engine integration, and device testing remain separate
-steps.
+Build/package it with `cargo x android-build zenohd` / `cargo x android-apex zenohd`;
+see [Android router setup and SELinux](../docs/src/android.md#standalone-zenoh-router).
+Orb-engine integration and device testing remain separate steps.
