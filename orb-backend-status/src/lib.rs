@@ -11,22 +11,15 @@ use crate::{
 };
 use backend::client::StatusClient;
 use chrono::Utc;
-use collectors::{
-    connectivity::{self, GlobalConnectivity},
-    core_signups, front_als, hardware_states,
-    linux::reroute::OesReroute,
-    net_stats,
-    token::TokenWatcher,
-    update_progress, ZenorbCtx,
-};
+use collectors::{connectivity::GlobalConnectivity, token::TokenWatcher};
 use color_eyre::eyre::Result;
 use dbus::{intf_impl::BackendStatusImpl, setup_dbus};
 use orb_build_info::{make_build_info, BuildInfo};
 use orb_dogd::MetricEmitter;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
-use tokio::{sync::watch, task::JoinHandle};
+use std::{path::PathBuf, time::Duration};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use zenorb::Zenorb as ZSession;
@@ -95,27 +88,14 @@ pub async fn program(
         .connectivity_rx(connectivity_receiver.clone())
         .build();
 
-    // Spawn non-zenorb collectors
-    let mut tasks: Vec<JoinHandle<()>> = vec![];
+    let collectors = collectors::Collectors::new(backend_status_impl);
 
-    tasks.push(net_stats::spawn_reporter(
-        backend_status_impl.clone(),
+    let mut tasks = collectors.spawn_reporters(
+        dbus,
         net_stats_poll_interval,
         procfs,
         shutdown_token.clone(),
-    ));
-
-    tasks.push(update_progress::spawn_reporter(
-        dbus.clone(),
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    ));
-
-    tasks.push(core_signups::spawn_reporter(
-        dbus.clone(),
-        backend_status_impl.clone(),
-        shutdown_token.clone(),
-    ));
+    );
 
     let oes = OrbEventStream::start(status_client.clone(), shutdown_token.clone());
     if let Some(boot_id) = boot_id
@@ -124,37 +104,8 @@ pub async fn program(
         warn!("failed to cache boot-id OES event: {e:?}");
     }
 
-    let zenorb_ctx = ZenorbCtx {
-        backend_status: backend_status_impl.clone(),
-        connectivity_tx,
-        hardware_states: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-        front_als: Arc::new(tokio::sync::Mutex::new(None)),
-        oes: oes.clone(),
-    };
-
-    let mut zenorb_tasks = zsession
-        .receiver(zenorb_ctx)
-        .querying_subscriber(
-            "connd/oes/active_connections",
-            Duration::from_millis(15),
-            connectivity::handle_connection_event,
-        )
-        .querying_subscriber(
-            hardware_states::HARDWARE_STATUS_KEY_EXPR,
-            Duration::from_millis(100),
-            hardware_states::handle_hardware_state_event,
-        )
-        .querying_subscriber(
-            front_als::FRONT_ALS_KEY_EXPR,
-            Duration::from_millis(100),
-            front_als::handle_front_als_event,
-        )
-        .oes_reroute(
-            "core/config",
-            Duration::from_millis(100),
-            oes::Mode::CacheOnly,
-        )
-        .run()
+    let mut zenorb_tasks = collectors
+        .subscribe(zsession, connectivity_tx, oes.clone())
         .await?;
 
     zenorb_tasks.extend(
@@ -169,12 +120,7 @@ pub async fn program(
     );
 
     let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
-    sender
-        .run_loop(
-            collectors::Collectors::new(backend_status_impl),
-            shutdown_token.clone(),
-        )
-        .await;
+    sender.run_loop(collectors, shutdown_token.clone()).await;
 
     // Spawn a single shutdown task for all zenorb subscribers
     let shutdown = shutdown_token.clone();
