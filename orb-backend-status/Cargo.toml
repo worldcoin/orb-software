@@ -17,20 +17,20 @@ linux-collectors = [
 	"dep:orb-connd-dbus",
 	"dep:orb-endpoints",
 	"dep:orb-messages",
-	"dep:orb-telemetry",
+	"orb-telemetry/zbus-tracing",
 	"dep:orb-update-agent-dbus",
 	"dep:zbus",
 	"orb-info/orb-token",
 ]
-android-collectors = []
+android-collectors = ["dep:clap"]
 
 [[bin]]
 name = "orb-backend-status"
 path = "src/main.rs"
-required-features = ["linux-collectors"]
 
 [dependencies]
 bon.workspace = true
+clap = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 color-eyre.workspace = true
 derive_more = { workspace = true, default-features = false, features = ["from"] }
@@ -52,7 +52,7 @@ orb-info = { workspace = true, features = [
 ] }
 orb-dogd.workspace = true
 orb-security-utils = { workspace = true, features = ["reqwest"] }
-orb-telemetry = { workspace = true, optional = true, features = ["otel", "zbus-tracing"] }
+orb-telemetry = { workspace = true, features = ["otel"] }
 orb-update-agent-dbus = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { version = "0.4.1", features = ["json"] }

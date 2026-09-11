@@ -7370,6 +7370,7 @@ dependencies = [
  "async-tempfile",
  "bon",
  "chrono",
+ "clap",
  "color-eyre",
  "dbus-launch",
  "derive_more 2.1.1",
