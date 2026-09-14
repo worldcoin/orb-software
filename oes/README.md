@@ -203,6 +203,36 @@ Event {
 Published by `orb-core` when the service starts. Empty payload.
 See [src/core.rs](src/core.rs).
 
+### `core/bootstrap`
+- **Frequency**: each failed bootstrap attempt (existing five-second retry loop), and once after successful bootstrap
+- **Mode**: `oes::Normal`
+
+Reports initialization before the operator/user QR flow. Failure identifies a
+bounded stage (`network`, `token`, `configuration`, or `warmup`); it carries no
+raw error, URL, token, or credential. A successful bootstrap clears a preceding
+bootstrap error but does not assert readiness for a signup. Existing QR phase
+events establish whether core is waiting for an operator or a user. These events
+use the existing best-effort Zenoh publisher; delivery is not guaranteed while it
+is disconnected. `orb-backend-status` assigns event timestamps on receipt.
+
+```json
+{"state": "failed", "stage": "configuration"}
+```
+
+```json
+{"state": "succeeded"}
+```
+
+### `core/operator_qr_restored`
+- **Frequency**: a validated persisted operator credential becomes active
+- **Mode**: `oes::Normal`
+
+Empty payload (`{}`). Emitted on successful startup restoration and restoration
+after a test operator credential. Reading the file, rejected validation, and
+ordinary in-memory revalidation do not produce this event. It records credential
+provenance, not a readiness transition, and contains no operator identifier or QR
+contents.
+
 ### `core/qr_scan`
 - **Frequency**: on change
 - **Mode**: `oes::Normal`
@@ -217,6 +247,11 @@ Event {
 Published by `orb-core` during QR code scanning. Records the scanning phase
 and outcome. See [src/core.rs](src/core.rs) for the full `QrScanEvt` struct.
 
+Accepted operator QR events include optional `origin`: `camera` for a physical
+scan (including refresh while waiting for a user), or `cli` for injected input.
+Absent or unrecognized origin means unknown; a legacy success must not be treated
+as proof of a physical scan. Stored credentials use `core/operator_qr_restored`.
+
 #### Payload Example
 
 ```json
@@ -226,9 +261,16 @@ and outcome. See [src/core.rs](src/core.rs) for the full `QrScanEvt` struct.
     "success": {
       "kind": "operator"
     }
-  }
+  },
+  "origin": "camera"
 }
 ```
+
+Fleet's API parser and typed models must be updated together with new event
+names or fields. The generic backend-status transport forwards JSON unchanged,
+but unsupported events can be discarded by the receiving application. Deploy
+receiver support before enabling new producer events; keep existing log fallback
+coverage until the OES rollout is verified.
 
 ### `core/config`
 - **Frequency**: on change
