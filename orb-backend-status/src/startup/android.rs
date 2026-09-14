@@ -1,6 +1,9 @@
 use super::Config;
 use clap::Parser;
-use color_eyre::{eyre::Context, Result};
+use color_eyre::{
+    eyre::{ensure, Context},
+    Result,
+};
 use orb_backend_status::{collectors, BUILD_INFO};
 use orb_info::{OrbJabilId, OrbName};
 use reqwest::Url;
@@ -48,6 +51,12 @@ pub async fn configure(args: Args) -> Result<Config> {
         .wrap_err_with(|| {
             format!("failed to read token file {}", args.token_file.display())
         })?;
+    let token = token.trim();
+    ensure!(
+        !token.is_empty(),
+        "token file {} is empty or whitespace-only; provide a non-empty backend authentication token before starting",
+        args.token_file.display()
+    );
 
     Ok(Config {
         orb_id: TEMP_ORB_ID.parse().expect("temporary orb ID must be valid"),
@@ -57,7 +66,7 @@ pub async fn configure(args: Args) -> Result<Config> {
         endpoint: args.endpoint,
         zenoh: zenoh_config(&args.zenoh_socket)?,
         collectors: collectors::Config {
-            token: token.trim().to_owned(),
+            token: token.to_owned(),
         },
         metrics_socket: Some(args.metrics_socket),
     })

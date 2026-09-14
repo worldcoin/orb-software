@@ -200,47 +200,130 @@ fn build_with(
 ) -> Result<Vec<Package>> {
     let excludes = unsupported_packages(md, TARGET);
 
-    let mut cmd_args = vec!["cargo"];
-    cmd_args.extend_from_slice(subcmd);
-    cmd_args.push("--target");
-    cmd_args.push(TARGET);
-    if release {
-        cmd_args.push("--release");
-    }
-
-    let built: Vec<Package> = match &pkg {
-        Some(pkg) => {
-            cmd_args.push("-p");
-            cmd_args.push(pkg.name.as_str());
-            vec![pkg.clone()]
-        }
-        None => {
-            cmd_args.push("--workspace");
-            for pkg in &excludes {
-                cmd_args.push("--exclude");
-                cmd_args.push(pkg);
-            }
-            md.workspace_packages()
-                .into_iter()
-                .filter(|p| !excludes.contains(p.name.as_str()))
-                .cloned()
-                .collect()
-        }
+    let built: Vec<Package> = match pkg {
+        Some(pkg) => vec![pkg],
+        None => md
+            .workspace_packages()
+            .into_iter()
+            .filter(|p| !excludes.contains(p.name.as_str()))
+            .cloned()
+            .collect(),
     };
-
-    if !trailing_args.is_empty() {
-        cmd_args.push("--");
-        cmd_args.extend_from_slice(trailing_args);
+    let packages: Vec<&str> = built.iter().map(|p| p.name.as_str()).collect();
+    for command in build_commands(&packages, release, subcmd, trailing_args) {
+        cmd(&command)?;
     }
-
-    cmd(&cmd_args)?;
-
     Ok(built)
+}
+
+fn build_commands(
+    packages: &[&str],
+    release: bool,
+    subcmd: &[&str],
+    trailing_args: &[&str],
+) -> Vec<Vec<String>> {
+    // Separate invocations keep Linux defaults from being unified into the
+    // Android service without disabling defaults for unrelated packages.
+    let (backend_status, others): (Vec<_>, Vec<_>) = packages
+        .iter()
+        .copied()
+        .partition(|name| *name == "orb-backend-status");
+    let mut commands = Vec::new();
+    for (group, android_collectors) in [(others, false), (backend_status, true)] {
+        if group.is_empty() {
+            continue;
+        }
+        let mut args = vec!["cargo"];
+        args.extend_from_slice(subcmd);
+        args.extend(["--target", TARGET]);
+        if release {
+            args.push("--release");
+        }
+        for package in group {
+            args.extend(["-p", package]);
+        }
+        if android_collectors {
+            args.extend(["--no-default-features", "--features", "android-collectors"]);
+        }
+        if !trailing_args.is_empty() {
+            args.push("--");
+            args.extend_from_slice(trailing_args);
+        }
+        commands.push(args.into_iter().map(str::to_owned).collect());
+    }
+    commands
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn android_service_features_apply_to_build_test_and_clippy() {
+        for (subcmd, trailing) in [
+            (vec!["build"], vec![]),
+            (vec!["build", "--tests"], vec![]),
+            (vec!["clippy", "--all-targets"], vec!["-D", "warnings"]),
+        ] {
+            let mut expected = vec!["cargo"];
+            expected.extend_from_slice(&subcmd);
+            expected.extend([
+                "--target",
+                TARGET,
+                "--release",
+                "-p",
+                "orb-backend-status",
+                "--no-default-features",
+                "--features",
+                "android-collectors",
+            ]);
+            if !trailing.is_empty() {
+                expected.push("--");
+                expected.extend_from_slice(&trailing);
+            }
+            assert_eq!(
+                build_commands(&["orb-backend-status"], true, &subcmd, &trailing),
+                vec![expected],
+            );
+        }
+    }
+
+    #[test]
+    fn workspace_build_isolates_android_service_and_preserves_other_defaults() {
+        assert_eq!(
+            build_commands(
+                &["zenorb", "orb-backend-status", "zorb"],
+                false,
+                &["build"],
+                &[]
+            ),
+            vec![
+                vec![
+                    "cargo", "build", "--target", TARGET, "-p", "zenorb", "-p", "zorb"
+                ],
+                vec![
+                    "cargo",
+                    "build",
+                    "--target",
+                    TARGET,
+                    "-p",
+                    "orb-backend-status",
+                    "--no-default-features",
+                    "--features",
+                    "android-collectors"
+                ],
+            ],
+        );
+    }
+
+    #[test]
+    fn unrelated_package_does_not_build_backend_status() {
+        assert_eq!(
+            build_commands(&["zorb"], false, &["build"], &[]),
+            vec![vec!["cargo", "build", "--target", TARGET, "-p", "zorb"]],
+        );
+        assert!(build_commands(&[], false, &["build"], &[]).is_empty());
+    }
 
     #[test]
     fn recognizes_upstream_router_without_workspace_membership() {
