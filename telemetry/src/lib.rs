@@ -10,6 +10,9 @@ use tracing_subscriber::{
     layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter,
 };
 
+#[cfg(any(target_os = "android", test))]
+mod logcat;
+
 #[cfg(feature = "otel")]
 mod _otel_stuff {
     pub use opentelemetry::propagation::TextMapPropagator;

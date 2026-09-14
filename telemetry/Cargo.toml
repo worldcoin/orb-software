@@ -36,6 +36,9 @@ tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["registry", "env-filter"] }
 zbus = { workspace = true, optional = true }
 
+[target.'cfg(target_os = "android")'.dependencies]
+android_log-sys = "0.3.2"
+
 [dev-dependencies]
 color-eyre.workspace = true
 

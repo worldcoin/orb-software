@@ -1,0 +1,117 @@
+use std::ffi::{CStr, CString};
+use std::io;
+
+#[cfg(target_os = "android")]
+use std::io::Write;
+
+const MESSAGE_MAX_LEN: usize = 4000;
+
+fn write_chunks(
+    bytes: &[u8],
+    mut emit: impl FnMut(&CStr) -> io::Result<()>,
+) -> io::Result<()> {
+    let message = String::from_utf8_lossy(bytes).replace('\0', "\\0");
+
+    let mut rest = message.as_str();
+
+    while !rest.is_empty() {
+        let mut end = rest.len().min(MESSAGE_MAX_LEN);
+
+        while !rest.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        let (chunk, tail) = rest.split_at(end);
+
+        let chunk = CString::new(chunk).expect("NUL bytes were escaped above");
+
+        emit(&chunk)?;
+        rest = tail;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+fn write_logcat_chunk(
+    tag: &CStr,
+    priority: android_log_sys::LogPriority,
+    message: &CStr,
+) -> io::Result<()> {
+    // SAFETY: Both strings are NULL-terminated and remain valid for
+    // the duration of the call. liblog does not retain their pointers
+
+    let result = unsafe {
+        android_log_sys::__android_log_write(
+            priority as android_log_sys::c_int,
+            tag.as_ptr(),
+            message.as_ptr(),
+        )
+    };
+
+    // -EPERM means Android filtered the message by tag or priority.
+    if result < -1 {
+        return Err(io::Error::from_raw_os_error(-result));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "android")]
+pub(super) struct EventWriter<'a> {
+    tag: &'a CStr,
+    priority: android_log_sys::LogPriority,
+    buffer: Vec<u8>,
+}
+
+#[cfg(target_os = "android")]
+impl Write for EventWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.buffer.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let buffer = std::mem::take(&mut self.buffer);
+
+        write_chunks(&buffer, |message| {
+            write_logcat_chunk(self.tag, self.priority, message);
+        })
+    }
+}
+
+#[cfg(target_os = "android")]
+impl Drom for EvenWriter<'_> {
+    fn drop(&mut self) {
+        if let Err(error) = self.flush() {
+            let _ = writeln!(std::io::stderr(), "failed writing to logcat: {error}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn it_escapes_nulls_and_preserves_utf8_across_chunks() {
+        // Arrange
+
+        let prefix = "a".repeat(MESSAGE_MAX_LEN - 1);
+        let message = format!("{prefix}🦉\0tail");
+        let mut chunks = Vec::new();
+
+        // Act
+
+        write_chunks(message.as_bytes(), |chunk| {
+            chunks.push(chunk.to_str().unwrap().to_owned());
+            Ok(())
+        })
+        .unwrap();
+
+        // Assert
+
+        assert_eq!(chunks, vec![prefix, "🦉\\0tail".to_owned()]);
+    }
+}
