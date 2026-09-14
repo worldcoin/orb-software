@@ -72,7 +72,9 @@ tokio = { workspace = true, features = [
 ] }
 tokio-util.workspace = true
 tracing = { workspace = true, features = ["attributes"] }
-zbus = { workspace = true, optional = true, default-features = false, features = ["tokio"] }
+zbus = { workspace = true, optional = true, default-features = false, features = [
+	"tokio",
+] }
 zenorb.workspace = true
 
 [dev-dependencies]
