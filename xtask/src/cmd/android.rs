@@ -209,7 +209,10 @@ fn build_with(
             .cloned()
             .collect(),
     };
-    let packages: Vec<&str> = built.iter().map(|p| p.name.as_str()).collect();
+    let packages: Vec<(&str, &str)> = built
+        .iter()
+        .map(|p| (p.name.as_str(), p.id.repr.as_str()))
+        .collect();
     for command in build_commands(&packages, release, subcmd, trailing_args) {
         cmd(&command)?;
     }
@@ -217,7 +220,7 @@ fn build_with(
 }
 
 fn build_commands(
-    packages: &[&str],
+    packages: &[(&str, &str)],
     release: bool,
     subcmd: &[&str],
     trailing_args: &[&str],
@@ -227,7 +230,7 @@ fn build_commands(
     let (backend_status, others): (Vec<_>, Vec<_>) = packages
         .iter()
         .copied()
-        .partition(|name| *name == "orb-backend-status");
+        .partition(|(name, _)| *name == "orb-backend-status");
     let mut commands = Vec::new();
     for (group, android_collectors) in [(others, false), (backend_status, true)] {
         if group.is_empty() {
@@ -239,8 +242,9 @@ fn build_commands(
         if release {
             args.push("--release");
         }
-        for package in group {
-            args.extend(["-p", package]);
+        for (_, package_id) in group {
+            // Names can also occur in dependencies from another source.
+            args.extend(["-p", package_id]);
         }
         if android_collectors {
             args.extend(["--no-default-features", "--features", "android-collectors"]);
@@ -258,6 +262,11 @@ fn build_commands(
 mod tests {
     use super::*;
 
+    const BACKEND_STATUS_ID: &str =
+        "path+file:///workspace/orb-backend-status#orb-backend-status@0.0.1";
+    const SECURITY_UTILS_ID: &str =
+        "path+file:///workspace/security-utils#orb-security-utils@0.0.0";
+
     #[test]
     fn android_service_features_apply_to_build_test_and_clippy() {
         for (subcmd, trailing) in [
@@ -272,7 +281,7 @@ mod tests {
                 TARGET,
                 "--release",
                 "-p",
-                "orb-backend-status",
+                BACKEND_STATUS_ID,
                 "--no-default-features",
                 "--features",
                 "android-collectors",
@@ -282,7 +291,12 @@ mod tests {
                 expected.extend_from_slice(&trailing);
             }
             assert_eq!(
-                build_commands(&["orb-backend-status"], true, &subcmd, &trailing),
+                build_commands(
+                    &[("orb-backend-status", BACKEND_STATUS_ID)],
+                    true,
+                    &subcmd,
+                    &trailing,
+                ),
                 vec![expected],
             );
         }
@@ -292,14 +306,22 @@ mod tests {
     fn workspace_build_isolates_android_service_and_preserves_other_defaults() {
         assert_eq!(
             build_commands(
-                &["zenorb", "orb-backend-status", "zorb"],
+                &[
+                    ("orb-security-utils", SECURITY_UTILS_ID),
+                    ("orb-backend-status", BACKEND_STATUS_ID),
+                ],
                 false,
                 &["build"],
                 &[]
             ),
             vec![
                 vec![
-                    "cargo", "build", "--target", TARGET, "-p", "zenorb", "-p", "zorb"
+                    "cargo",
+                    "build",
+                    "--target",
+                    TARGET,
+                    "-p",
+                    SECURITY_UTILS_ID
                 ],
                 vec![
                     "cargo",
@@ -307,7 +329,7 @@ mod tests {
                     "--target",
                     TARGET,
                     "-p",
-                    "orb-backend-status",
+                    BACKEND_STATUS_ID,
                     "--no-default-features",
                     "--features",
                     "android-collectors"
@@ -319,8 +341,20 @@ mod tests {
     #[test]
     fn unrelated_package_does_not_build_backend_status() {
         assert_eq!(
-            build_commands(&["zorb"], false, &["build"], &[]),
-            vec![vec!["cargo", "build", "--target", TARGET, "-p", "zorb"]],
+            build_commands(
+                &[("orb-security-utils", SECURITY_UTILS_ID)],
+                false,
+                &["build"],
+                &[]
+            ),
+            vec![vec![
+                "cargo",
+                "build",
+                "--target",
+                TARGET,
+                "-p",
+                SECURITY_UTILS_ID
+            ]],
         );
         assert!(build_commands(&[], false, &["build"], &[]).is_empty());
     }
