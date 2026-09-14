@@ -19,6 +19,7 @@ members = [
 	"header-parsing",
 	"hil",
 	"io-utils",
+	"ipcp-hpke",
 	"jwk-util",
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
