@@ -75,13 +75,13 @@ impl Write for EventWriter<'_> {
         let buffer = std::mem::take(&mut self.buffer);
 
         write_chunks(&buffer, |message| {
-            write_logcat_chunk(self.tag, self.priority, message);
+            write_logcat_chunk(self.tag, self.priority, message)
         })
     }
 }
 
 #[cfg(target_os = "android")]
-impl Drom for EvenWriter<'_> {
+impl Drop for EventWriter<'_> {
     fn drop(&mut self) {
         if let Err(error) = self.flush() {
             let _ = writeln!(std::io::stderr(), "failed writing to logcat: {error}");
