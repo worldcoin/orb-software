@@ -201,6 +201,11 @@ impl TelemetryConfig {
         let stderr_layer = journald_layer
             .is_none()
             .then(|| tracing_subscriber::fmt::layer().with_writer(std::io::stderr));
+
+        #[cfg(target_os = "android")]
+        let stderr_layer =
+            stderr_layer.map(|layer| layer.with_ansi(self.logcat_tag.is_none()));
+
         assert!(stderr_layer.is_some() || journald_layer.is_some());
 
         #[cfg(feature = "otel")]

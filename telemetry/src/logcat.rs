@@ -150,4 +150,28 @@ mod tests {
 
         assert_eq!(chunks, vec![prefix, "🦉\\0tail".to_owned()]);
     }
+
+    #[test]
+    fn it_stops_after_chunk_write_fails() {
+        // Arrange
+        let message = vec![b'a'; MESSAGE_MAX_LEN * 3];
+        let mut calls = 0;
+
+        // Act
+        let error = write_chunks(&message, |_| {
+            calls += 1;
+            if calls == 2 {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "test sink disconnected",
+                ));
+            }
+            Ok(())
+        })
+        .unwrap_err();
+
+        // Assert
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        assert_eq!(calls, 2);
+    }
 }
