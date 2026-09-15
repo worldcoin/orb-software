@@ -368,6 +368,19 @@ mod tests {
     }
 
     #[test]
+    fn crypto_state_cleanup_guards_are_enabled() {
+        fn assert_drop_guard<T: ZeroizeOnDrop>() {}
+
+        assert_drop_guard::<aes_gcm::Aes256Gcm>();
+        assert_drop_guard::<sha2_hpke::Sha256>();
+        assert_drop_guard::<
+            hmac::digest::block_api::Buffer<
+                hmac::block_api::HmacCore<sha2_hpke::Sha256>,
+            >,
+        >();
+    }
+
+    #[test]
     fn plaintext_and_entropy_use_zeroizing_guards() {
         fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
         let f = ipcp_fixture();
