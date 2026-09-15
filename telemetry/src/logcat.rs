@@ -10,6 +10,13 @@ use android_log_sys::LogPriority;
 use tracing::{Level, Metadata};
 #[cfg(target_os = "android")]
 use tracing_subscriber::fmt::MakeWriter;
+use tracing_subscriber::{
+    field::RecordFields,
+    fmt::{
+        format::{DefaultFields, Writer},
+        FormatFields,
+    },
+};
 
 const MESSAGE_MAX_LEN: usize = 4000;
 
@@ -62,6 +69,18 @@ fn write_logcat_chunk(
     }
 
     Ok(())
+}
+
+pub(super) struct LogcatFields;
+
+impl<'writer> FormatFields<'writer> for LogcatFields {
+    fn format_fields<R: RecordFields>(
+        &self,
+        writer: Writer<'writer>,
+        fields: R,
+    ) -> std::fmt::Result {
+        DefaultFields::new().format_fields(writer, fields)
+    }
 }
 
 #[cfg(target_os = "android")]

@@ -226,6 +226,7 @@ impl TelemetryConfig {
         #[cfg(target_os = "android")]
         let registry = registry.with(self.logcat_tag.map(|tag| {
             tracing_subscriber::fmt::layer()
+                .fmt_fields(logcat::LogcatFields)
                 .with_ansi(false)
                 .without_time()
                 .with_writer(logcat::LogcatWriter(tag))
