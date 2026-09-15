@@ -10,6 +10,9 @@ use tracing_subscriber::{
     layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter,
 };
 
+#[cfg(any(target_os = "android", test))]
+mod logcat;
+
 #[cfg(feature = "otel")]
 mod _otel_stuff {
     pub use opentelemetry::propagation::TextMapPropagator;
@@ -109,6 +112,9 @@ pub struct TelemetryConfig {
     global_filter: EnvFilter,
     #[cfg(feature = "otel")]
     otel_cfg: Option<OpentelemetryConfig>,
+
+    #[cfg(target_os = "android")]
+    logcat_tag: Option<std::ffi::CString>,
 }
 
 impl TelemetryConfig {
@@ -124,6 +130,8 @@ impl TelemetryConfig {
                 .from_env_lossy(),
             #[cfg(feature = "otel")]
             otel_cfg: None,
+            #[cfg(target_os = "android")]
+            logcat_tag: None,
         }
     }
 
@@ -134,6 +142,22 @@ impl TelemetryConfig {
     pub fn with_journald(self, syslog_identifier: &str) -> Self {
         Self {
             syslog_identifier: Some(syslog_identifier.to_owned()),
+            ..self
+        }
+    }
+
+    /// Adds Android logcat output alongside the existing logging sink.
+    ///
+    /// Tags longer than 65 bytes are truncated with a warning to stderr.
+    /// UTF-8 tags are truncated at a character boundary.
+    ///
+    /// Delivery is best-effort: Android's logging API does not expose logd
+    /// transport failures, so a successsful write does not guarantee delivery.
+    #[cfg(target_os = "android")]
+    #[must_use]
+    pub fn with_logcat(self, tag: &std::ffi::CStr) -> Self {
+        Self {
+            logcat_tag: Some(logcat::truncate_tag(tag)),
             ..self
         }
     }
@@ -184,6 +208,7 @@ impl TelemetryConfig {
         let stderr_layer = journald_layer
             .is_none()
             .then(|| tracing_subscriber::fmt::layer().with_writer(std::io::stderr));
+
         assert!(stderr_layer.is_some() || journald_layer.is_some());
 
         #[cfg(feature = "otel")]
@@ -200,6 +225,16 @@ impl TelemetryConfig {
             .with(tokio_console_layer)
             .with(stderr_layer)
             .with(journald_layer);
+
+        #[cfg(target_os = "android")]
+        let registry = registry.with(self.logcat_tag.map(|tag| {
+            tracing_subscriber::fmt::layer()
+                .fmt_fields(logcat::LogcatFields)
+                .with_ansi(false)
+                .without_time()
+                .with_writer(logcat::LogcatWriter(tag))
+        }));
+
         #[cfg(feature = "otel")]
         let registry = registry.with(otel_layer);
         registry.with(self.global_filter).try_init()?;
