@@ -1,4 +1,5 @@
 use orb_const_concat::const_concat;
+use orb_info::OrbId;
 use reqwest::Client;
 use secrecy::ExposeSecret;
 use std::time::Duration;
@@ -40,7 +41,7 @@ pub fn create() -> Client {
 /// If failed to connect to the backend.
 pub async fn validate_token(
     client: &Client,
-    orb_id: &str,
+    orb_id: &OrbId,
     token: &crate::remote_api::Token,
     ping_url: &url::Url,
 ) -> Result<bool, Error> {
