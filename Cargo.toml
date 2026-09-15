@@ -153,7 +153,7 @@ regex = "1.11.2"
 ring = "0.17.2"
 rkyv = "0.8.17"
 rustix = "0.38.37"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
