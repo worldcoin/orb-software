@@ -113,7 +113,7 @@ pub struct TelemetryConfig {
     #[cfg(feature = "otel")]
     otel_cfg: Option<OpentelemetryConfig>,
 
-    #[cfg(target_os="android")]
+    #[cfg(target_os = "android")]
     logcat_tag: Option<std::ffi::CString>,
 }
 
@@ -130,7 +130,7 @@ impl TelemetryConfig {
                 .from_env_lossy(),
             #[cfg(feature = "otel")]
             otel_cfg: None,
-            #[cfg(target_os="android")]
+            #[cfg(target_os = "android")]
             logcat_tag: None,
         }
     }
@@ -142,6 +142,15 @@ impl TelemetryConfig {
     pub fn with_journald(self, syslog_identifier: &str) -> Self {
         Self {
             syslog_identifier: Some(syslog_identifier.to_owned()),
+            ..self
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[must_use]
+    pub fn with_logcat(self, tag: &std::ffi::CStr) -> Self {
+        Self {
+            logcat_tag: Some(tag.to_owned()),
             ..self
         }
     }
@@ -208,6 +217,15 @@ impl TelemetryConfig {
             .with(tokio_console_layer)
             .with(stderr_layer)
             .with(journald_layer);
+
+        #[cfg(target_os = "android")]
+        let registry = registry.with(self.logcat_tag.map(|tag| {
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .without_time()
+                .with_writer(logcat::LogcatWriter(tag))
+        }));
+
         #[cfg(feature = "otel")]
         let registry = registry.with(otel_layer);
         registry.with(self.global_filter).try_init()?;
