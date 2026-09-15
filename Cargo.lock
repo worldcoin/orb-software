@@ -64,6 +64,7 @@ dependencies = [
  "cipher 0.5.2",
  "cpubits",
  "cpufeatures 0.3.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -78,6 +79,7 @@ dependencies = [
  "ctr",
  "ctutils",
  "ghash",
+ "zeroize",
 ]
 
 [[package]]
@@ -737,9 +739,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.16.3"
+version = "1.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ec6fb3fe69024a75fa7e1bfb48aa6cf59706a101658ea01bfd33b2b248a038f"
+checksum = "b281d307588d634de920874890732659e2e7672f72b5e10e81badc1a8a83621e"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -747,14 +749,15 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.40.0"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f50037ee5e1e41e7b8f9d161680a725bd1626cb6f8c7e901f91f942850852fe7"
+checksum = "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27"
 dependencies = [
  "cc",
  "cmake",
  "dunce",
  "fs_extra",
+ "pkg-config",
 ]
 
 [[package]]
@@ -1303,7 +1306,7 @@ dependencies = [
  "hyper 1.7.0",
  "hyper-util",
  "pin-project-lite",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "tokio",
@@ -1577,6 +1580,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+ "zeroize",
 ]
 
 [[package]]
@@ -1619,7 +1623,7 @@ dependencies = [
  "num",
  "pin-project-lite",
  "rand 0.9.4",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.2",
  "rustls-pki-types",
  "serde",
@@ -3059,6 +3063,7 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "ctutils",
+ "zeroize",
 ]
 
 [[package]]
@@ -4218,6 +4223,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eecf2d5dc9b66b732b97707a0210906b1d30523eb773193ab777c0c84b3e8d5"
 dependencies = [
  "polyval",
+ "zeroize",
 ]
 
 [[package]]
@@ -5027,7 +5033,7 @@ dependencies = [
  "http 1.3.1",
  "hyper 1.7.0",
  "hyper-util",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.4",
@@ -5487,7 +5493,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.12.24",
  "ring",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-webpki 0.102.8",
  "serde",
  "smallvec",
@@ -5561,7 +5567,7 @@ dependencies = [
  "iroh-quinn-udp",
  "pin-project-lite",
  "rustc-hash",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
@@ -5580,7 +5586,7 @@ dependencies = [
  "rand 0.8.7",
  "ring",
  "rustc-hash",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.17",
@@ -5632,7 +5638,7 @@ dependencies = [
  "postcard",
  "rand 0.8.7",
  "reqwest 0.12.24",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-webpki 0.102.8",
  "serde",
  "sha1",
@@ -7720,12 +7726,15 @@ version = "0.0.0"
 name = "orb-ipcp-hpke"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "getrandom 0.4.2",
  "hex 0.4.3",
+ "hmac 0.13.0",
  "hpke",
  "rand_core 0.10.1",
  "serde_json",
  "sha2 0.10.9",
+ "sha2 0.11.0",
  "thiserror 2.0.17",
  "zeroize",
 ]
@@ -7763,7 +7772,7 @@ dependencies = [
  "orb-telemetry",
  "orb-zbus-proxies",
  "portpicker",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "secrecy 0.8.0",
  "serde",
  "serde_json",
@@ -8030,7 +8039,7 @@ dependencies = [
  "owo-colors 3.5.0",
  "p256 0.13.2",
  "rustls-pki-types",
- "rustls-webpki 0.103.13",
+ "rustls-webpki 0.103.14",
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
@@ -9164,6 +9173,7 @@ dependencies = [
  "cpubits",
  "cpufeatures 0.3.0",
  "universal-hash 0.6.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -9722,7 +9732,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "socket2 0.6.1",
  "thiserror 2.0.17",
  "tokio",
@@ -9742,7 +9752,7 @@ dependencies = [
  "rand 0.9.4",
  "ring",
  "rustc-hash",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.17",
@@ -10137,7 +10147,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -10468,15 +10478,15 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.35"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.13",
+ "rustls-webpki 0.103.14",
  "subtle",
  "zeroize",
 ]
@@ -10556,9 +10566,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "0527518605e68109d875e248ea259b6758801cf165e4b2c2733ae3b51f12535a"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -11447,7 +11457,7 @@ dependencies = [
  "memchr",
  "once_cell",
  "percent-encoding",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -12278,7 +12288,7 @@ version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
 dependencies = [
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "tokio",
 ]
 
@@ -12979,7 +12989,7 @@ dependencies = [
  "base64 0.22.1",
  "log",
  "percent-encoding",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "ureq-proto",
@@ -14108,7 +14118,7 @@ dependencies = [
  "pem",
  "quinn",
  "rcgen",
- "rustls 0.23.35",
+ "rustls 0.23.45",
  "rustls-native-certs 0.8.2",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
@@ -14816,9 +14826,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.8.2"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 dependencies = [
  "serde",
  "zeroize_derive",
