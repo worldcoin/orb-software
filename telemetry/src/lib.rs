@@ -150,6 +150,9 @@ impl TelemetryConfig {
     ///
     /// Tags longer than 65 bytes are truncated with a warning to stderr.
     /// UTF-8 tags are truncated at a character boundary.
+    ///
+    /// Delivery is best-effort: Android's logging API does not expose logd
+    /// transport failures, so a successsful write does not guarantee delivery.
     #[cfg(target_os = "android")]
     #[must_use]
     pub fn with_logcat(self, tag: &std::ffi::CStr) -> Self {
@@ -205,10 +208,6 @@ impl TelemetryConfig {
         let stderr_layer = journald_layer
             .is_none()
             .then(|| tracing_subscriber::fmt::layer().with_writer(std::io::stderr));
-
-        #[cfg(target_os = "android")]
-        let stderr_layer =
-            stderr_layer.map(|layer| layer.with_ansi(self.logcat_tag.is_none()));
 
         assert!(stderr_layer.is_some() || journald_layer.is_some());
 

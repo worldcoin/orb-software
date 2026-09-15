@@ -263,4 +263,64 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
         assert_eq!(calls, 2);
     }
+
+    #[test]
+    fn it_records_span_updates_once_per_output() {
+        // Arrange
+        use std::sync::{Arc, Mutex};
+        use tracing_subscriber::layer::SubscriberExt;
+
+        #[derive(Clone, Default)]
+        struct Buffer(Arc<Mutex<Vec<u8>>>);
+
+        impl io::Write for Buffer {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let stderr = Buffer::default();
+        let logcat = Buffer::default();
+
+        let stderr_writer = stderr.clone();
+        let logcat_writer = logcat.clone();
+
+        let subscriber = tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .without_time()
+                    .with_writer(move || stderr_writer.clone()),
+            )
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .fmt_fields(LogcatFields)
+                    .with_ansi(false)
+                    .without_time()
+                    .with_writer(move || logcat_writer.clone()),
+            );
+
+        // Act
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!("request", status = tracing::field::Empty,);
+            let _entered = span.enter();
+
+            span.record("status", 200);
+            tracing::info!("request finished");
+        });
+
+        // Assert
+        for (name, buffer) in [("stderr", stderr), ("logcat", logcat)] {
+            let bytes = buffer.0.lock().unwrap();
+            let output = std::str::from_utf8(&bytes).unwrap();
+
+            assert!(output.contains("request finished"), "{name}: {output}");
+            assert_eq!(output.matches("status=200").count(), 1, "{name}: {output}");
+        }
+    }
 }
