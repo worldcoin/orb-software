@@ -5,12 +5,9 @@ use color_eyre::{
     Result,
 };
 use orb_backend_status::{collectors, BUILD_INFO};
-use orb_info::{OrbJabilId, OrbName};
+use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::path::PathBuf;
-
-// TODO: Use OrbId::read() once the Android orb-info implementation is available.
-const TEMP_ORB_ID: &str = "00000000";
 
 #[derive(Parser)]
 #[command(version = BUILD_INFO.version, about = "Forward Android OES events to the backend")]
@@ -45,7 +42,7 @@ fn zenoh_config(socket: &str) -> Result<zenorb::zenoh::Config> {
     Ok(config)
 }
 
-pub async fn configure(args: Args) -> Result<Config> {
+pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
     let token = tokio::fs::read_to_string(&args.token_file)
         .await
         .wrap_err_with(|| {
@@ -59,7 +56,7 @@ pub async fn configure(args: Args) -> Result<Config> {
     );
 
     Ok(Config {
-        orb_id: TEMP_ORB_ID.parse().expect("temporary orb ID must be valid"),
+        orb_id,
         orb_name: OrbName("unknown".to_owned()),
         orb_jabil_id: OrbJabilId("unknown".to_owned()),
         orb_os_version: args.orb_os_version,
@@ -75,12 +72,6 @@ pub async fn configure(args: Args) -> Result<Config> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn temporary_identity_is_supported_by_current_orb_info() {
-        let orb_id: orb_info::OrbId = TEMP_ORB_ID.parse().unwrap();
-        assert_eq!(orb_id.as_str(), "00000000");
-    }
 
     #[test]
     fn requires_backend_url_and_token_file() {
@@ -118,24 +109,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn loads_static_token_and_temporary_identity() {
-        let dir = async_tempfile::TempDir::new().await.unwrap();
-        let token_file = dir.to_path_buf().join("token");
-        tokio::fs::write(&token_file, "test-token\n").await.unwrap();
-        let args = Args {
-            endpoint: "https://example.com/status".parse().unwrap(),
-            token_file,
-            zenoh_socket: "/data/local/tmp/zenohd.sock".to_owned(),
-            metrics_socket: "/data/local/tmp/dsd.socket".to_owned(),
-            orb_os_version: "android-test".to_owned(),
-        };
-        let config = configure(args).await.unwrap();
-        assert_eq!(config.orb_id.as_str(), "00000000");
-        assert_eq!(config.collectors.token, "test-token");
-        assert_eq!(config.orb_os_version, "android-test");
-    }
-
-    #[tokio::test]
     async fn unreadable_token_file_has_actionable_error() {
         let dir = async_tempfile::TempDir::new().await.unwrap();
         let args = Args {
@@ -145,7 +118,8 @@ mod tests {
             metrics_socket: "/data/local/tmp/dsd.socket".to_owned(),
             orb_os_version: "unknown".to_owned(),
         };
-        let error = configure(args)
+        let orb_id = orb_info::orb_id::test_orb_id();
+        let error = configure(args, orb_id)
             .await
             .err()
             .expect("missing token must fail");

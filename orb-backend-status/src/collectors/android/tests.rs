@@ -5,6 +5,7 @@ use crate::{
     sender::BackendSender,
 };
 use orb_dogd::test::MetricSinkhole;
+use orb_info::orb_id::test_orb_id;
 use std::time::Duration;
 use tokio::time::timeout;
 use wiremock::{
@@ -24,7 +25,7 @@ async fn setup(token: &str, server: &MockServer) -> (Collectors, StatusClient) {
 
     let client = StatusClient::builder()
         .metrics(MetricSinkhole)
-        .orb_id("ea2ea744".parse().unwrap())
+        .orb_id(test_orb_id())
         .orb_name("android-test".parse().unwrap())
         .jabil_id("android-test".parse().unwrap())
         .orb_os_version("android-test".to_owned())
@@ -67,9 +68,10 @@ async fn static_channels_stay_open_without_background_reporters() {
 
 #[tokio::test]
 async fn sends_cached_oes_with_initial_static_token() {
+    let orb_id = test_orb_id().to_string();
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(basic_auth("ea2ea744", "static-token"))
+        .and(basic_auth(orb_id.as_str(), "static-token"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
         .mount(&server)
@@ -99,7 +101,7 @@ async fn sends_cached_oes_with_initial_static_token() {
 
     let requests = server.received_requests().await.unwrap();
     let body: serde_json::Value = requests[0].body_json().unwrap();
-    assert_eq!(body["orb_id"], "ea2ea744");
+    assert_eq!(body["orb_id"], orb_id);
     assert_eq!(body["oes_cached"], true);
     assert_eq!(body["oes"][0]["name"], "orb-engine/test");
     assert_eq!(body["oes"][0]["payload"]["value"], 42);

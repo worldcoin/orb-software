@@ -47,7 +47,10 @@ async fn main() -> Result<()> {
     #[cfg(feature = "linux-collectors")]
     let config = startup::linux::configure().await?;
     #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
-    let config = startup::android::configure(args).await?;
+    let config = {
+        let orb_id = orb_info::OrbId::read().await?;
+        startup::android::configure(args, orb_id).await?
+    };
 
     let zsession = zenorb::Zenorb::from_cfg(config.zenoh)
         .orb_id(config.orb_id.clone())
