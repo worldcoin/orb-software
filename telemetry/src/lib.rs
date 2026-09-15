@@ -112,6 +112,9 @@ pub struct TelemetryConfig {
     global_filter: EnvFilter,
     #[cfg(feature = "otel")]
     otel_cfg: Option<OpentelemetryConfig>,
+
+    #[cfg(target_os="android")]
+    logcat_tag: Option<std::ffi::CString>,
 }
 
 impl TelemetryConfig {
@@ -127,6 +130,8 @@ impl TelemetryConfig {
                 .from_env_lossy(),
             #[cfg(feature = "otel")]
             otel_cfg: None,
+            #[cfg(target_os="android")]
+            logcat_tag: None,
         }
     }
 

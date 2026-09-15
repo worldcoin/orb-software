@@ -4,6 +4,13 @@ use std::io;
 #[cfg(target_os = "android")]
 use std::io::Write;
 
+#[cfg(target_os = "android")]
+use android_log_sys::LogPriority;
+#[cfg(target_os = "android")]
+use tracing::{Level, Metadata};
+#[cfg(target_os = "android")]
+use tracing_subscriber::fmt::MakeWriter;
+
 const MESSAGE_MAX_LEN: usize = 4000;
 
 fn write_chunks(
@@ -55,6 +62,35 @@ fn write_logcat_chunk(
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "android")]
+pub(super) struct LogcatWriter(pub(super) CString);
+
+#[cfg(target_os = "android")]
+impl<'a> MakeWriter<'a> for LogcatWriter {
+    type Writer = EventWriter<'a>;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        EventWriter {
+            tag: &self.0,
+            priority: LogPriority::INFO,
+            buffer: Vec::new(),
+        }
+    }
+
+    fn make_writer_for(&'a self, metadata: &Metadata<'_>) -> Self::Writer {
+        let mut writer = self.make_writer();
+
+        writer.priority = match *metadata.level() {
+            Level::TRACE => LogPriority::VERBOSE,
+            Level::DEBUG => LogPriority::DEBUG,
+            Level::INFO => LogPriority::INFO,
+            Level::WARN => LogPriority::WARN,
+            Level::ERROR => LogPriority::ERROR,
+        };
+        writer
+    }
 }
 
 #[cfg(target_os = "android")]
