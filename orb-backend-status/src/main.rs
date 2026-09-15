@@ -9,13 +9,24 @@ mod startup;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(target_os = "android")]
+    color_eyre::config::HookBuilder::default()
+        .theme(color_eyre::config::Theme::new())
+        .install()?;
+
+    #[cfg(not(target_os = "android"))]
     color_eyre::install()?;
+
     #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
     let args = <startup::android::Args as clap::Parser>::parse();
 
     let telemetry = orb_telemetry::TelemetryConfig::new();
-    #[cfg(feature = "linux-collectors")]
+
+    #[cfg(all(target_os = "linux", feature = "linux-collectors"))]
     let telemetry = telemetry.with_journald("worldcoin-backend-status");
+
+    #[cfg(all(target_os = "android", feature = "android-collectors"))]
+    let telemetry = telemetry.with_logcat(c"orb-backend-status");
     let telemetry = telemetry.init();
 
     let shutdown_token = CancellationToken::new();
