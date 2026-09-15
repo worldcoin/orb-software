@@ -1,8 +1,6 @@
 use std::ffi::{CStr, CString};
-use std::io;
-
-#[cfg(target_os = "android")]
-use std::io::Write;
+use std::io::{self, Write};
+use std::num::NonZeroU8;
 
 #[cfg(target_os = "android")]
 use android_log_sys::LogPriority;
@@ -19,6 +17,31 @@ use tracing_subscriber::{
 };
 
 const MESSAGE_MAX_LEN: usize = 4000;
+// Android's 4068-byte payload includes one priority byte and two NULs.
+const TAG_MAX_LEN: usize = 65;
+
+pub(super) fn truncate_tag(tag: &CStr) -> CString {
+    if tag.to_bytes().len() <= TAG_MAX_LEN {
+        return tag.to_owned();
+    }
+
+    // Best-effort: a stderr failure must not prevent telemetry initialization.
+    let _ = writeln!(
+        io::stderr(),
+        "logcat tag exceeds {TAG_MAX_LEN} bytes; truncating it"
+    );
+
+    let end = tag
+        .to_str()
+        .map_or(TAG_MAX_LEN, |text| text.floor_char_boundary(TAG_MAX_LEN));
+    let bytes: Vec<NonZeroU8> = tag.to_bytes()[..end]
+        .iter()
+        .copied()
+        .filter_map(NonZeroU8::new)
+        .collect();
+
+    CString::from(bytes)
+}
 
 fn write_chunks(
     bytes: &[u8],
@@ -148,6 +171,53 @@ impl Drop for EventWriter<'_> {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn it_accepts_a_tag_at_the_payload_limit() {
+        let tag = CString::new("t".repeat(TAG_MAX_LEN)).unwrap();
+
+        assert_eq!(truncate_tag(&tag), tag);
+
+        assert_eq!(
+            1 + tag.as_bytes_with_nul().len() + MESSAGE_MAX_LEN + 1,
+            4068
+        );
+    }
+
+    #[test]
+    fn it_truncates_a_tag_over_the_limit() {
+        let tag = CString::new("t".repeat(TAG_MAX_LEN + 1)).unwrap();
+
+        let truncated = truncate_tag(&tag);
+
+        assert_eq!(truncated.to_bytes(), "t".repeat(TAG_MAX_LEN).as_bytes());
+    }
+
+    #[test]
+    fn it_truncates_tags_at_a_utf8_boundary() {
+        let tag = CString::new("🦉".repeat(17)).unwrap();
+
+        let truncated = truncate_tag(&tag);
+
+        assert_eq!(truncated.to_str().unwrap(), "🦉".repeat(16));
+        assert_eq!(truncated.to_bytes().len(), 64);
+    }
+
+    #[test]
+    fn it_preserves_short_tags() {
+        for tag in [c"", c"orb-backend-status", c"🦉"] {
+            assert_eq!(truncate_tag(tag).as_c_str(), tag);
+        }
+    }
+
+    #[test]
+    fn it_truncates_non_utf8_tags_as_bytes() {
+        let tag = CString::new(vec![0xff; TAG_MAX_LEN + 1]).unwrap();
+
+        let truncated = truncate_tag(&tag);
+
+        assert_eq!(truncated.to_bytes(), &[0xff; TAG_MAX_LEN]);
+    }
 
     #[test]
     fn it_escapes_nulls_and_preserves_utf8_across_chunks() {

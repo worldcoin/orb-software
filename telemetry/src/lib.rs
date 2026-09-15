@@ -146,11 +146,15 @@ impl TelemetryConfig {
         }
     }
 
+    /// Adds Android logcat output alongside the existing logging sink.
+    ///
+    /// Tags longer than 65 bytes are truncated with a warning to stderr.
+    /// UTF-8 tags are truncated at a character boundary.
     #[cfg(target_os = "android")]
     #[must_use]
     pub fn with_logcat(self, tag: &std::ffi::CStr) -> Self {
         Self {
-            logcat_tag: Some(tag.to_owned()),
+            logcat_tag: Some(logcat::truncate_tag(tag)),
             ..self
         }
     }
