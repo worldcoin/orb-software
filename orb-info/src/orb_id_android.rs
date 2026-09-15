@@ -6,13 +6,30 @@ use futures::TryFutureExt;
 #[cfg(feature = "async")]
 use std::future;
 
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, derive_more::Display, derive_more::FromStr,
-)]
-pub struct OrbId(u32);
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct OrbId(pub(crate) u32);
 
-// Serialize/deserialize as a string, matching orb_id_linux's `OrbId` and the
-// backend API, which expects `orbId` to be a string on every platform.
+// A suffix to append to orb-id to distinguish it from Linux based orbs. Use suffix
+// and not prefix because backend like to truncate orb id to 8 characters, thus
+// loosing the actual orb id
+const SUFFIX: &str = "arkenstone";
+
+impl std::fmt::Display for OrbId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{SUFFIX}", self.0)
+    }
+}
+
+impl std::str::FromStr for OrbId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.strip_suffix(SUFFIX).unwrap_or(s).parse()?))
+    }
+}
+
+// Serialize/deserialize as a string via Display/FromStr, so the `arkenstone`
+// suffix is included on the wire.
 #[cfg(feature = "serde")]
 impl serde::Serialize for OrbId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -80,7 +97,13 @@ mod test {
     fn test_from_str_and_display() {
         let id: OrbId = "1234".parse().unwrap();
         assert_eq!(id.0, 1234);
-        assert_eq!(id.to_string(), "1234");
+        assert_eq!(id.to_string(), "1234arkenstone");
+    }
+
+    #[test]
+    fn test_from_str_accepts_suffixed() {
+        let id: OrbId = "1234arkenstone".parse().unwrap();
+        assert_eq!(id.0, 1234);
     }
 
     #[test]
@@ -141,7 +164,10 @@ mod test {
         let json = serde_json::json!("1234");
         let id: OrbId = serde_json::from_value(json).unwrap();
         assert_eq!(id.0, 1234);
-        assert_eq!(serde_json::to_value(id).unwrap(), serde_json::json!("1234"));
+        assert_eq!(
+            serde_json::to_value(id).unwrap(),
+            serde_json::json!("1234arkenstone")
+        );
     }
 
     /// Ensures request payloads embedding an `OrbId` send `orbId` as a JSON
@@ -159,6 +185,9 @@ mod test {
         let req = Request {
             orb_id: "1234".parse().unwrap(),
         };
-        assert_eq!(serde_json::to_string(&req).unwrap(), r#"{"orbId":"1234"}"#);
+        assert_eq!(
+            serde_json::to_string(&req).unwrap(),
+            r#"{"orbId":"1234arkenstone"}"#
+        );
     }
 }
