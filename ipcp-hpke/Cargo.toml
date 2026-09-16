@@ -10,10 +10,12 @@ rust-version.workspace = true
 
 [dependencies]
 aes-gcm = { version = "0.11.1", default-features = false, features = ["zeroize"] }
-getrandom = "0.4"
 hmac = { version = "0.13", default-features = false, features = ["zeroize"] }
-hpke = { version = "=0.14.1", default-features = false, features = ["x25519", "aes"] }
-rand_core = "0.10.1"
+hpke = { version = "=0.14.1", default-features = false, features = [
+	"x25519",
+	"aes",
+	"getrandom",
+] }
 sha2-hpke = { package = "sha2", version = "0.11", default-features = false, features = [
 	"zeroize",
 ] }

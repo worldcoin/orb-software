@@ -4843,6 +4843,7 @@ checksum = "a5324110b02044183df000f0bd7d2d7e61f1000631508627e77f63983b6fdffb"
 dependencies = [
  "aead 0.6.1",
  "aes-gcm",
+ "getrandom 0.4.2",
  "hkdf 0.13.0",
  "hybrid-array",
  "rand_core 0.10.1",
@@ -7728,12 +7729,10 @@ name = "orb-ipcp-hpke"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
- "getrandom 0.4.2",
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
  "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27)",
- "rand_core 0.10.1",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.17",

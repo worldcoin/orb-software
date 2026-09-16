@@ -19,11 +19,13 @@ fn bytes(fixture: &Value, field: &str) -> Vec<u8> {
 }
 
 fn pairing_key_from_fixture(fixture: &Value) -> PairingKey {
-    PairingKey::with_randomness(|output| {
-        output.copy_from_slice(&bytes(fixture, "skRm"));
-        Ok(())
-    })
-    .unwrap()
+    PairingKey {
+        pairing_private_key: <Profile as Kem>::PrivateKey::from_bytes(&bytes(
+            fixture, "skRm",
+        ))
+        .unwrap(),
+        pairing_public_key: bytes(fixture, "pkRm").try_into().unwrap(),
+    }
 }
 
 fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayload {
@@ -33,17 +35,10 @@ fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayloa
     }
 }
 
-fn ephemeral_key_material_from_fixture(fixture: &Value) -> EphemeralKeyMaterial {
-    EphemeralKeyMaterial {
-        bytes: Zeroizing::new(bytes(fixture, "ikmE").try_into().unwrap()),
-        position: 0,
-    }
-}
-
 #[test]
 fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
-    let pairing_key = PairingKey::new().unwrap();
-    let other_pairing_key = PairingKey::new().unwrap();
+    let pairing_key = PairingKey::new_pairing_key();
+    let other_pairing_key = PairingKey::new_pairing_key();
     assert_ne!(
         pairing_key.pairing_public_key,
         other_pairing_key.pairing_public_key
@@ -78,7 +73,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 
 #[test]
 fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
-    let pairing_key = PairingKey::new().unwrap();
+    let pairing_key = PairingKey::new_pairing_key();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let encrypted_ipcp_image_payload = PairingKey::encrypt(
         &pairing_key.pairing_public_key,
@@ -108,18 +103,7 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
 }
 
 #[test]
-fn pairing_key_randomness_failure_returns_randomness_error() {
-    assert!(matches!(
-        PairingKey::with_randomness(|output| {
-            output.fill(0xa5);
-            Err(getrandom::Error::UNSUPPORTED)
-        }),
-        Err(Error::Randomness)
-    ));
-}
-
-#[test]
-fn ipcp_image_fixture_matches_encryption_and_decryption() {
+fn ipcp_image_fixture_matches_decryption() {
     let f = ipcp_image_fixture();
     for (field, expected) in
         [("mode", 0), ("kem_id", 32), ("kdf_id", 1), ("aead_id", 2)]
@@ -129,19 +113,7 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
     assert_eq!(bytes(&f, "info"), IPCP_INFO);
     assert_eq!(bytes(&f, "aad"), IPCP_AAD);
     let ipcp_image = bytes(&f, "pt");
-    let encrypted_ipcp_image_payload = PairingKey::encrypt_with_randomness(
-        &bytes(&f, "pkRm"),
-        &ipcp_image,
-        IPCP_INFO,
-        IPCP_AAD,
-        |output| {
-            output.copy_from_slice(&bytes(&f, "ikmE"));
-            Ok(())
-        },
-    )
-    .unwrap();
-    assert_eq!(encrypted_ipcp_image_payload.enc, bytes(&f, "enc"));
-    assert_eq!(encrypted_ipcp_image_payload.ciphertext, bytes(&f, "ct"));
+    let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     assert_eq!(
         encrypted_ipcp_image_payload.ciphertext,
         [bytes(&f, "ciphertext"), bytes(&f, "tag")].concat()
@@ -161,23 +133,11 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
 }
 
 #[test]
-fn published_cfrg_vector_matches() {
+fn published_cfrg_vector_matches_decryption() {
     let f = fixture(include_str!("fixtures/ipcp-hpke-cfrg.json"));
     let pairing_key = pairing_key_from_fixture(&f);
     let test_plaintext_bytes = bytes(&f, "pt");
-    let encrypted_test_payload = PairingKey::encrypt_with_randomness(
-        &bytes(&f, "pkRm"),
-        &test_plaintext_bytes,
-        &bytes(&f, "info"),
-        &bytes(&f, "aad"),
-        |output| {
-            output.copy_from_slice(&bytes(&f, "ikmE"));
-            Ok(())
-        },
-    )
-    .unwrap();
-    assert_eq!(encrypted_test_payload.enc, bytes(&f, "enc"));
-    assert_eq!(encrypted_test_payload.ciphertext, bytes(&f, "ct"));
+    let encrypted_test_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     let decrypted_test_plaintext_bytes = pairing_key
         .decrypt(
             &encrypted_test_payload,
@@ -371,21 +331,6 @@ fn incorrect_info_and_aad_are_rejected() {
 }
 
 #[test]
-fn encryption_randomness_failure_returns_randomness_error() {
-    let result = PairingKey::encrypt_with_randomness(
-        &bytes(&ipcp_image_fixture(), "pkRm"),
-        b"test",
-        IPCP_INFO,
-        IPCP_AAD,
-        |output| {
-            output.fill(0xa5);
-            Err(getrandom::Error::UNSUPPORTED)
-        },
-    );
-    assert!(matches!(result, Err(Error::Randomness)));
-}
-
-#[test]
 fn crypto_state_cleanup_guards_are_enabled() {
     fn assert_drop_guard<T: ZeroizeOnDrop>() {}
 
@@ -397,7 +342,7 @@ fn crypto_state_cleanup_guards_are_enabled() {
 }
 
 #[test]
-fn ipcp_image_and_ephemeral_key_material_use_zeroizing_guards() {
+fn decrypted_ipcp_image_uses_zeroizing_guard() {
     fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
     let f = ipcp_image_fixture();
     let mut decrypted_ipcp_image_bytes = pairing_key_from_fixture(&f)
@@ -411,40 +356,4 @@ fn ipcp_image_and_ephemeral_key_material_use_zeroizing_guards() {
     assert!(!decrypted_ipcp_image_bytes.is_empty());
     decrypted_ipcp_image_bytes.as_mut_slice().zeroize();
     assert!(decrypted_ipcp_image_bytes.iter().all(|&byte| byte == 0));
-    let mut ephemeral_key_material = ephemeral_key_material_from_fixture(&f);
-    assert_drop_guard(&ephemeral_key_material.bytes);
-    ephemeral_key_material.bytes.zeroize();
-    assert_eq!(*ephemeral_key_material.bytes, [0; KEY_LEN]);
-}
-
-#[test]
-fn ephemeral_key_material_reads_advance_without_repeating_bytes() {
-    let f = ipcp_image_fixture();
-    let source = bytes(&f, "ikmE");
-    let mut ephemeral_key_material = ephemeral_key_material_from_fixture(&f);
-    assert_eq!(
-        ephemeral_key_material.try_next_u32().unwrap(),
-        u32::from_le_bytes(source[..4].try_into().unwrap())
-    );
-    assert_eq!(
-        ephemeral_key_material.try_next_u64().unwrap(),
-        u64::from_le_bytes(source[4..12].try_into().unwrap())
-    );
-    let mut remaining = [0; 20];
-    ephemeral_key_material
-        .try_fill_bytes(&mut remaining)
-        .unwrap();
-    assert_eq!(remaining, source[12..]);
-    assert_eq!(ephemeral_key_material.position, KEY_LEN);
-}
-
-#[test]
-#[should_panic(expected = "Ephemeral key material exhausted")]
-fn ephemeral_key_material_exhaustion_cannot_reuse_randomness() {
-    let mut ephemeral_key_material =
-        ephemeral_key_material_from_fixture(&ipcp_image_fixture());
-    ephemeral_key_material
-        .try_fill_bytes(&mut [0; KEY_LEN])
-        .unwrap();
-    ephemeral_key_material.try_fill_bytes(&mut [0; 1]).unwrap();
 }
