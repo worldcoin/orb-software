@@ -3,7 +3,7 @@ use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
 use crate::{ble, modem, reporters, OrbCapabilities};
 use color_eyre::eyre::Result;
-use orb_info::orb_os_release::OrbOsRelease;
+use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use speare::mini::{self, OnErr};
 use speare::{Backoff, Limit};
 use std::path::Path;
@@ -71,17 +71,20 @@ pub async fn program(
         .await
         .inspect_err(|e| error!("failed to start connd zoci zenoh receiver: {e}"));
 
-    speare
-        .task_with()
-        .on_err(OnErr::Restart {
-            max: Limit::None,
-            backoff: Backoff::Static(Duration::from_secs(30)),
-        })
-        .args(ble::Args {
-            zenoh: zenoh.clone(),
-        })
-        .spawn(ble::advertiser)
-        .inspect_err(|e| error!("failed to spawn ble beacon task: {e:?}"))?;
+    if os_release.orb_os_platform_type == OrbOsPlatform::Diamond {
+        speare
+            .task_with()
+            .on_err(OnErr::Restart {
+                max: Limit::None,
+                backoff: Backoff::Static(Duration::from_secs(30)),
+            })
+            .args(ble::Args {
+                zenoh: zenoh.clone(),
+                interval: Duration::from_millis(1_000),
+            })
+            .spawn(ble::advertiser)
+            .inspect_err(|e| error!("failed to spawn ble beacon task: {e:?}"))?;
+    }
 
     speare.oneshot(async move |_| connd.spawn().await)?;
 

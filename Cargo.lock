@@ -7431,6 +7431,7 @@ dependencies = [
  "color-eyre",
  "crabwire",
  "dashmap",
+ "dbus-launch",
  "derive_more 2.1.1",
  "escargot",
  "faux",

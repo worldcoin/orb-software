@@ -72,6 +72,7 @@ zenorb.workspace = true
 [dev-dependencies]
 async-tempfile.workspace = true
 crabwire = { workspace = true, features = ["testing"] }
+dbus-launch.workspace = true
 escargot.workspace = true
 faux.workspace = true
 test-utils.workspace = true
@@ -101,6 +102,11 @@ assets = [
 	[
 		"nm_cfg/20-defaults.conf",
 		"/etc/NetworkManager/conf.d/",
+		"644",
+	],
+	[
+		"debian/THIRD-PARTY-NOTICES",
+		"/usr/share/doc/orb-connd/THIRD-PARTY-NOTICES",
 		"644",
 	],
 ]

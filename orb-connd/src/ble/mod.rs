@@ -1,14 +1,23 @@
 use bluer::adv::{Advertisement, Type};
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{
+    eyre::{ensure, eyre},
+    Result,
+};
 use serde::{Deserialize, Serialize};
 use speare::mini;
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+    collections::BTreeMap,
+    ops::Bound::{Excluded, Unbounded},
+    time::Duration,
+};
+use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 use zenorb::Zenorb;
 
 pub struct Args {
     pub zenoh: Zenorb,
+    pub interval: Duration,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,11 +50,6 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
         Ok(a) => a,
     };
 
-    let active = adapter.active_advertising_instances().await?;
-    let supported = adapter.supported_advertising_instances().await?;
-
-    info!("ble advertising instances. active: {active}, supported: {supported}");
-
     if !adapter
         .is_powered()
         .await
@@ -64,62 +68,80 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
         .map_err(|e| eyre!("{e}"))?;
 
     let mut service_data = BTreeMap::new();
-    let mut _advertisement_handle = None;
+    let mut advertisement_handle = None;
+    let mut last_service_id = None;
+    let mut last_payload = None;
+    let mut interval = time::interval(ctx.interval);
+    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
-        let sample = subscriber
-            .recv_async()
-            .await
-            .map_err(|e| eyre!("{e}"))
-            .inspect_err(|e| {
-                warn!("ble advertiser failed receive zenoh sample: {e}")
-            })?;
+        tokio::select! {
+            sample = subscriber.recv_async() => {
+                let sample = sample
+                    .map_err(|e| eyre!("{e}"))
+                    .inspect_err(|e| {
+                        warn!("ble advertiser failed receive zenoh sample: {e}")
+                    })?;
 
-        let payload = sample.payload().to_bytes();
-        let advert = match serde_json::from_slice::<Advert>(&payload) {
-            Err(e) => {
-                warn!("ble advertiser received malformed json: {e}");
-                continue;
+                let payload = sample.payload().to_bytes();
+                let advert = match serde_json::from_slice::<Advert>(&payload) {
+                    Err(e) => {
+                        warn!("ble advertiser received malformed json: {e}");
+                        continue;
+                    }
+
+                    Ok(p) => p,
+                };
+
+                match advert.payload {
+                    None => {
+                        info!("removing ble advert from service: {}", advert.service_id);
+                        service_data.remove(&advert.service_id);
+                    }
+
+                    Some(payload) => {
+                        info!("adding ble advert for service: {}", advert.service_id);
+                        service_data.insert(advert.service_id, payload);
+                    }
+                }
             }
 
-            Ok(p) => p,
-        };
+            _ = interval.tick() => {
+                let next = last_service_id
+                    .and_then(|id| service_data.range((Excluded(id), Unbounded)).next())
+                    .or_else(|| service_data.first_key_value());
 
-        match advert.payload {
-            None => {
-                info!("removing ble advert from service: {}", advert.service_id);
-                service_data.remove(&advert.service_id);
-            }
+                let Some((&service_id, payload)) = next else {
+                    drop(advertisement_handle.take());
+                    last_service_id = None;
+                    last_payload = None;
+                    continue;
+                };
 
-            Some(payload) => {
-                info!("adding ble advert for service: {}", advert.service_id);
-                service_data.insert(advert.service_id, payload);
-            }
-        }
+                let advertisement_unchanged = last_service_id == Some(service_id)
+                    && last_payload.as_ref() == Some(payload);
 
-        match (service_data.is_empty(), &_advertisement_handle) {
-            (true, None) => (),
+                if advertisement_unchanged {
+                    continue;
+                }
 
-            (true, Some(_)) => {
-                info!("removing all ble advertisements");
-                _advertisement_handle = None;
-            }
+                // Dropping the handle stops advertising asynchronously. The next advertisement
+                // may briefly overlap with the old one; our module supports up to 8 at once.
+                drop(advertisement_handle.take());
 
-            (false, _) => {
-                _advertisement_handle = None; // force drop
-
-                let ids: String = service_data.keys().map(|x| x.to_string()).collect();
-                info!("advertising ble broadcast for services: {ids}");
+                info!("advertising ble broadcast for service: {service_id}");
 
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
                     local_name: Some("Orb".to_owned()),
-                    service_data: service_data.clone(),
+                    service_data: BTreeMap::from([(service_id, payload.clone())]),
                     timeout: Some(Duration::ZERO),
                     ..Default::default()
                 };
 
-                _advertisement_handle = Some(adapter.advertise(advertisement).await?);
+                advertisement_handle = Some(adapter.advertise(advertisement).await?);
+                last_service_id = Some(service_id);
+                last_payload = Some(payload.clone());
             }
         }
     }
