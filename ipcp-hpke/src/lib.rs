@@ -1,10 +1,8 @@
 #![forbid(unsafe_code)]
 
 use hpke::{
-    aead::{AeadTag, AesGcm256},
-    kdf::HkdfSha256,
-    kem::X25519HkdfSha256,
-    Deserializable, Kem, OpModeR, OpModeS, Serializable,
+    aead::AesGcm256, kdf::HkdfSha256, kem::X25519HkdfSha256, Deserializable, Kem,
+    OpModeR, OpModeS, Serializable,
 };
 pub use orb_relay_messages::common::v1::IpcpHpkePayload as EncryptedPayload;
 use zeroize::Zeroizing;
@@ -35,53 +33,37 @@ impl PairingKey {
         {
             return Err(Error::InvalidPayload);
         }
-        let tag_start = encrypted_payload.ciphertext.len() - TAG_LEN;
         let ephemeral_public_key =
             <Profile as Kem>::EncappedKey::from_bytes(&encrypted_payload.enc)
                 .map_err(|_| Error::InvalidPayload)?;
-        let tag = AeadTag::<AesGcm256>::from_bytes(
-            &encrypted_payload.ciphertext[tag_start..],
-        )
-        .map_err(|_| Error::InvalidPayload)?;
-        let mut plaintext =
-            Zeroizing::new(encrypted_payload.ciphertext[..tag_start].to_vec());
-        hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
+        hpke::single_shot_open::<AesGcm256, HkdfSha256, Profile>(
             &OpModeR::Base,
             &self.sk,
             &ephemeral_public_key,
             &[],
-            plaintext.as_mut_slice().into(),
+            &encrypted_payload.ciphertext,
             &[],
-            &tag,
         )
-        .map_err(|_| Error::Decryption)?;
-        Ok(plaintext)
+        .map(Zeroizing::new)
+        .map_err(|_| Error::Decryption)
     }
 
     pub fn encrypt(
         recipient_pk: &<Profile as Kem>::PublicKey,
         plaintext: Zeroizing<Vec<u8>>,
     ) -> Result<EncryptedPayload, Error> {
-        let len = plaintext
-            .len()
-            .checked_add(TAG_LEN)
-            .ok_or(Error::InvalidPayload)?;
-        let tag_start = len - TAG_LEN;
-        let mut ciphertext = Zeroizing::new(vec![0; len]);
-        ciphertext[..tag_start].copy_from_slice(&plaintext);
-        let (ephemeral_public_key, tag) =
-            hpke::single_shot_seal_inout_detached::<AesGcm256, HkdfSha256, Profile>(
+        let (ephemeral_public_key, ciphertext) =
+            hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
                 &OpModeS::Base,
                 recipient_pk,
                 &[],
-                ciphertext[..tag_start].as_mut().into(),
+                &plaintext,
                 &[],
             )
             .map_err(|_| Error::Encryption)?;
-        ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
         Ok(EncryptedPayload {
             enc: ephemeral_public_key.to_bytes().to_vec(),
-            ciphertext: std::mem::take(&mut *ciphertext),
+            ciphertext,
         })
     }
 }

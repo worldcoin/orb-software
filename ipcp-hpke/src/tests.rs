@@ -35,7 +35,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let other_pairing_key = PairingKey::new();
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let mut encrypted_ipcp_image_payload =
+    let encrypted_ipcp_image_payload =
         PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
     assert_eq!(
         pairing_key
@@ -48,11 +48,25 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
         other_pairing_key.decrypt(&encrypted_ipcp_image_payload),
         Err(Error::Decryption)
     ));
-    encrypted_ipcp_image_payload.ciphertext[0] ^= 1;
-    assert!(matches!(
-        pairing_key.decrypt(&encrypted_ipcp_image_payload),
-        Err(Error::Decryption)
-    ));
+    for index in [0, encrypted_ipcp_image_payload.ciphertext.len() - 1] {
+        let mut tampered_payload = encrypted_ipcp_image_payload.clone();
+        tampered_payload.ciphertext[index] ^= 1;
+        assert!(matches!(
+            pairing_key.decrypt(&tampered_payload),
+            Err(Error::Decryption)
+        ));
+    }
+}
+
+#[test]
+fn empty_plaintext_roundtrips() {
+    let pairing_key = PairingKey::new();
+    let encrypted_payload =
+        PairingKey::encrypt(&pairing_key.pk, Zeroizing::new(Vec::new())).unwrap();
+    assert_eq!(encrypted_payload.ciphertext.len(), TAG_LEN);
+    let plaintext: Zeroizing<Vec<u8>> =
+        pairing_key.decrypt(&encrypted_payload).unwrap();
+    assert!(plaintext.is_empty());
 }
 
 #[test]
