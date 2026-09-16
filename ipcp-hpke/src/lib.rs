@@ -19,8 +19,13 @@ const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
 
 pub struct PairingKey {
-    pairing_private_key: <Profile as Kem>::PrivateKey,
     pairing_public_key: [u8; KEY_LEN],
+    key_material: PairingKeyMaterial,
+}
+
+enum PairingKeyMaterial {
+    Recipient(<Profile as Kem>::PrivateKey),
+    Sender(<Profile as Kem>::PublicKey),
 }
 
 impl PairingKey {
@@ -40,8 +45,18 @@ impl PairingKey {
         let pairing_public_key =
             Profile::sk_to_pk(&pairing_private_key).to_bytes().into();
         Ok(Self {
-            pairing_private_key,
             pairing_public_key,
+            key_material: PairingKeyMaterial::Recipient(pairing_private_key),
+        })
+    }
+
+    pub fn from_public_key(recipient_public_key: &[u8]) -> Result<Self, Error> {
+        let recipient_public_key =
+            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
+                .map_err(|_| Error::InvalidKey)?;
+        Ok(Self {
+            pairing_public_key: recipient_public_key.to_bytes().into(),
+            key_material: PairingKeyMaterial::Sender(recipient_public_key),
         })
     }
 
@@ -55,6 +70,10 @@ impl PairingKey {
         info: &[u8],
         aad: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
+        let PairingKeyMaterial::Recipient(pairing_private_key) = &self.key_material
+        else {
+            return Err(Error::InvalidRole);
+        };
         if encrypted_payload.enc.len() != KEY_LEN
             || encrypted_payload.ciphertext.len() < TAG_LEN
         {
@@ -72,7 +91,7 @@ impl PairingKey {
             Zeroizing::new(encrypted_payload.ciphertext[..tag_start].to_vec());
         hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
             &OpModeR::Base,
-            &self.pairing_private_key,
+            pairing_private_key,
             &ephemeral_public_key,
             info,
             plaintext.as_mut_slice().into(),
@@ -84,52 +103,31 @@ impl PairingKey {
     }
 
     pub fn encrypt(
-        recipient_public_key: &[u8],
+        &self,
         plaintext: Vec<u8>,
         info: &[u8],
         aad: &[u8],
     ) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
-        Self::encrypt_with_randomness(
-            recipient_public_key,
-            &plaintext,
-            info,
-            aad,
-            getrandom::fill,
-        )
+        self.encrypt_with_randomness(&plaintext, info, aad, getrandom::fill)
     }
 
     fn encrypt_with_randomness(
-        recipient_public_key: &[u8],
+        &self,
         plaintext: &[u8],
         info: &[u8],
         aad: &[u8],
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<EncryptedPayload, Error> {
-        let recipient_public_key =
-            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
-                .map_err(|_| Error::InvalidKey)?;
+        let PairingKeyMaterial::Sender(recipient_public_key) = &self.key_material
+        else {
+            return Err(Error::InvalidRole);
+        };
         let mut ephemeral_key_material = EphemeralKeyMaterial {
             bytes: Zeroizing::new([0; KEY_LEN]),
             position: 0,
         };
         fill(ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-        Self::encrypt_with_context(
-            &recipient_public_key,
-            plaintext,
-            info,
-            aad,
-            &mut ephemeral_key_material,
-        )
-    }
-
-    fn encrypt_with_context(
-        recipient_public_key: &<Profile as Kem>::PublicKey,
-        plaintext: &[u8],
-        info: &[u8],
-        aad: &[u8],
-        ephemeral_key_material: &mut EphemeralKeyMaterial,
-    ) -> Result<EncryptedPayload, Error> {
         let len = plaintext
             .len()
             .checked_add(TAG_LEN)
@@ -148,7 +146,7 @@ impl PairingKey {
                 info,
                 ciphertext[..tag_start].as_mut().into(),
                 aad,
-                ephemeral_key_material,
+                &mut ephemeral_key_material,
             )
             .map_err(|_| Error::Encryption)?;
         ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
@@ -163,6 +161,8 @@ impl PairingKey {
 pub enum Error {
     #[error("Invalid X25519 key")]
     InvalidKey,
+    #[error("Pairing key does not support this operation")]
+    InvalidRole,
     #[error("Invalid encrypted payload")]
     InvalidPayload,
     #[error("System randomness unavailable")]
