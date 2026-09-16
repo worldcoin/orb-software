@@ -28,7 +28,11 @@ tracing.workspace = true
 orb-build-info = { path = "../build-info", features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+unsupported_targets = [
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"aarch64-linux-android",
+]
 
 [package.metadata.deb]
 assets = [

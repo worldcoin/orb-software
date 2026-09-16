@@ -1,0 +1,316 @@
+pub use hex::FromHexError;
+
+use std::io;
+use std::path::Path;
+use std::process::Output;
+use std::{fmt::Display, hash::Hash, str::FromStr};
+use thiserror::Error;
+
+#[cfg(feature = "async")]
+async fn from_binary(path: impl AsRef<Path>) -> io::Result<String> {
+    let output = tokio::process::Command::new(path.as_ref()).output().await?;
+    from_binary_output(output, path)
+}
+
+fn from_binary_blocking(path: impl AsRef<Path>) -> io::Result<String> {
+    let output = std::process::Command::new(path.as_ref()).output()?;
+    from_binary_output(output, path)
+}
+
+fn from_binary_output(output: Output, path: impl AsRef<Path>) -> io::Result<String> {
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(std::io::Error::other(format!(
+            "{} binary failed",
+            path.as_ref().display()
+        )))
+    }
+}
+
+/// Boilerplate for OrbId*
+macro_rules! impl_orb_id {
+    (
+        $(#[$($enum_attrs:tt)*])*
+        $vis:vis struct $name:ident<$n:literal>;
+    ) => {
+        $(#[$($enum_attrs)*])*
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        $vis struct $name {
+            string: String,
+            bytes: [u8; $n],
+        }
+
+        impl $name {
+            pub const N_BYTES: usize = $n;
+
+            pub fn new(bytes: [u8; $n]) -> Self {
+                Self {
+                    string: hex::encode(&bytes),
+                    bytes,
+                }
+            }
+
+            pub fn as_str(&self) -> &str {
+                &self.string
+            }
+
+            pub fn as_bytes(&self) -> &[u8; $n] {
+                &self.bytes
+            }
+        }
+
+        impl FromStr for $name {
+            type Err = FromHexError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let mut result = Self {
+                    string: s.to_lowercase(),
+                    bytes: [0; $n],
+                };
+                hex::decode_to_slice(s, &mut result.bytes)?;
+                Ok(result)
+            }
+        }
+
+        impl Hash for $name {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.bytes[..usize::min($n, 4)].hash(state)
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str(&self.string)
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        impl serde::Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        #[cfg(feature = "serde")]
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                let s = String::deserialize(deserializer)?;
+                s.parse().map_err(serde::de::Error::custom)
+            }
+        }
+    };
+}
+
+impl_orb_id! {
+    /// A short [`OrbId`]. These shorter orb ids are what all EV4+ orbs use.
+    ///
+    /// # Example
+    /// ```
+    /// # use orb_info::orb_id::OrbIdShort;
+    /// let id: OrbIdShort = "ea2ea744".parse().unwrap();
+    /// assert_eq!(id.as_str(), "ea2ea744");
+    /// ```
+    pub struct OrbIdShort<4>;
+}
+
+impl_orb_id! {
+    /// A long [`OrbId`]. These longer orb ids are what pre-EV4 orbs used to use.
+    ///
+    /// # Example
+    /// ```
+    /// # use orb_info::orb_id::OrbIdLong;
+    /// let s = "ea2ea744295c5dacb12a825713f9cec1a2f4d63d86803a15fe580d6a468ab6d2";
+    /// let id: OrbIdLong = s.parse().unwrap();
+    /// assert_eq!(id.as_str(), s);
+    /// ```
+    pub struct OrbIdLong<32>;
+}
+
+/// An orb id.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
+pub enum OrbId {
+    Short(OrbIdShort),
+    Long(OrbIdLong),
+}
+
+#[derive(Debug, Error)]
+pub enum ReadErr {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+impl OrbId {
+    #[cfg(feature = "async")]
+    pub async fn read() -> Result<Self, ReadErr> {
+        let id = if let Ok(s) = std::env::var("ORB_ID") {
+            Ok(s.trim().to_string())
+        } else {
+            from_binary("orb-id").await
+        }?;
+        Ok(Self::from_str(&id).unwrap())
+    }
+
+    pub fn read_blocking() -> Result<Self, ReadErr> {
+        let id = if let Ok(s) = std::env::var("ORB_ID") {
+            Ok(s.trim().to_string())
+        } else {
+            from_binary_blocking("orb-id")
+        }?;
+        Ok(Self::from_str(&id).unwrap())
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Short(id) => id.as_str(),
+            Self::Long(id) => id.as_str(),
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Short(id) => id.as_bytes(),
+            Self::Long(id) => id.as_bytes(),
+        }
+    }
+
+    pub fn is_long(&self) -> bool {
+        match self {
+            OrbId::Short(_) => false,
+            OrbId::Long(_) => true,
+        }
+    }
+}
+
+#[cfg(any(test, feature = "testing"))]
+pub fn test_orb_id() -> OrbId {
+    "88888888".parse().unwrap()
+}
+
+impl From<OrbIdShort> for OrbId {
+    fn from(value: OrbIdShort) -> Self {
+        Self::Short(value)
+    }
+}
+
+impl From<OrbIdLong> for OrbId {
+    fn from(value: OrbIdLong) -> Self {
+        Self::Long(value)
+    }
+}
+
+impl FromStr for OrbId {
+    type Err = FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(id) = s.parse::<OrbIdShort>() {
+            return Ok(Self::from(id));
+        }
+        s.parse::<OrbIdLong>().map(Self::from)
+    }
+}
+
+impl Display for OrbId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Short(id) => id.fmt(f),
+            Self::Long(id) => id.fmt(f),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_round_trip() {
+        let short = "ea2ea744";
+        let long = "ea2ea744295c5dacb12a825713f9cec1a2f4d63d86803a15fe580d6a468ab6d2";
+        let caps = short.to_uppercase();
+        let caps = &caps;
+        let repeated = String::from("a").repeat(64);
+        let repeated = &repeated;
+
+        let ids = [short, long, caps, repeated];
+        for id in ids {
+            let lower = OrbId::from_str(id).expect("failed lower");
+            let upper = OrbId::from_str(&id.to_uppercase()).expect("failed upper");
+
+            assert_eq!(lower, upper);
+            assert_eq!(lower.as_str(), upper.as_str());
+            assert_eq!(lower.as_bytes(), upper.as_bytes());
+        }
+    }
+
+    #[test]
+    fn test_invalid_hex() {
+        let ids = ["", "a", "abc", "gg", &String::from("a").repeat(65)];
+        for id in ids {
+            assert!(OrbId::from_str(id).is_err(), "failed on value `{id}`");
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_sync_get_orb_id_from_env() {
+        let test_id = "abcd1234";
+        std::env::set_var("ORB_ID", test_id);
+
+        let orb_id = OrbId::read_blocking().unwrap();
+        assert_eq!(orb_id.as_str(), test_id);
+
+        // Test caching works
+        let cached_result = orb_id.as_str();
+        assert_eq!(cached_result, test_id);
+
+        std::env::remove_var("ORB_ID");
+    }
+
+    #[cfg(feature = "async")]
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_async_get_orb_id_from_env() {
+        let test_id = "abcd1234";
+        std::env::set_var("ORB_ID", test_id);
+
+        let orb_id = OrbId::read().await.unwrap();
+        assert_eq!(orb_id.as_str(), test_id);
+
+        // Test caching works
+        let cached_result = orb_id.as_str();
+        assert_eq!(cached_result, test_id);
+
+        std::env::remove_var("ORB_ID");
+    }
+
+    #[test]
+    fn test_serde_orb_id() {
+        let short = "ea2ea744";
+        let long = "ea2ea744295c5dacb12a825713f9cec1a2f4d63d86803a15fe580d6a468ab6d2";
+        let short_json = serde_json::json!({
+            "short": short,
+            "long": long,
+        });
+
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Example {
+            short: OrbId,
+            long: OrbId,
+        }
+
+        let deserialized: Example = serde_json::from_value(short_json).unwrap();
+        assert_eq!(deserialized.short.as_str(), short);
+        assert!(!deserialized.short.is_long());
+        assert_eq!(deserialized.long.as_str(), long);
+        assert!(deserialized.long.is_long());
+    }
+}

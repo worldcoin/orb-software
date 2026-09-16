@@ -1,6 +1,6 @@
 [package]
 name = "orb-se050-reprovision"
-version = "0.0.0"
+version = "0.0.1"
 description = "Oneshot service that reprovisions the SE050 secure element"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 publish = false

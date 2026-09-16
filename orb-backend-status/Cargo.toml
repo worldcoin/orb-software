@@ -1,6 +1,6 @@
 [package]
 name = "orb-backend-status"
-version = "0.0.0"
+version = "0.0.1"
 description = "Systemd service that receives orb status and periodicallyprovides it to the Orb backend"
 authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
 publish = false
@@ -58,6 +58,7 @@ zbus = { workspace = true, default-features = false, features = ["tokio"] }
 zenorb.workspace = true
 
 [dev-dependencies]
+orb-info = { workspace = true, features = ["testing"] }
 orb-security-utils = { workspace = true, features = [
 	"reqwest",
 	"dangerously-allow-http",

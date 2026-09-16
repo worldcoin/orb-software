@@ -87,7 +87,11 @@ toml = "0.8.10"
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [package.metadata.orb]
-unsupported_targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+unsupported_targets = [
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"aarch64-linux-android",
+]
 flavors = [{ name = "no-sig", features = ["skip-manifest-signature-verification"] }]
 
 [package.metadata.deb]

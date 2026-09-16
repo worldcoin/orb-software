@@ -1,4 +1,4 @@
-use crate::cmd::cmd;
+use crate::cmd::{args, cmd};
 use clap::Args as ClapArgs;
 use color_eyre::Result;
 
@@ -12,14 +12,14 @@ pub struct Args {
 pub fn run(args: Args) -> Result<()> {
     let Args { pkg, target } = args;
 
-    cmd(&[
+    cmd(&args![
         "cargo",
         "zigbuild",
         "--target",
-        target.as_str(),
+        &target,
         "--release",
         "-p",
-        pkg.as_str(),
+        &pkg,
     ])?;
 
     Ok(())

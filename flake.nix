@@ -12,17 +12,6 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Manages dotfiles and home environment
-    home-manager = {
-      url = "github:nix-community/home-manager/release-25.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    # Supports generating liveusbs
-    disko = {
-      url = "github:nix-community/disko/v1.12.0";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -40,19 +29,16 @@
     };
 
     # Replaces the need to have a git submodule.
+    #
+    # Pinned to an explicit rev (not a branch ref) so `nix flake update` never
+    # needs the GitHub ref->rev API call (api.github.com). That call requires
+    # a valid token for this private repo, and on hosts with a stale/wrong-scope
+    # token it 404s (GitHub hides private repos from unauthorized requests
+    # rather than 401ing), breaking `nix flake update` entirely. Bump the rev
+    # by hand (with a valid token) when seek-thermal-sdk needs updating.
     seekSdk = {
-      url = "github:worldcoin/seek-thermal-sdk";
+      url = "github:worldcoin/seek-thermal-sdk/63471a7cdc2cd06e1a317ec31c26b9da8aa8f883";
       flake = false;
-    };
-
-    # HIL orchestrator client binaries (orb-hil-agent, hiltop, hil).
-    # HTTPS (not git+ssh) so CI can authenticate via the github_access_token
-    # passed to install-nix-action (the runners have no SSH key).
-    orb-internal = {
-      url = "github:worldcoin/orb-internal?rev=dc171236eb87414940f6004a2012f6cf2d86384a";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.fenix.follows = "fenix";
-      inputs.flake-utils.follows = "flake-utils";
     };
   };
 
@@ -62,8 +48,6 @@
       # Used for conveniently accessing nixpkgs on different platforms.
       # We instantiate this once here, and then use it in various other places.
       p = (import ./nix/packages/nixpkgs.nix { inherit inputs; });
-      # Creates all of the nixos machines for the flake.
-      machines = (import nix/machines/flake-outputs.nix { inherit p inputs; });
       # Creates a `nix develop` shell for every host platform.
       devShells = (
         import nix/shells/flake-outputs.nix {
@@ -82,7 +66,6 @@
 
     # This is like repeatedly doing a deep version of the  `//` operator to combine into one big attrset.
     lib.foldl' lib.recursiveUpdate { } [
-      machines
       devShells
       containers
     ];

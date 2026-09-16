@@ -1,6 +1,6 @@
 [package]
 name = "orb-jwk-util"
-version = "0.0.0"
+version = "0.0.1"
 authors = ["Ryan Butler <thebutlah@users.noreply.github.com>"]
 description = "CLI utility for manipulating Json Web Keys"
 publish = false

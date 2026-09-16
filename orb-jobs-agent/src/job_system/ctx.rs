@@ -8,7 +8,7 @@ use orb_relay_messages::jobs::v1::{
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{error, warn};
 
 /// A struct created every time one of the job handlers are called.
 /// Contains:
@@ -258,17 +258,34 @@ impl JobExecutionUpdateExt for JobExecutionUpdate {
     }
 }
 
+/// Max length of a zoci command, in bytes.
+const ZOCI_CMD_MAX_LEN: usize = 64;
+
 fn get_zoci_command(full_cmd: &str) -> Option<String> {
     let cmd = full_cmd
         .split_once(" ")
         .map(|(cmd, _)| cmd)
         .unwrap_or(full_cmd);
 
-    if cmd.is_empty() {
-        return None;
+    // the command is interpolated into a zenoh key expression (see
+    // `zoci_handler`), so anything outside the charset real queryables use is
+    // unsupported -- notably `*` and `**`, which would fan a single job out to
+    // every `job/*` queryable.
+    let is_valid = (1..=ZOCI_CMD_MAX_LEN).contains(&cmd.len())
+        && cmd
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+
+    if !is_valid && !cmd.is_empty() {
+        // distinguishable from a benign unknown command; `?` escapes control
+        // characters and the token is truncated since it is attacker-chosen
+        warn!(
+            token = ?cmd.chars().take(ZOCI_CMD_MAX_LEN).collect::<String>(),
+            "rejected zoci command outside the [a-z0-9_] charset"
+        );
     }
 
-    Some(cmd.into())
+    is_valid.then(|| cmd.to_owned())
 }
 
 fn zoci_handler() -> Handler {
@@ -320,4 +337,50 @@ fn zoci_handler() -> Handler {
     }
 
     Arc::new(|ctx| Box::pin(handler(ctx)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_commands_matching_real_zoci_endpoints() {
+        assert_eq!(get_zoci_command("wifi_add").as_deref(), Some("wifi_add"));
+        assert_eq!(get_zoci_command("gondor").as_deref(), Some("gondor"));
+        assert_eq!(
+            get_zoci_command("wifi_scan --json").as_deref(),
+            Some("wifi_scan")
+        );
+        assert_eq!(
+            get_zoci_command("read_temp sensor-a nominal").as_deref(),
+            Some("read_temp")
+        );
+
+        let max_len = "a".repeat(ZOCI_CMD_MAX_LEN);
+        assert_eq!(
+            get_zoci_command(&max_len).as_deref(),
+            Some(max_len.as_str())
+        );
+    }
+
+    #[test]
+    fn rejects_commands_outside_the_charset() {
+        let too_long = "a".repeat(ZOCI_CMD_MAX_LEN + 1);
+
+        for cmd in [
+            "*",
+            "**",
+            "a/b",
+            "wifi_add$x",
+            "Wifi_Add",
+            "..",
+            "",
+            // only a single space delimits args, so whitespace-separated
+            // documents fail closed as one oversized token
+            "wifi_add\tsome-arg",
+            &too_long,
+        ] {
+            assert_eq!(get_zoci_command(cmd), None, "expected {cmd:?} rejected");
+        }
+    }
 }

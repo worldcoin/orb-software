@@ -21,11 +21,20 @@ on:
           - release
           - artifact
         default: artifact
+      build_android_apex:
+        description: "Build and include the Android APEX (skipped automatically if the crate has no Android target)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  actions: read
 
 env:
   CRATE: ${{ inputs.crate }}
   BUILD_AARCH64: ${{ inputs.build_aarch64 }}
   BUILD_X86_64: ${{ inputs.build_x86_64 }}
+  BUILD_ANDROID_APEX: ${{ inputs.build_android_apex }}
   PROFILE: ${{ inputs.profile }}
   GH_TOKEN: ${{ github.token }} # For gh cli
   BRANCH: ${{ github.ref_name }}
@@ -37,7 +46,7 @@ jobs:
     outputs:
       release-name: ${{ steps.release-name.outputs.CI_RELEASE_NAME }}
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
       - name: Calculate Release Name
         id: release-name
         run: |
@@ -49,14 +58,14 @@ jobs:
     name: Test
     runs-on: public-ubuntu-24.04-32core
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
           lfs: true
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
         with:
           github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # pin@v17
         continue-on-error: true
         with:
           name: worldcoin
@@ -102,14 +111,14 @@ jobs:
     name: Build
     runs-on: public-ubuntu-24.04-32core
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # pin@v5.0.0
         with:
           token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
           lfs: true
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # pin@v31.8.4
         with:
           github_access_token: ${{ secrets.ORB_GIT_HUB_TOKEN }}
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # pin@v15
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # pin@v17
         continue-on-error: true
         with:
           name: worldcoin
@@ -188,11 +197,41 @@ jobs:
             fi
           done
 
+      - name: Allow unprivileged user namespaces for bubblewrap
+        # apexer's bubblewrap FHS sandbox (nix/packages/android-apex.nix)
+        # always creates a user namespace for CAP_SYS_ADMIN, which Ubuntu
+        # 24.04's AppArmor blocks for unprofiled binaries like nix store
+        # paths ("bwrap: setting up uid map: Permission denied"). Safe to
+        # relax repo-wide here since this runner is ephemeral (ARC); a
+        # persistent host should ship a scoped AppArmor exception instead.
+        if: ${{ inputs.build_android_apex }}
+        run: sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Build and package Android APEX
+        if: ${{ inputs.build_android_apex }}
+        run: |
+          set -Eeuxo pipefail
+          set +e
+          nix develop -c cargo x crate-supported "${CRATE}" --target aarch64-linux-android
+          status=$?
+          set -e
+
+          if [ "${status}" -eq 1 ]; then
+            echo "::notice::${CRATE} is marked unsupported for Android; skipping the APEX"
+            exit 0
+          elif [ "${status}" -ne 0 ]; then
+            exit "${status}"
+          fi
+
+          mkdir -p artifacts
+          nix develop -c cargo x android-apex "${CRATE}" --release --out-dir artifacts
+
       - name: Compute sha256 checksums
         run: |
           set -Eeuxo pipefail
           cd artifacts
-          for f in *.deb; do
+          shopt -s nullglob
+          for f in *.deb *.apex; do
             sha256sum "${f}" > "${f}.sha256"
           done
           ls -la
@@ -207,6 +246,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
     needs:
       - release-name
       - test

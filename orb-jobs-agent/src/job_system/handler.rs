@@ -134,7 +134,7 @@ impl JobHandler {
         } = &deps.settings;
 
         let opts = ClientOpts::entity(EntityType::Orb)
-            .id(orb_id.as_str().to_string())
+            .id(orb_id.to_string())
             .endpoint(relay_host)
             .namespace(relay_namespace)
             .auth(auth.clone())

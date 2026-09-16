@@ -110,7 +110,7 @@ type QuerierBuilderFn =
 
 pub struct Builder<'a> {
     session: &'a zenoh::Session,
-    orb_id: &'a str,
+    orb_id: &'a OrbId,
     service_name: &'a str,
     publishers: Vec<(&'static str, PublisherBuilderFn)>,
     queriers: Vec<(&'static str, QuerierBuilderFn)>,
@@ -124,7 +124,7 @@ impl<'a> Builder<'a> {
     ) -> Builder<'a> {
         Builder {
             session,
-            orb_id: orb_id.as_str(),
+            orb_id,
             service_name,
             publishers: Vec::new(),
             queriers: Vec::new(),

@@ -22,7 +22,12 @@ orb-build-info.workspace = true
 orb-const-concat.workspace = true
 orb-dogd.workspace = true
 orb-endpoints.workspace = true
-orb-info = { workspace = true, features = ["async", "orb-id"] }
+orb-info = { workspace = true, features = [
+	"async",
+	"orb-id",
+	"orb-os-release",
+	"serde",
+] }
 orb-security-utils = { workspace = true, features = ["reqwest"] }
 orb-telemetry.workspace = true
 prelude = { workspace = true, features = ["connectivity"] }
@@ -40,13 +45,13 @@ tracing.workspace = true
 url = "2.2"
 zbus.workspace = true
 zenorb.workspace = true
-zbus_systemd = { workspace = true, features = ["systemd1"] }
 tempfile = "3.3"
 
 [build-dependencies]
 orb-build-info = { workspace = true, features = ["build-script"] }
 
 [dev-dependencies]
+orb-info = { workspace = true, features = ["testing"] }
 serial_test = "2.0"
 wiremock = "0.6"
 

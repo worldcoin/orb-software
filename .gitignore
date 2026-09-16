@@ -54,3 +54,4 @@ __pycache__
 *.csr
 *.p12
 *.pfx
+/.devcontainer/postCreateCommand.user.sh

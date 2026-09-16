@@ -1,6 +1,5 @@
 use super::build;
-use crate::cmd::cmd;
-use crate::cmd::deb;
+use crate::cmd::{args, cmd, deb};
 use cargo_metadata::MetadataCommand;
 use clap::Args as ClapArgs;
 use color_eyre::{eyre::eyre, Result};
@@ -53,35 +52,35 @@ fn deploy_deb(pkg: String) -> Result<()> {
     let remote_deb = format!("./{pkg}.deb");
 
     println!("\ncopying .deb file to orb");
-    cmd(&[
+    cmd(&args![
         "sshpass",
         "-p",
-        worldcoin_pw.as_str(),
+        &worldcoin_pw,
         "scp",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
         "UserKnownHostsFile=/dev/null",
-        deb_path.as_str(),
-        scp_target.as_str(),
+        &deb_path,
+        &scp_target,
     ])?;
 
     println!("installing .deb pkg on orb\n");
-    cmd(&[
+    cmd(&args![
         "sshpass",
         "-p",
-        worldcoin_pw.as_str(),
+        &worldcoin_pw,
         "ssh",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
         "UserKnownHostsFile=/dev/null",
-        host.as_str(),
+        &host,
         "sudo",
         "apt",
         "install",
         "--reinstall",
-        remote_deb.as_str(),
+        &remote_deb,
         "-y",
     ])?;
 
@@ -103,14 +102,14 @@ fn deploy_bin(pkg: String) -> Result<()> {
 
     let bin = get_crate_binary_name(&pkg)?;
 
-    cmd(&[
+    cmd(&args![
         "cargo",
         "zigbuild",
         "--target",
         target,
         "--release",
         "-p",
-        pkg.as_str(),
+        &pkg,
     ])?;
 
     let bin_path = format!("./target/{target}/release/{bin}");
@@ -120,36 +119,36 @@ fn deploy_bin(pkg: String) -> Result<()> {
     let install_target = format!("/usr/local/bin/{bin}");
 
     println!("\ncopying binary to orb");
-    cmd(&[
+    cmd(&args![
         "sshpass",
         "-p",
-        worldcoin_pw.as_str(),
+        &worldcoin_pw,
         "scp",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
         "UserKnownHostsFile=/dev/null",
-        bin_path.as_str(),
-        scp_target.as_str(),
+        &bin_path,
+        &scp_target,
     ])?;
 
     println!("installing binary to /usr/local/bin on orb\n");
-    cmd(&[
+    cmd(&args![
         "sshpass",
         "-p",
-        worldcoin_pw.as_str(),
+        &worldcoin_pw,
         "ssh",
         "-o",
         "StrictHostKeyChecking=no",
         "-o",
         "UserKnownHostsFile=/dev/null",
-        host.as_str(),
+        &host,
         "sudo",
         "install",
         "-m",
         "0755",
-        remote_bin.as_str(),
-        install_target.as_str(),
+        &remote_bin,
+        &install_target,
     ])?;
 
     restart_services(&worldcoin_pw, &host, services)?;
@@ -164,7 +163,7 @@ fn restart_services(
 ) -> Result<()> {
     for service in services {
         println!("\nrestarting service {service} on orb\n");
-        cmd(&[
+        cmd(&args![
             "sshpass",
             "-p",
             worldcoin_pw,
@@ -177,7 +176,7 @@ fn restart_services(
             "sudo",
             "systemctl",
             "restart",
-            service.as_str(),
+            &service,
         ])?;
     }
 

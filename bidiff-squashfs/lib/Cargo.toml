@@ -21,3 +21,6 @@ cmd_lib.workspace = true
 color-eyre.workspace = true
 orb-telemetry = { workspace = true, default-features = false }
 tempfile.workspace = true
+
+[package.metadata.orb]
+unsupported_targets = ["aarch64-linux-android"]

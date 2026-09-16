@@ -17,6 +17,11 @@ let
       # Configuration for nixpkgs.
       config = {
         allowUnfree = true;
+        # Accepts the Android SDK/NDK terms of service, required to build
+        # `pkgs.androidenv.composeAndroidPackages` (used by
+        # nix/packages/android-ndk.nix for cross-compiling to Android).
+        # See https://developer.android.com/studio/terms
+        android_sdk.accept_license = true;
       };
       flake = abort "this should be specified in nixos modules, its inert here";
     }

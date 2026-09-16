@@ -19,6 +19,7 @@ members = [
 	"header-parsing",
 	"hil",
 	"io-utils",
+	"ipcp-hpke",
 	"jwk-util",
 	"license-stubs/glib",
 	"license-stubs/gstreamer",
@@ -27,6 +28,7 @@ members = [
 	"mcu-util",
 	"oes",
 	"optee/secure-storage/ca",
+	"orb-bin",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
 	"orb-connd",
@@ -36,6 +38,7 @@ members = [
 	"orb-health",
 	"orb-info",
 	"orb-jobs-agent",
+	"orb-monitoring-auth",
 	"orbd",
 	"ota-backend",
 	"pcp-defs/rust",
@@ -151,7 +154,7 @@ regex = "1.11.2"
 ring = "0.17.2"
 rkyv = "0.8.17"
 rustix = "0.38.37"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring"] }
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
@@ -210,6 +213,7 @@ orb-health.path = "orb-health"
 orb-info = { path = "orb-info", default-features = false }
 orb-io-utils.path = "io-utils"
 orb-mcu-interface.path = "mcu-interface"
+orb-monitoring-auth.path = "orb-monitoring-auth"
 orb-s3-helpers.path = "s3-helpers"
 orb-se050.path = "se050"
 orb-se050-reprovision.path = "orb-se050-reprovision"

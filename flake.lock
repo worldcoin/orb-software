@@ -1,42 +1,5 @@
 {
   "nodes": {
-    "crane": {
-      "locked": {
-        "lastModified": 1778106249,
-        "narHash": "sha256-cM/AuKy5tMhwOOQIbha8ZRRMHVfNf7cv2aljIw+qoCg=",
-        "owner": "ipetkov",
-        "repo": "crane",
-        "rev": "6d015ea29630b7ad2402841386da2cb617a470a7",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ipetkov",
-        "repo": "crane",
-        "rev": "6d015ea29630b7ad2402841386da2cb617a470a7",
-        "type": "github"
-      }
-    },
-    "disko": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1746728054,
-        "narHash": "sha256-eDoSOhxGEm2PykZFa/x9QG5eTH0MJdiJ9aR00VAofXE=",
-        "owner": "nix-community",
-        "repo": "disko",
-        "rev": "ff442f5d1425feb86344c028298548024f21256d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "v1.12.0",
-        "repo": "disko",
-        "type": "github"
-      }
-    },
     "fenix": {
       "inputs": {
         "nixpkgs": [
@@ -76,27 +39,6 @@
         "type": "github"
       }
     },
-    "home-manager": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1756679287,
-        "narHash": "sha256-Xd1vOeY9ccDf5VtVK12yM0FS6qqvfUop8UQlxEB+gTQ=",
-        "owner": "nix-community",
-        "repo": "home-manager",
-        "rev": "07fc025fe10487dd80f2ec694f1cd790e752d0e8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "release-25.05",
-        "repo": "home-manager",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1767313136,
@@ -129,22 +71,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-cargo-deny": {
-      "locked": {
-        "lastModified": 1782760764,
-        "narHash": "sha256-N66fYdUuZ9hpdM7jsQ7CUWtLJduqGDyTGCaLR62CXaQ=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7a1a64774a5fd0b0cd39ac95d0e170ace8b266a0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7a1a64774a5fd0b0cd39ac95d0e170ace8b266a0",
-        "type": "github"
-      }
-    },
     "nixpkgs-unstable": {
       "locked": {
         "lastModified": 1766070988,
@@ -158,35 +84,6 @@
         "owner": "NixOS",
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "orb-internal": {
-      "inputs": {
-        "crane": "crane",
-        "fenix": [
-          "fenix"
-        ],
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "nixpkgs-cargo-deny": "nixpkgs-cargo-deny"
-      },
-      "locked": {
-        "lastModified": 1784133309,
-        "narHash": "sha256-MIh+9F1YbZisaMFtqySiGstBzjrmShkKbZ5zdIIj7Ps=",
-        "owner": "worldcoin",
-        "repo": "orb-internal",
-        "rev": "dc171236eb87414940f6004a2012f6cf2d86384a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "worldcoin",
-        "repo": "orb-internal",
-        "rev": "dc171236eb87414940f6004a2012f6cf2d86384a",
         "type": "github"
       }
     },
@@ -238,14 +135,11 @@
     },
     "root": {
       "inputs": {
-        "disko": "disko",
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
         "nixpkgs-23_11": "nixpkgs-23_11",
         "nixpkgs-unstable": "nixpkgs-unstable",
-        "orb-internal": "orb-internal",
         "pyproject-build-systems": "pyproject-build-systems",
         "pyproject-nix": "pyproject-nix",
         "seekSdk": "seekSdk",
@@ -282,6 +176,7 @@
       "original": {
         "owner": "worldcoin",
         "repo": "seek-thermal-sdk",
+        "rev": "63471a7cdc2cd06e1a317ec31c26b9da8aa8f883",
         "type": "github"
       }
     },

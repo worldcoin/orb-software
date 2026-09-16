@@ -11,7 +11,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-async = ["dep:tokio", "dep:tokio-util"]
+async = ["dep:tokio", "dep:tokio-util", "dep:futures"]
 default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "orb-os-release", "async"]
 orb-id = ["dep:hex"]
 orb-jabil-id = ["dep:hex"]
@@ -25,9 +25,11 @@ orb-token = [
 	"dep:zbus",
 ]
 serde = ["dep:serde"]
+testing = []
 
 [dependencies]
 derive_more = { workspace = true, features = ["display", "from_str"] }
+futures = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 orb-attest-dbus = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
