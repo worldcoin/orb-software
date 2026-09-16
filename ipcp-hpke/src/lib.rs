@@ -82,49 +82,49 @@ impl PairingKey {
         .map_err(|_| Error::Decryption)?;
         Ok(plaintext)
     }
-}
-
-pub struct RecipientKey {
-    recipient_public_key: <Profile as Kem>::PublicKey,
-}
-
-impl RecipientKey {
-    pub fn from_public_key(recipient_public_key: &[u8]) -> Result<Self, Error> {
-        let recipient_public_key =
-            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
-                .map_err(|_| Error::InvalidKey)?;
-        Ok(Self {
-            recipient_public_key,
-        })
-    }
 
     pub fn encrypt(
-        &self,
+        recipient_public_key: &[u8],
         plaintext: Vec<u8>,
         info: &[u8],
         aad: &[u8],
     ) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
-        self.encrypt_with_randomness(&plaintext, info, aad, getrandom::fill)
+        Self::encrypt_with_randomness(
+            recipient_public_key,
+            &plaintext,
+            info,
+            aad,
+            getrandom::fill,
+        )
     }
 
     fn encrypt_with_randomness(
-        &self,
+        recipient_public_key: &[u8],
         plaintext: &[u8],
         info: &[u8],
         aad: &[u8],
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<EncryptedPayload, Error> {
+        let recipient_public_key =
+            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
+                .map_err(|_| Error::InvalidKey)?;
         let mut ephemeral_key_material = EphemeralKeyMaterial {
             bytes: Zeroizing::new([0; KEY_LEN]),
             position: 0,
         };
         fill(ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-        self.encrypt_with_context(plaintext, info, aad, &mut ephemeral_key_material)
+        Self::encrypt_with_context(
+            &recipient_public_key,
+            plaintext,
+            info,
+            aad,
+            &mut ephemeral_key_material,
+        )
     }
 
     fn encrypt_with_context(
-        &self,
+        recipient_public_key: &<Profile as Kem>::PublicKey,
         plaintext: &[u8],
         info: &[u8],
         aad: &[u8],
@@ -144,7 +144,7 @@ impl RecipientKey {
                 Profile,
             >(
                 &OpModeS::Base,
-                &self.recipient_public_key,
+                recipient_public_key,
                 info,
                 ciphertext[..tag_start].as_mut().into(),
                 aad,
