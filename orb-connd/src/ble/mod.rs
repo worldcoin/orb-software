@@ -140,8 +140,6 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
                 // may briefly overlap with the old one; our module supports up to 8 at once.
                 drop(advertisement_handle.take());
 
-                info!("advertising ble broadcast for service: {service_id}");
-
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
                     // Nice to have only: BlueZ may truncate this if ServiceData needs the room.
