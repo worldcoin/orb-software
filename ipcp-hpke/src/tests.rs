@@ -30,29 +30,33 @@ fn entropy(fixture: &Value) -> EphemeralEntropy {
 
 #[tokio::test]
 async fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
-    let key = PairingKey::new().unwrap();
-    let other_key = PairingKey::new().unwrap();
-    assert_ne!(key.public_key(), other_key.public_key());
-    let public_key = *key.public_key();
+    let orb_pairing_key = PairingKey::new().unwrap();
+    let other_orb_pairing_key = PairingKey::new().unwrap();
+    assert_ne!(
+        orb_pairing_key.public_key(),
+        other_orb_pairing_key.public_key()
+    );
+    let orb_public_key_bytes = *orb_pairing_key.public_key();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let mut encrypted_ipcp_image_payload =
-        encrypt_ipcp_image_payload(public_key.to_vec(), ipcp_image.clone())
+        encrypt_ipcp_image_payload(orb_public_key_bytes.to_vec(), ipcp_image.clone())
             .await
             .unwrap();
-    assert_eq!(*key.public_key(), public_key);
+    assert_eq!(*orb_pairing_key.public_key(), orb_public_key_bytes);
     assert_eq!(
-        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload)
+        orb_pairing_key
+            .decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload)
             .unwrap()
             .as_slice(),
         ipcp_image
     );
     assert!(matches!(
-        other_key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
+        other_orb_pairing_key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
         Err(Error::Decryption)
     ));
     encrypted_ipcp_image_payload.ciphertext[0] ^= 1;
     assert!(matches!(
-        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
+        orb_pairing_key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
         Err(Error::Decryption)
     ));
 }
@@ -60,14 +64,15 @@ async fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 #[test]
 fn pairing_key_matches_existing_x25519_fixture() {
     let f = ipcp_image_fixture();
-    let key = PairingKey::with_entropy(|output| {
+    let orb_pairing_key = PairingKey::with_entropy(|output| {
         output.copy_from_slice(&bytes(&f, "skRm"));
         Ok(())
     })
     .unwrap();
-    assert_eq!(key.public_key().as_slice(), bytes(&f, "pkRm"));
+    assert_eq!(orb_pairing_key.public_key().as_slice(), bytes(&f, "pkRm"));
     assert_eq!(
-        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload_from_fixture(&f))
+        orb_pairing_key
+            .decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload_from_fixture(&f))
             .unwrap()
             .as_slice(),
         bytes(&f, "pt")
@@ -163,20 +168,22 @@ fn published_cfrg_vector_matches() {
 #[tokio::test(flavor = "current_thread")]
 async fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation() {
     let f = ipcp_image_fixture();
-    let public = bytes(&f, "pkRm");
-    let private = bytes(&f, "skRm");
+    let orb_public_key_bytes = bytes(&f, "pkRm");
+    let orb_private_key_bytes = bytes(&f, "skRm");
     for test_plaintext_bytes in [bytes(&f, "pt"), Vec::new()] {
         let first = tokio::spawn(encrypt_ipcp_image_payload(
-            public.clone(),
+            orb_public_key_bytes.clone(),
             test_plaintext_bytes.clone(),
         ))
         .await
         .unwrap()
         .unwrap();
-        let second =
-            encrypt_ipcp_image_payload(public.clone(), test_plaintext_bytes.clone())
-                .await
-                .unwrap();
+        let second = encrypt_ipcp_image_payload(
+            orb_public_key_bytes.clone(),
+            test_plaintext_bytes.clone(),
+        )
+        .await
+        .unwrap();
         assert_ne!(first.enc, second.enc);
         for encrypted_test_payload in [first, second] {
             assert_eq!(encrypted_test_payload.enc.len(), KEY_LEN);
@@ -185,9 +192,12 @@ async fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation()
                 test_plaintext_bytes.len() + TAG_LEN
             );
             assert_eq!(
-                decrypt_ipcp_image_payload(&private, &encrypted_test_payload)
-                    .unwrap()
-                    .as_slice(),
+                decrypt_ipcp_image_payload(
+                    &orb_private_key_bytes,
+                    &encrypted_test_payload
+                )
+                .unwrap()
+                .as_slice(),
                 test_plaintext_bytes
             );
         }
@@ -234,13 +244,16 @@ fn wrong_recipient_and_invalid_key_lengths_are_rejected() {
     )
     .is_err());
     for length in [0, 1, 31, 33, 64] {
-        let key = vec![0xa5; length];
+        let invalid_key_bytes = vec![0xa5; length];
         assert!(matches!(
-            decrypt_ipcp_image_payload(&key, &encrypted_ipcp_image_payload),
+            decrypt_ipcp_image_payload(
+                &invalid_key_bytes,
+                &encrypted_ipcp_image_payload
+            ),
             Err(Error::InvalidKey)
         ));
         assert!(matches!(
-            encrypt_with_entropy(&key, b"test", |output| {
+            encrypt_with_entropy(&invalid_key_bytes, b"test", |output| {
                 output.fill(1);
                 Ok(())
             }),
@@ -253,12 +266,21 @@ fn wrong_recipient_and_invalid_key_lengths_are_rejected() {
 fn all_zero_and_low_order_public_keys_are_rejected() {
     let f = ipcp_image_fixture();
     for first_byte in [0, 1] {
-        let mut public = [0; KEY_LEN];
-        public[0] = first_byte;
-        assert!(seal(&public, b"test", INFO, AAD, &mut entropy(&f)).is_err());
+        let mut invalid_public_key_bytes = [0; KEY_LEN];
+        invalid_public_key_bytes[0] = first_byte;
+        assert!(seal(
+            &invalid_public_key_bytes,
+            b"test",
+            INFO,
+            AAD,
+            &mut entropy(&f)
+        )
+        .is_err());
         let mut encrypted_ipcp_image_payload =
             encrypted_ipcp_image_payload_from_fixture(&f);
-        encrypted_ipcp_image_payload.enc.copy_from_slice(&public);
+        encrypted_ipcp_image_payload
+            .enc
+            .copy_from_slice(&invalid_public_key_bytes);
         assert!(decrypt_ipcp_image_payload(
             &bytes(&f, "skRm"),
             &encrypted_ipcp_image_payload
@@ -270,26 +292,26 @@ fn all_zero_and_low_order_public_keys_are_rejected() {
 #[test]
 fn truncated_and_extended_payloads_are_rejected() {
     let f = ipcp_image_fixture();
-    let private = bytes(&f, "skRm");
+    let orb_private_key_bytes = bytes(&f, "skRm");
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     for length in 0..KEY_LEN {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.enc.truncate(length);
         assert!(matches!(
-            decrypt_ipcp_image_payload(&private, &truncated),
+            decrypt_ipcp_image_payload(&orb_private_key_bytes, &truncated),
             Err(Error::InvalidPayload)
         ));
     }
     let mut extended = encrypted_ipcp_image_payload.clone();
     extended.enc.push(0);
     assert!(matches!(
-        decrypt_ipcp_image_payload(&private, &extended),
+        decrypt_ipcp_image_payload(&orb_private_key_bytes, &extended),
         Err(Error::InvalidPayload)
     ));
     for length in 0..encrypted_ipcp_image_payload.ciphertext.len() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.ciphertext.truncate(length);
-        let result = decrypt_ipcp_image_payload(&private, &truncated);
+        let result = decrypt_ipcp_image_payload(&orb_private_key_bytes, &truncated);
         assert!(
             if length < TAG_LEN {
                 matches!(result, Err(Error::InvalidPayload))
@@ -302,7 +324,7 @@ fn truncated_and_extended_payloads_are_rejected() {
     let mut extended = encrypted_ipcp_image_payload;
     extended.ciphertext.push(0);
     assert!(matches!(
-        decrypt_ipcp_image_payload(&private, &extended),
+        decrypt_ipcp_image_payload(&orb_private_key_bytes, &extended),
         Err(Error::Decryption)
     ));
 }
@@ -310,7 +332,7 @@ fn truncated_and_extended_payloads_are_rejected() {
 #[test]
 fn moving_bytes_across_payload_field_boundary_is_rejected() {
     let f = ipcp_image_fixture();
-    let private = bytes(&f, "skRm");
+    let orb_private_key_bytes = bytes(&f, "skRm");
     let original = encrypted_ipcp_image_payload_from_fixture(&f);
     let mut short_enc = original.clone();
     short_enc.ciphertext.insert(0, short_enc.enc.pop().unwrap());
@@ -323,7 +345,7 @@ fn moving_bytes_across_payload_field_boundary_is_rejected() {
             bytes(&f, "encrypted_ipcp")
         );
         assert!(matches!(
-            decrypt_ipcp_image_payload(&private, &malformed),
+            decrypt_ipcp_image_payload(&orb_private_key_bytes, &malformed),
             Err(Error::InvalidPayload)
         ));
     }
@@ -332,7 +354,7 @@ fn moving_bytes_across_payload_field_boundary_is_rejected() {
 #[test]
 fn modification_at_every_payload_byte_is_rejected() {
     let f = ipcp_image_fixture();
-    let private = bytes(&f, "skRm");
+    let orb_private_key_bytes = bytes(&f, "skRm");
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     for index in 0..encrypted_ipcp_image_payload.enc.len()
         + encrypted_ipcp_image_payload.ciphertext.len()
@@ -344,7 +366,7 @@ fn modification_at_every_payload_byte_is_rejected() {
             modified.ciphertext[index - modified.enc.len()] ^= 1;
         }
         assert!(
-            decrypt_ipcp_image_payload(&private, &modified).is_err(),
+            decrypt_ipcp_image_payload(&orb_private_key_bytes, &modified).is_err(),
             "byte {index}"
         );
     }
@@ -353,14 +375,17 @@ fn modification_at_every_payload_byte_is_rejected() {
 #[test]
 fn incorrect_info_and_aad_are_rejected() {
     let f = ipcp_image_fixture();
-    let private = bytes(&f, "skRm");
-    let private_key = <Profile as Kem>::PrivateKey::from_bytes(&private).unwrap();
+    let orb_private_key_bytes = bytes(&f, "skRm");
+    let orb_private_key =
+        <Profile as Kem>::PrivateKey::from_bytes(&orb_private_key_bytes).unwrap();
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     for (info, aad) in [
         (b"worldcoin/ipcp/hpke/v2".as_slice(), AAD),
         (INFO, b"unexpected metadata".as_slice()),
     ] {
-        assert!(open(&private_key, &encrypted_ipcp_image_payload, info, aad).is_err());
+        assert!(
+            open(&orb_private_key, &encrypted_ipcp_image_payload, info, aad).is_err()
+        );
         let altered = seal(
             &bytes(&f, "pkRm"),
             &bytes(&f, "pt"),
@@ -369,7 +394,7 @@ fn incorrect_info_and_aad_are_rejected() {
             &mut entropy(&f),
         )
         .unwrap();
-        assert!(decrypt_ipcp_image_payload(&private, &altered).is_err());
+        assert!(decrypt_ipcp_image_payload(&orb_private_key_bytes, &altered).is_err());
     }
 }
 
