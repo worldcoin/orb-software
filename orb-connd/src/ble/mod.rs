@@ -1,8 +1,5 @@
 use bluer::adv::{Advertisement, Type};
-use color_eyre::{
-    eyre::{ensure, eyre},
-    Result,
-};
+use color_eyre::{eyre::eyre, Result};
 use serde::{Deserialize, Serialize};
 use speare::mini;
 use std::{
@@ -14,6 +11,9 @@ use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 use zenorb::Zenorb;
+
+const MAX_ADVERTISEMENT_LEN: usize = 31;
+const MAX_PAYLOAD_LEN: usize = 10;
 
 pub struct Args {
     pub zenoh: Zenorb,
@@ -66,6 +66,9 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
         .declare_subscriber("*/ble_beacon")
         .await
         .map_err(|e| eyre!("{e}"))?;
+    info!(
+        "BLE advertisement size limits: max advertisement {MAX_ADVERTISEMENT_LEN} bytes, max payload {MAX_PAYLOAD_LEN} bytes"
+    );
 
     let mut service_data = BTreeMap::new();
     let mut advertisement_handle = None;
@@ -97,6 +100,14 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
                     None => {
                         info!("removing ble advert from service: {}", advert.service_id);
                         service_data.remove(&advert.service_id);
+                    }
+
+                    Some(payload) if payload.len() > MAX_PAYLOAD_LEN => {
+                        warn!(
+                            "ignoring oversized BLE advertisement payload for {}: {} bytes exceeds {MAX_PAYLOAD_LEN} byte maximum",
+                            advert.service_id,
+                            payload.len(),
+                        );
                     }
 
                     Some(payload) => {
@@ -133,6 +144,7 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
+                    // Nice to have only: BlueZ may truncate this if ServiceData needs the room.
                     local_name: Some("Orb".to_owned()),
                     service_data: BTreeMap::from([(service_id, payload.clone())]),
                     timeout: Some(Duration::ZERO),

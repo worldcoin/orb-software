@@ -3,7 +3,6 @@
 use fixture::Fixture;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use std::time::Duration;
-use tokio::time::timeout;
 use uuid::Uuid;
 
 mod fixture;
@@ -146,6 +145,38 @@ async fn it_keeps_one_unchanged_payload_advertising() {
         handle.bluez.active_advertisements(),
         vec![(service_id, payload)]
     );
+
+    // Cleanup
+    handle.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_ignores_payloads_that_exceed_the_legacy_advertising_budget() {
+    // Arrange
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+
+    fixture.bluez.mock_adapter().mock_adapter_is_powered(true);
+
+    let service_id = Uuid::from_u128(1).to_string();
+
+    // Act
+    let handle = fixture.run().await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(1))
+        .await
+        .unwrap();
+    handle.publish_ble(&service_id, Some(&[0; 11])).await;
+
+    // Assert
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+    assert!(handle.bluez.advertisements().is_empty());
 
     // Cleanup
     handle.stop().await;
