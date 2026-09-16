@@ -28,6 +28,63 @@ fn entropy(fixture: &Value) -> EphemeralEntropy {
     }
 }
 
+#[tokio::test]
+async fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
+    let key = PairingKey::new().unwrap();
+    let other_key = PairingKey::new().unwrap();
+    assert_ne!(key.public_key(), other_key.public_key());
+    let public_key = *key.public_key();
+    let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
+    let mut encrypted_ipcp_image_payload =
+        encrypt_ipcp_image_payload(public_key.to_vec(), ipcp_image.clone())
+            .await
+            .unwrap();
+    assert_eq!(*key.public_key(), public_key);
+    assert_eq!(
+        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload)
+            .unwrap()
+            .as_slice(),
+        ipcp_image
+    );
+    assert!(matches!(
+        other_key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
+        Err(Error::Decryption)
+    ));
+    encrypted_ipcp_image_payload.ciphertext[0] ^= 1;
+    assert!(matches!(
+        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload),
+        Err(Error::Decryption)
+    ));
+}
+
+#[test]
+fn pairing_key_matches_existing_x25519_fixture() {
+    let f = ipcp_image_fixture();
+    let key = PairingKey::with_entropy(|output| {
+        output.copy_from_slice(&bytes(&f, "skRm"));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(key.public_key().as_slice(), bytes(&f, "pkRm"));
+    assert_eq!(
+        key.decrypt_ipcp_image_payload(&encrypted_ipcp_image_payload_from_fixture(&f))
+            .unwrap()
+            .as_slice(),
+        bytes(&f, "pt")
+    );
+}
+
+#[test]
+fn pairing_key_entropy_failure_returns_randomness_error() {
+    assert!(matches!(
+        PairingKey::with_entropy(|output| {
+            output.fill(0xa5);
+            Err(getrandom::Error::UNSUPPORTED)
+        }),
+        Err(Error::Randomness)
+    ));
+}
+
 #[test]
 fn ipcp_image_fixture_matches_encryption_and_decryption() {
     let f = ipcp_image_fixture();
@@ -91,7 +148,7 @@ fn published_cfrg_vector_matches() {
     assert_eq!(encrypted_test_payload.ciphertext, bytes(&f, "ct"));
     assert_eq!(entropy.position, KEY_LEN);
     let decrypted_test_plaintext_bytes = open(
-        &bytes(&f, "skRm"),
+        &<Profile as Kem>::PrivateKey::from_bytes(&bytes(&f, "skRm")).unwrap(),
         &encrypted_test_payload,
         &bytes(&f, "info"),
         &bytes(&f, "aad"),
@@ -297,12 +354,13 @@ fn modification_at_every_payload_byte_is_rejected() {
 fn incorrect_info_and_aad_are_rejected() {
     let f = ipcp_image_fixture();
     let private = bytes(&f, "skRm");
+    let private_key = <Profile as Kem>::PrivateKey::from_bytes(&private).unwrap();
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     for (info, aad) in [
         (b"worldcoin/ipcp/hpke/v2".as_slice(), AAD),
         (INFO, b"unexpected metadata".as_slice()),
     ] {
-        assert!(open(&private, &encrypted_ipcp_image_payload, info, aad).is_err());
+        assert!(open(&private_key, &encrypted_ipcp_image_payload, info, aad).is_err());
         let altered = seal(
             &bytes(&f, "pkRm"),
             &bytes(&f, "pt"),

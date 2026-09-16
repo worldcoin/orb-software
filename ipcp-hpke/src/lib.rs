@@ -25,6 +25,42 @@ pub struct IpcpImageHpkePayload {
     pub ciphertext: Vec<u8>,
 }
 
+pub struct PairingKey {
+    private_key: <Profile as Kem>::PrivateKey,
+    public_key: [u8; KEY_LEN],
+}
+
+impl PairingKey {
+    pub fn new() -> Result<Self, Error> {
+        Self::with_entropy(getrandom::fill)
+    }
+
+    fn with_entropy(
+        fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
+    ) -> Result<Self, Error> {
+        let mut seed = Zeroizing::new([0; KEY_LEN]);
+        fill(seed.as_mut()).map_err(|_| Error::Randomness)?;
+        let private_key = <Profile as Kem>::PrivateKey::from_bytes(seed.as_ref())
+            .map_err(|_| Error::InvalidKey)?;
+        let public_key = Profile::sk_to_pk(&private_key).to_bytes().into();
+        Ok(Self {
+            private_key,
+            public_key,
+        })
+    }
+
+    pub fn public_key(&self) -> &[u8; KEY_LEN] {
+        &self.public_key
+    }
+
+    pub fn decrypt_ipcp_image_payload(
+        &self,
+        encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
+    ) -> Result<Zeroizing<Vec<u8>>, Error> {
+        open(&self.private_key, encrypted_ipcp_image_payload, INFO, AAD)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Invalid X25519 key")]
@@ -108,11 +144,13 @@ pub fn decrypt_ipcp_image_payload(
     orb_private_key: &[u8],
     encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
 ) -> Result<Zeroizing<Vec<u8>>, Error> {
-    open(orb_private_key, encrypted_ipcp_image_payload, INFO, AAD)
+    let private_key = <Profile as Kem>::PrivateKey::from_bytes(orb_private_key)
+        .map_err(|_| Error::InvalidKey)?;
+    open(&private_key, encrypted_ipcp_image_payload, INFO, AAD)
 }
 
 fn open(
-    orb_private_key: &[u8],
+    orb_private_key: &<Profile as Kem>::PrivateKey,
     encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
     info: &[u8],
     aad: &[u8],
@@ -123,8 +161,6 @@ fn open(
         return Err(Error::InvalidPayload);
     }
     let tag_start = encrypted_ipcp_image_payload.ciphertext.len() - TAG_LEN;
-    let private_key = <Profile as Kem>::PrivateKey::from_bytes(orb_private_key)
-        .map_err(|_| Error::InvalidKey)?;
     let enc =
         <Profile as Kem>::EncappedKey::from_bytes(&encrypted_ipcp_image_payload.enc)
             .map_err(|_| Error::InvalidPayload)?;
@@ -136,7 +172,7 @@ fn open(
         Zeroizing::new(encrypted_ipcp_image_payload.ciphertext[..tag_start].to_vec());
     hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
         &OpModeR::Base,
-        &private_key,
+        orb_private_key,
         &enc,
         info,
         decrypted_ipcp_image_bytes.as_mut_slice().into(),
