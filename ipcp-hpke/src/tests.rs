@@ -23,8 +23,8 @@ fn pairing_key_from_fixture(fixture: &Value) -> PairingKey {
     .unwrap()
 }
 
-fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> IpcpHpkePayload {
-    IpcpHpkePayload {
+fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayload {
+    EncryptedPayload {
         enc: bytes(fixture, "enc"),
         ciphertext: bytes(fixture, "ct"),
     }

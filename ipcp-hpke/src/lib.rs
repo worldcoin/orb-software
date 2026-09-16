@@ -8,7 +8,7 @@ use hpke::{
     kem::X25519HkdfSha256,
     Deserializable, Kem, OpModeR, OpModeS, Serializable,
 };
-pub use orb_relay_messages::common::v1::IpcpHpkePayload;
+pub use orb_relay_messages::common::v1::IpcpHpkePayload as EncryptedPayload;
 use rand_core::{TryCryptoRng, TryRng};
 use zeroize::Zeroizing;
 
@@ -51,14 +51,14 @@ impl PairingKey {
 
     pub fn decrypt(
         &self,
-        encrypted_payload: &IpcpHpkePayload,
+        encrypted_payload: &EncryptedPayload,
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
         self.decrypt_with_context(encrypted_payload, INFO, AAD)
     }
 
     fn decrypt_with_context(
         &self,
-        encrypted_payload: &IpcpHpkePayload,
+        encrypted_payload: &EncryptedPayload,
         info: &[u8],
         aad: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
@@ -102,7 +102,7 @@ impl RecipientKey {
         Ok(Self { public_key })
     }
 
-    pub fn encrypt(&self, plaintext: Vec<u8>) -> Result<IpcpHpkePayload, Error> {
+    pub fn encrypt(&self, plaintext: Vec<u8>) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
         self.encrypt_with_randomness(&plaintext, getrandom::fill)
     }
@@ -111,7 +111,7 @@ impl RecipientKey {
         &self,
         plaintext: &[u8],
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
-    ) -> Result<IpcpHpkePayload, Error> {
+    ) -> Result<EncryptedPayload, Error> {
         let mut ephemeral_key_material = EphemeralKeyMaterial {
             bytes: Zeroizing::new([0; KEY_LEN]),
             position: 0,
@@ -126,7 +126,7 @@ impl RecipientKey {
         info: &[u8],
         aad: &[u8],
         ephemeral_key_material: &mut EphemeralKeyMaterial,
-    ) -> Result<IpcpHpkePayload, Error> {
+    ) -> Result<EncryptedPayload, Error> {
         let len = plaintext
             .len()
             .checked_add(TAG_LEN)
@@ -149,7 +149,7 @@ impl RecipientKey {
             )
             .map_err(|_| Error::Encryption)?;
         ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
-        Ok(IpcpHpkePayload {
+        Ok(EncryptedPayload {
             enc: ephemeral_public_key.to_bytes().to_vec(),
             ciphertext: std::mem::take(&mut *ciphertext),
         })
