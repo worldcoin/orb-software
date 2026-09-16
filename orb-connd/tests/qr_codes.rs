@@ -1,9 +1,6 @@
 #![cfg(feature = "testing")]
 use fixture::Fixture;
-use orb_connd::{
-    network_manager::{WifiProfile, WifiSec},
-    OrbCapabilities,
-};
+use orb_connd::network_manager::{WifiProfile, WifiSec};
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
 
@@ -26,7 +23,7 @@ async fn it_applies_netconfig_qr_code() {
         (OrbRelease::Prod, PROD, true),
     ] {
         let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
-            .cap(OrbCapabilities::CellularAndWifi)
+            .cellular(true)
             .release(release)
             .build()
             .await;

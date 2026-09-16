@@ -1,4 +1,3 @@
-use derive_more::Display;
 use std::path::Path;
 use tokio::fs;
 
@@ -18,19 +17,21 @@ pub mod wpa_ctrl;
 mod ble;
 mod utils;
 
-#[derive(Display, Debug, PartialEq, Copy, Clone)]
-pub enum OrbCapabilities {
-    CellularAndWifi,
-    WifiOnly,
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct OrbCapabilities {
+    pub cellular: bool,
+    pub bluetooth: bool,
 }
 
 impl OrbCapabilities {
     pub async fn from_sysfs(sysfs: impl AsRef<Path>) -> Self {
-        let sysfs = sysfs.as_ref().join("class").join("net").join("wwan0");
-        if fs::metadata(&sysfs).await.is_ok() {
-            OrbCapabilities::CellularAndWifi
-        } else {
-            OrbCapabilities::WifiOnly
+        let class = sysfs.as_ref().join("class");
+
+        Self {
+            cellular: fs::metadata(class.join("net").join("wwan0")).await.is_ok(),
+            bluetooth: fs::metadata(class.join("bluetooth").join("hci0"))
+                .await
+                .is_ok(),
         }
     }
 }

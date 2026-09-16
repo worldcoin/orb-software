@@ -3,7 +3,6 @@ use fixture::Fixture;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
     service::zoci::WifiProfileDto,
-    OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
@@ -17,7 +16,7 @@ mod fixture;
 async fn it_adds_removes_and_imports_encrypted_profiles() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
-        .cap(OrbCapabilities::WifiOnly)
+        .cellular(false)
         .release(OrbRelease::Prod)
         .build()
         .await;

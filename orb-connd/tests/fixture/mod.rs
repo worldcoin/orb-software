@@ -66,6 +66,7 @@ pub struct Fixture {
 
 pub struct FxHandle {
     pub container: Container,
+    pub cap: OrbCapabilities,
     pub bluez: FakeBluez,
 
     zenorb: Zenorb,
@@ -90,7 +91,8 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
-        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
+        #[builder(default = false)] cellular: bool,
+        #[builder(default = false)] bluetooth: bool,
         wpa_ctrl: Option<MockWpaCli>,
         registry: Option<crabwire::Registry>,
     ) -> Self {
@@ -103,6 +105,11 @@ impl Fixture {
                 .run()
                 .unwrap()
         });
+
+        let cap = OrbCapabilities {
+            cellular,
+            bluetooth,
+        };
 
         let container_tempdir = TempDir::new().await.unwrap();
         let usr_persistent = setup_usr_persistent(&container_tempdir).await;
@@ -158,7 +165,8 @@ impl Fixture {
         }
 
         let mut bluez = std::mem::take(&mut self.bluez);
-        let bluez_bus = if self.platform == OrbOsPlatform::Diamond {
+        let bluez_bus = if self.cap.bluetooth && self.platform == OrbOsPlatform::Diamond
+        {
             let bus = task::spawn_blocking(|| {
                 Launcher::daemon()
                     .bus_type(BusType::Session)
@@ -287,6 +295,7 @@ impl Fixture {
 
         FxHandle {
             container,
+            cap: self.cap,
             bluez,
             zenorb,
             zenoh_router_socket,
@@ -361,7 +370,7 @@ async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {
         .await
         .unwrap();
 
-    if cap == OrbCapabilities::CellularAndWifi {
+    if cap.cellular {
         let stats = net_dir.join("wwan0").join("statistics");
         let tx = stats.join("tx_bytes");
         let rx = stats.join("rx_bytes");
@@ -371,6 +380,12 @@ async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {
         fs::write(rx, "0").await.unwrap();
 
         fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
+            .await
+            .unwrap();
+    }
+
+    if cap.bluetooth {
+        fs::create_dir_all(sysfs.join("class").join("bluetooth").join("hci0"))
             .await
             .unwrap();
     }

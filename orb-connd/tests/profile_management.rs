@@ -4,7 +4,6 @@ use futures::TryStreamExt;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
     service::{zoci::WifiProfileDto, ConndService, ProfileStorage},
-    OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
@@ -357,7 +356,7 @@ async fn it_cleans_leases_without_evicting_profiles_when_secure_storage_fails() 
         handle.dbus.clone(),
         handle.nm.clone(),
         OrbRelease::Prod,
-        OrbCapabilities::WifiOnly,
+        handle.cap,
         Duration::from_secs(1),
         &fx.usr_persistent,
         ProfileStorage::SecureStorage(handle.secure_storage.clone()),
@@ -547,7 +546,7 @@ async fn it_returns_saved_wifi_profiles() {
 async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -617,7 +616,7 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
 async fn profile_is_persisted_after_bumping_priority() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;

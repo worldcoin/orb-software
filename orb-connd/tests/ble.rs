@@ -11,6 +11,7 @@ mod fixture;
 async fn it_powers_on_adapter_if_off() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -39,6 +40,7 @@ async fn it_powers_on_adapter_if_off() {
 async fn it_alternates_between_two_payloads() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -84,6 +86,7 @@ async fn it_alternates_between_two_payloads() {
 async fn it_does_not_power_on_an_already_powered_adapter() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -108,6 +111,7 @@ async fn it_does_not_power_on_an_already_powered_adapter() {
 async fn it_keeps_one_unchanged_payload_advertising() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -154,6 +158,7 @@ async fn it_keeps_one_unchanged_payload_advertising() {
 async fn it_ignores_payloads_that_exceed_the_legacy_advertising_budget() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -186,6 +191,7 @@ async fn it_ignores_payloads_that_exceed_the_legacy_advertising_budget() {
 async fn it_replaces_an_updated_payload_for_the_same_service() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -248,6 +254,7 @@ async fn it_replaces_an_updated_payload_for_the_same_service() {
 async fn it_removes_one_service_and_keeps_the_other_advertising() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -315,6 +322,7 @@ async fn it_removes_one_service_and_keeps_the_other_advertising() {
 async fn it_unregisters_the_last_removed_service() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -361,6 +369,7 @@ async fn it_unregisters_the_last_removed_service() {
 async fn it_ignores_malformed_json_and_accepts_the_next_payload() {
     // Arrange
     let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
         .release(OrbRelease::Dev)
         .build()
         .await;

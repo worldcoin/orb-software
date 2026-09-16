@@ -31,8 +31,11 @@ pub async fn program(
     let cap = OrbCapabilities::from_sysfs(&sysfs).await;
 
     info!(
-        "connd starting on Orb {} {} with capabilities: {}",
-        os_release.orb_os_platform_type, os_release.release_type, cap
+        "connd starting on Orb {} {} with capabilities: cellular {}, bluetooth {}",
+        os_release.orb_os_platform_type,
+        os_release.release_type,
+        cap.cellular,
+        cap.bluetooth,
     );
 
     let zsender = zenoh
@@ -71,7 +74,7 @@ pub async fn program(
         .await
         .inspect_err(|e| error!("failed to start connd zoci zenoh receiver: {e}"));
 
-    if os_release.orb_os_platform_type == OrbOsPlatform::Diamond {
+    if cap.bluetooth && os_release.orb_os_platform_type == OrbOsPlatform::Diamond {
         speare
             .task_with()
             .on_err(OnErr::Restart {
@@ -99,7 +102,7 @@ pub async fn program(
     )
     .await?;
 
-    if let OrbCapabilities::CellularAndWifi = cap {
+    if cap.cellular {
         speare
             .task_with()
             .on_err(OnErr::Restart {
