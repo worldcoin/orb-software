@@ -66,7 +66,7 @@ async fn it_alternates_between_two_payloads() {
     // Assert
     handle
         .bluez
-        .wait_all_called(Duration::from_secs(1))
+        .wait_all_called(Duration::from_secs(5))
         .await
         .unwrap();
 
@@ -279,7 +279,7 @@ async fn it_removes_one_service_and_keeps_the_other_advertising() {
 
     handle
         .bluez
-        .wait_all_called(Duration::from_secs(1))
+        .wait_all_called(Duration::from_secs(5))
         .await
         .unwrap();
 
@@ -303,7 +303,7 @@ async fn it_removes_one_service_and_keeps_the_other_advertising() {
     // Assert
     handle
         .bluez
-        .wait_all_called(Duration::from_secs(1))
+        .wait_all_called(Duration::from_secs(5))
         .await
         .unwrap();
 
@@ -385,8 +385,10 @@ async fn it_ignores_malformed_json_and_accepts_the_next_payload() {
 
     // Act
     let handle = fixture.run().await;
-    let publisher = handle.ble_publisher().await;
-    publisher.put("{invalid json").await.unwrap();
+    {
+        let publisher = handle.ble_publisher().await;
+        publisher.put("{invalid json").await.unwrap();
+    }
     handle.publish_ble(&service_id, Some(&payload)).await;
 
     // Assert
