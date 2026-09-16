@@ -7732,6 +7732,7 @@ dependencies = [
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27)",
  "rand_core 0.10.1",
  "serde_json",
  "sha2 0.11.0",
@@ -7948,6 +7949,23 @@ dependencies = [
  "tokio-util",
  "tonic 0.14.2",
  "tracing",
+]
+
+[[package]]
+name = "orb-relay-messages"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27#6d43cf5f05874b5e12dfc1272ceafa238e9a6e27"
+dependencies = [
+ "blake3",
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "schemars 0.8.22",
+ "serde",
+ "thiserror 2.0.17",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

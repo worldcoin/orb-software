@@ -1,4 +1,5 @@
 use super::*;
+use orb_relay_messages::{common::v1::AnnounceAppId, prost::Message};
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -80,6 +81,32 @@ fn pairing_key_matches_existing_x25519_fixture() {
             .unwrap()
             .as_slice(),
         bytes(&f, "pt")
+    );
+}
+
+#[tokio::test]
+async fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
+    let orb_pairing_key = PairingKey::new().unwrap();
+    let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
+    let encrypted_ipcp_image_payload = encrypt_ipcp_image_payload(
+        orb_pairing_key.public_key().to_vec(),
+        ipcp_image.clone(),
+    )
+    .await
+    .unwrap();
+    let announcement = AnnounceAppId {
+        encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
+        ..Default::default()
+    };
+    let decoded =
+        AnnounceAppId::decode(announcement.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, announcement);
+    assert_eq!(
+        orb_pairing_key
+            .decrypt_ipcp_image_payload(&decoded.encrypted_ipcp_payload.unwrap())
+            .unwrap()
+            .as_slice(),
+        ipcp_image
     );
 }
 

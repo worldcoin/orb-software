@@ -21,6 +21,11 @@ thiserror = "2.0.17"
 tokio.workspace = true
 zeroize = "1.8.2"
 
+[dependencies.orb-relay-messages]
+features = ["client"]
+git = "https://github.com/worldcoin/orb-relay-messages.git"
+rev = "6d43cf5f05874b5e12dfc1272ceafa238e9a6e27"
+
 [dev-dependencies]
 hex = "0.4.3"
 serde_json = "1"

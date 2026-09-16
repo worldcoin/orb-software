@@ -8,6 +8,7 @@ use hpke::{
     kem::X25519HkdfSha256,
     Deserializable, Kem, OpModeR, OpModeS, Serializable,
 };
+pub use orb_relay_messages::common::v1::IpcpHpkePayload as IpcpImageHpkePayload;
 use rand_core::{TryCryptoRng, TryRng};
 use zeroize::Zeroizing;
 
@@ -18,12 +19,6 @@ const AAD: &[u8] = b"";
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IpcpImageHpkePayload {
-    pub enc: Vec<u8>,
-    pub ciphertext: Vec<u8>,
-}
 
 pub struct PairingKey {
     orb_private_key: <Profile as Kem>::PrivateKey,
