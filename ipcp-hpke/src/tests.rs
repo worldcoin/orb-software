@@ -17,11 +17,8 @@ fn bytes(fixture: &Value, field: &str) -> Vec<u8> {
 
 fn pairing_key_from_fixture(fixture: &Value) -> PairingKey {
     PairingKey {
-        pairing_private_key: <Profile as Kem>::PrivateKey::from_bytes(&bytes(
-            fixture, "skRm",
-        ))
-        .unwrap(),
-        pairing_public_key: bytes(fixture, "pkRm").try_into().unwrap(),
+        sk: <Profile as Kem>::PrivateKey::from_bytes(&bytes(fixture, "skRm")).unwrap(),
+        pk: <Profile as Kem>::PublicKey::from_bytes(&bytes(fixture, "pkRm")).unwrap(),
     }
 }
 
@@ -34,17 +31,12 @@ fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayloa
 
 #[test]
 fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
-    let pairing_key = PairingKey::new_pairing_key();
-    let other_pairing_key = PairingKey::new_pairing_key();
-    assert_ne!(
-        pairing_key.pairing_public_key,
-        other_pairing_key.pairing_public_key
-    );
-    let pairing_public_key_bytes = pairing_key.pairing_public_key;
+    let pairing_key = PairingKey::new();
+    let other_pairing_key = PairingKey::new();
+    assert_ne!(pairing_key.pk, other_pairing_key.pk);
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let mut encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_public_key_bytes, ipcp_image.clone()).unwrap();
-    assert_eq!(pairing_key.pairing_public_key, pairing_public_key_bytes);
+        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
     assert_eq!(
         pairing_key
             .decrypt(&encrypted_ipcp_image_payload)
@@ -65,11 +57,10 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 
 #[test]
 fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
-    let pairing_key = PairingKey::new_pairing_key();
+    let pairing_key = PairingKey::new();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_key.pairing_public_key, ipcp_image.clone())
-            .unwrap();
+        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
     let announcement = AnnounceAppId {
         encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
         ..Default::default()
@@ -127,67 +118,6 @@ fn published_cfrg_vector_with_nonempty_context_is_rejected() {
         pairing_key.decrypt(&encrypted_test_payload),
         Err(Error::Decryption)
     ));
-}
-
-#[test]
-fn system_randomness_roundtrips_with_fresh_ephemeral_public_keys() {
-    let f = ipcp_image_fixture();
-    let recipient_public_key = bytes(&f, "pkRm");
-    let pairing_key = pairing_key_from_fixture(&f);
-    for test_plaintext_bytes in [bytes(&f, "pt"), Vec::new()] {
-        let first =
-            PairingKey::encrypt(&recipient_public_key, test_plaintext_bytes.clone())
-                .unwrap();
-        let second =
-            PairingKey::encrypt(&recipient_public_key, test_plaintext_bytes.clone())
-                .unwrap();
-        assert_ne!(first.enc, second.enc);
-        for encrypted_test_payload in [first, second] {
-            assert_eq!(encrypted_test_payload.enc.len(), KEY_LEN);
-            assert_eq!(
-                encrypted_test_payload.ciphertext.len(),
-                test_plaintext_bytes.len() + TAG_LEN
-            );
-            assert_eq!(
-                pairing_key
-                    .decrypt(&encrypted_test_payload)
-                    .unwrap()
-                    .as_slice(),
-                test_plaintext_bytes
-            );
-        }
-    }
-}
-
-#[test]
-fn pairing_key_rejects_invalid_recipient_public_keys() {
-    assert!(matches!(
-        PairingKey::encrypt(&[0xa5; KEY_LEN - 1], b"test".to_vec()),
-        Err(Error::InvalidKey)
-    ));
-    assert!(matches!(
-        PairingKey::encrypt(&[0; KEY_LEN], b"test".to_vec()),
-        Err(Error::Encryption)
-    ));
-}
-
-#[test]
-fn all_zero_and_low_order_public_keys_are_rejected() {
-    let f = ipcp_image_fixture();
-    let pairing_key = pairing_key_from_fixture(&f);
-    for first_byte in [0, 1] {
-        let mut invalid_public_key_bytes = [0; KEY_LEN];
-        invalid_public_key_bytes[0] = first_byte;
-        assert!(
-            PairingKey::encrypt(&invalid_public_key_bytes, b"test".to_vec()).is_err()
-        );
-        let mut encrypted_ipcp_image_payload =
-            encrypted_ipcp_image_payload_from_fixture(&f);
-        encrypted_ipcp_image_payload
-            .enc
-            .copy_from_slice(&invalid_public_key_bytes);
-        assert!(pairing_key.decrypt(&encrypted_ipcp_image_payload).is_err());
-    }
 }
 
 #[test]

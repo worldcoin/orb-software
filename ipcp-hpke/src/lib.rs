@@ -16,17 +16,14 @@ const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
 
 pub struct PairingKey {
-    pairing_private_key: <Profile as Kem>::PrivateKey,
-    pub pairing_public_key: [u8; KEY_LEN],
+    sk: <Profile as Kem>::PrivateKey,
+    pub pk: <Profile as Kem>::PublicKey,
 }
 
 impl PairingKey {
-    pub fn new_pairing_key() -> Self {
-        let (pairing_private_key, pairing_public_key) = Profile::gen_keypair();
-        Self {
-            pairing_private_key,
-            pairing_public_key: pairing_public_key.to_bytes().into(),
-        }
+    pub fn new() -> Self {
+        let (sk, pk) = Profile::gen_keypair();
+        Self { sk, pk }
     }
 
     pub fn decrypt(
@@ -50,7 +47,7 @@ impl PairingKey {
             Zeroizing::new(encrypted_payload.ciphertext[..tag_start].to_vec());
         hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
             &OpModeR::Base,
-            &self.pairing_private_key,
+            &self.sk,
             &ephemeral_public_key,
             &[],
             plaintext.as_mut_slice().into(),
@@ -62,13 +59,10 @@ impl PairingKey {
     }
 
     pub fn encrypt(
-        recipient_public_key: &[u8],
+        recipient_pk: &<Profile as Kem>::PublicKey,
         plaintext: Vec<u8>,
     ) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
-        let recipient_public_key =
-            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
-                .map_err(|_| Error::InvalidKey)?;
         let len = plaintext
             .len()
             .checked_add(TAG_LEN)
@@ -79,7 +73,7 @@ impl PairingKey {
         let (ephemeral_public_key, tag) =
             hpke::single_shot_seal_inout_detached::<AesGcm256, HkdfSha256, Profile>(
                 &OpModeS::Base,
-                &recipient_public_key,
+                recipient_pk,
                 &[],
                 ciphertext[..tag_start].as_mut().into(),
                 &[],
