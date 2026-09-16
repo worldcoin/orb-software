@@ -103,15 +103,23 @@ fn published_cfrg_vector_matches() {
     );
 }
 
-#[test]
-fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation() {
+#[tokio::test(flavor = "current_thread")]
+async fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation() {
     let f = ipcp_image_fixture();
     let public = bytes(&f, "pkRm");
     let private = bytes(&f, "skRm");
     for test_plaintext_bytes in [bytes(&f, "pt"), Vec::new()] {
-        let first = encrypt_ipcp_image_payload(&public, &test_plaintext_bytes).unwrap();
+        let first = tokio::spawn(encrypt_ipcp_image_payload(
+            public.clone(),
+            test_plaintext_bytes.clone(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
         let second =
-            encrypt_ipcp_image_payload(&public, &test_plaintext_bytes).unwrap();
+            encrypt_ipcp_image_payload(public.clone(), test_plaintext_bytes.clone())
+                .await
+                .unwrap();
         assert_ne!(first.enc, second.enc);
         for encrypted_test_payload in [first, second] {
             assert_eq!(encrypted_test_payload.enc.len(), KEY_LEN);
@@ -127,6 +135,36 @@ fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn public_encryption_rejects_invalid_keys() {
+    assert!(matches!(
+        encrypt_ipcp_image_payload(vec![0xa5; KEY_LEN - 1], b"test".to_vec()).await,
+        Err(Error::InvalidKey)
+    ));
+    assert!(matches!(
+        encrypt_ipcp_image_payload(vec![0; KEY_LEN], b"test".to_vec()).await,
+        Err(Error::Encryption)
+    ));
+}
+
+#[tokio::test]
+async fn decrypting_public_encryption_output_rejects_wrong_key_and_tampering() {
+    let f = ipcp_image_fixture();
+    let mut encrypted_ipcp_image_payload =
+        encrypt_ipcp_image_payload(bytes(&f, "pkRm"), bytes(&f, "pt"))
+            .await
+            .unwrap();
+    assert!(matches!(
+        decrypt_ipcp_image_payload(&bytes(&f, "skEm"), &encrypted_ipcp_image_payload),
+        Err(Error::Decryption)
+    ));
+    encrypted_ipcp_image_payload.ciphertext[0] ^= 1;
+    assert!(matches!(
+        decrypt_ipcp_image_payload(&bytes(&f, "skRm"), &encrypted_ipcp_image_payload),
+        Err(Error::Decryption)
+    ));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::convert::Infallible;
+use std::{convert::Infallible, future::Future};
 
 use hpke::{
     aead::{AeadTag, AesGcm256},
@@ -35,15 +35,24 @@ pub enum Error {
     Randomness,
     #[error("iPCP image encryption failed")]
     Encryption,
+    #[error("iPCP image encryption task failed")]
+    EncryptionTask(#[source] tokio::task::JoinError),
     #[error("iPCP image decryption failed")]
     Decryption,
 }
 
 pub fn encrypt_ipcp_image_payload(
-    orb_public_key: &[u8],
-    ipcp_image: &[u8],
-) -> Result<IpcpImageHpkePayload, Error> {
-    encrypt_with_entropy(orb_public_key, ipcp_image, getrandom::fill)
+    orb_public_key: Vec<u8>,
+    ipcp_image: Vec<u8>,
+) -> impl Future<Output = Result<IpcpImageHpkePayload, Error>> + Send {
+    let ipcp_image = Zeroizing::new(ipcp_image);
+    async move {
+        tokio::task::spawn_blocking(move || {
+            encrypt_with_entropy(&orb_public_key, &ipcp_image, getrandom::fill)
+        })
+        .await
+        .map_err(Error::EncryptionTask)?
+    }
 }
 
 fn encrypt_with_entropy(

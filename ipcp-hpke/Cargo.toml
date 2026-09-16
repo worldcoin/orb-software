@@ -18,6 +18,7 @@ sha2-hpke = { package = "sha2", version = "0.11", default-features = false, feat
 	"zeroize",
 ] }
 thiserror = "2.0.17"
+tokio.workspace = true
 zeroize = "1.8.2"
 
 [dev-dependencies]
