@@ -58,7 +58,7 @@ impl PairingKey {
         &self,
         encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
-        open(
+        decrypt_ipcp_image_with_context(
             &self.orb_private_key,
             encrypted_ipcp_image_payload,
             INFO,
@@ -90,32 +90,42 @@ pub fn encrypt_ipcp_image_payload(
     let ipcp_image = Zeroizing::new(ipcp_image);
     async move {
         tokio::task::spawn_blocking(move || {
-            encrypt_with_entropy(&orb_public_key, &ipcp_image, getrandom::fill)
+            encrypt_ipcp_image_with_entropy(
+                &orb_public_key,
+                &ipcp_image,
+                getrandom::fill,
+            )
         })
         .await
         .map_err(Error::EncryptionTask)?
     }
 }
 
-fn encrypt_with_entropy(
+fn encrypt_ipcp_image_with_entropy(
     orb_public_key: &[u8],
     ipcp_image: &[u8],
     fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
 ) -> Result<IpcpImageHpkePayload, Error> {
-    let mut entropy = EphemeralEntropy {
+    let mut app_ephemeral_entropy = AppEphemeralEntropy {
         bytes: Zeroizing::new([0; KEY_LEN]),
         position: 0,
     };
-    fill(entropy.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-    seal(orb_public_key, ipcp_image, INFO, AAD, &mut entropy)
+    fill(app_ephemeral_entropy.bytes.as_mut()).map_err(|_| Error::Randomness)?;
+    encrypt_ipcp_image_with_context(
+        orb_public_key,
+        ipcp_image,
+        INFO,
+        AAD,
+        &mut app_ephemeral_entropy,
+    )
 }
 
-fn seal(
+fn encrypt_ipcp_image_with_context(
     orb_public_key_bytes: &[u8],
     ipcp_image: &[u8],
     info: &[u8],
     aad: &[u8],
-    entropy: &mut EphemeralEntropy,
+    app_ephemeral_entropy: &mut AppEphemeralEntropy,
 ) -> Result<IpcpImageHpkePayload, Error> {
     let orb_public_key = <Profile as Kem>::PublicKey::from_bytes(orb_public_key_bytes)
         .map_err(|_| Error::InvalidKey)?;
@@ -126,7 +136,7 @@ fn seal(
     let tag_start = len - TAG_LEN;
     let mut ciphertext = Zeroizing::new(vec![0; len]);
     ciphertext[..tag_start].copy_from_slice(ipcp_image);
-    let (enc, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
+    let (app_encapsulation, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
         AesGcm256,
         HkdfSha256,
         Profile,
@@ -136,12 +146,12 @@ fn seal(
         info,
         ciphertext[..tag_start].as_mut().into(),
         aad,
-        entropy,
+        app_ephemeral_entropy,
     )
     .map_err(|_| Error::Encryption)?;
     ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
     Ok(IpcpImageHpkePayload {
-        enc: enc.to_bytes().to_vec(),
+        enc: app_encapsulation.to_bytes().to_vec(),
         ciphertext: std::mem::take(&mut *ciphertext),
     })
 }
@@ -153,10 +163,15 @@ pub fn decrypt_ipcp_image_payload(
     let orb_private_key =
         <Profile as Kem>::PrivateKey::from_bytes(orb_private_key_bytes)
             .map_err(|_| Error::InvalidKey)?;
-    open(&orb_private_key, encrypted_ipcp_image_payload, INFO, AAD)
+    decrypt_ipcp_image_with_context(
+        &orb_private_key,
+        encrypted_ipcp_image_payload,
+        INFO,
+        AAD,
+    )
 }
 
-fn open(
+fn decrypt_ipcp_image_with_context(
     orb_private_key: &<Profile as Kem>::PrivateKey,
     encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
     info: &[u8],
@@ -168,7 +183,7 @@ fn open(
         return Err(Error::InvalidPayload);
     }
     let tag_start = encrypted_ipcp_image_payload.ciphertext.len() - TAG_LEN;
-    let enc =
+    let app_encapsulation =
         <Profile as Kem>::EncappedKey::from_bytes(&encrypted_ipcp_image_payload.enc)
             .map_err(|_| Error::InvalidPayload)?;
     let tag = AeadTag::<AesGcm256>::from_bytes(
@@ -180,7 +195,7 @@ fn open(
     hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
         &OpModeR::Base,
         orb_private_key,
-        &enc,
+        &app_encapsulation,
         info,
         decrypted_ipcp_image_bytes.as_mut_slice().into(),
         aad,
@@ -190,12 +205,12 @@ fn open(
     Ok(decrypted_ipcp_image_bytes)
 }
 
-struct EphemeralEntropy {
+struct AppEphemeralEntropy {
     bytes: Zeroizing<[u8; KEY_LEN]>,
     position: usize,
 }
 
-impl TryRng for EphemeralEntropy {
+impl TryRng for AppEphemeralEntropy {
     type Error = Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Infallible> {
@@ -225,7 +240,7 @@ impl TryRng for EphemeralEntropy {
     }
 }
 
-impl TryCryptoRng for EphemeralEntropy {}
+impl TryCryptoRng for AppEphemeralEntropy {}
 
 #[cfg(test)]
 mod tests;

@@ -21,8 +21,8 @@ fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> IpcpImageHpkePa
     }
 }
 
-fn entropy(fixture: &Value) -> EphemeralEntropy {
-    EphemeralEntropy {
+fn app_ephemeral_entropy_from_fixture(fixture: &Value) -> AppEphemeralEntropy {
+    AppEphemeralEntropy {
         bytes: Zeroizing::new(bytes(fixture, "ikmE").try_into().unwrap()),
         position: 0,
     }
@@ -106,7 +106,7 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
     );
     let ipcp_image = bytes(&f, "pt");
     let encrypted_ipcp_image_payload =
-        encrypt_with_entropy(&bytes(&f, "pkRm"), &ipcp_image, |output| {
+        encrypt_ipcp_image_with_entropy(&bytes(&f, "pkRm"), &ipcp_image, |output| {
             output.copy_from_slice(&bytes(&f, "ikmE"));
             Ok(())
         })
@@ -139,20 +139,20 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
 #[test]
 fn published_cfrg_vector_matches() {
     let f = fixture(include_str!("fixtures/ipcp-hpke-cfrg.json"));
-    let mut entropy = entropy(&f);
+    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
     let test_plaintext_bytes = bytes(&f, "pt");
-    let encrypted_test_payload = seal(
+    let encrypted_test_payload = encrypt_ipcp_image_with_context(
         &bytes(&f, "pkRm"),
         &test_plaintext_bytes,
         &bytes(&f, "info"),
         &bytes(&f, "aad"),
-        &mut entropy,
+        &mut app_ephemeral_entropy,
     )
     .unwrap();
     assert_eq!(encrypted_test_payload.enc, bytes(&f, "enc"));
     assert_eq!(encrypted_test_payload.ciphertext, bytes(&f, "ct"));
-    assert_eq!(entropy.position, KEY_LEN);
-    let decrypted_test_plaintext_bytes = open(
+    assert_eq!(app_ephemeral_entropy.position, KEY_LEN);
+    let decrypted_test_plaintext_bytes = decrypt_ipcp_image_with_context(
         &<Profile as Kem>::PrivateKey::from_bytes(&bytes(&f, "skRm")).unwrap(),
         &encrypted_test_payload,
         &bytes(&f, "info"),
@@ -253,7 +253,7 @@ fn wrong_recipient_and_invalid_key_lengths_are_rejected() {
             Err(Error::InvalidKey)
         ));
         assert!(matches!(
-            encrypt_with_entropy(&invalid_key_bytes, b"test", |output| {
+            encrypt_ipcp_image_with_entropy(&invalid_key_bytes, b"test", |output| {
                 output.fill(1);
                 Ok(())
             }),
@@ -268,12 +268,12 @@ fn all_zero_and_low_order_public_keys_are_rejected() {
     for first_byte in [0, 1] {
         let mut invalid_public_key_bytes = [0; KEY_LEN];
         invalid_public_key_bytes[0] = first_byte;
-        assert!(seal(
+        assert!(encrypt_ipcp_image_with_context(
             &invalid_public_key_bytes,
             b"test",
             INFO,
             AAD,
-            &mut entropy(&f)
+            &mut app_ephemeral_entropy_from_fixture(&f)
         )
         .is_err());
         let mut encrypted_ipcp_image_payload =
@@ -383,15 +383,19 @@ fn incorrect_info_and_aad_are_rejected() {
         (b"worldcoin/ipcp/hpke/v2".as_slice(), AAD),
         (INFO, b"unexpected metadata".as_slice()),
     ] {
-        assert!(
-            open(&orb_private_key, &encrypted_ipcp_image_payload, info, aad).is_err()
-        );
-        let altered = seal(
+        assert!(decrypt_ipcp_image_with_context(
+            &orb_private_key,
+            &encrypted_ipcp_image_payload,
+            info,
+            aad
+        )
+        .is_err());
+        let altered = encrypt_ipcp_image_with_context(
             &bytes(&f, "pkRm"),
             &bytes(&f, "pt"),
             info,
             aad,
-            &mut entropy(&f),
+            &mut app_ephemeral_entropy_from_fixture(&f),
         )
         .unwrap();
         assert!(decrypt_ipcp_image_payload(&orb_private_key_bytes, &altered).is_err());
@@ -400,7 +404,7 @@ fn incorrect_info_and_aad_are_rejected() {
 
 #[test]
 fn entropy_failure_returns_randomness_error() {
-    let result = encrypt_with_entropy(
+    let result = encrypt_ipcp_image_with_entropy(
         &bytes(&ipcp_image_fixture(), "pkRm"),
         b"test",
         |output| {
@@ -435,35 +439,40 @@ fn ipcp_image_and_entropy_use_zeroizing_guards() {
     assert!(!decrypted_ipcp_image_bytes.is_empty());
     decrypted_ipcp_image_bytes.as_mut_slice().zeroize();
     assert!(decrypted_ipcp_image_bytes.iter().all(|&byte| byte == 0));
-    let mut entropy = entropy(&f);
-    assert_drop_guard(&entropy.bytes);
-    entropy.bytes.zeroize();
-    assert_eq!(*entropy.bytes, [0; KEY_LEN]);
+    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
+    assert_drop_guard(&app_ephemeral_entropy.bytes);
+    app_ephemeral_entropy.bytes.zeroize();
+    assert_eq!(*app_ephemeral_entropy.bytes, [0; KEY_LEN]);
 }
 
 #[test]
 fn entropy_reads_advance_without_repeating_bytes() {
     let f = ipcp_image_fixture();
     let source = bytes(&f, "ikmE");
-    let mut entropy = entropy(&f);
+    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
     assert_eq!(
-        entropy.try_next_u32().unwrap(),
+        app_ephemeral_entropy.try_next_u32().unwrap(),
         u32::from_le_bytes(source[..4].try_into().unwrap())
     );
     assert_eq!(
-        entropy.try_next_u64().unwrap(),
+        app_ephemeral_entropy.try_next_u64().unwrap(),
         u64::from_le_bytes(source[4..12].try_into().unwrap())
     );
     let mut remaining = [0; 20];
-    entropy.try_fill_bytes(&mut remaining).unwrap();
+    app_ephemeral_entropy
+        .try_fill_bytes(&mut remaining)
+        .unwrap();
     assert_eq!(remaining, source[12..]);
-    assert_eq!(entropy.position, KEY_LEN);
+    assert_eq!(app_ephemeral_entropy.position, KEY_LEN);
 }
 
 #[test]
 #[should_panic(expected = "X25519 entropy exhausted")]
 fn entropy_exhaustion_cannot_reuse_randomness() {
-    let mut entropy = entropy(&ipcp_image_fixture());
-    entropy.try_fill_bytes(&mut [0; KEY_LEN]).unwrap();
-    entropy.try_fill_bytes(&mut [0; 1]).unwrap();
+    let mut app_ephemeral_entropy =
+        app_ephemeral_entropy_from_fixture(&ipcp_image_fixture());
+    app_ephemeral_entropy
+        .try_fill_bytes(&mut [0; KEY_LEN])
+        .unwrap();
+    app_ephemeral_entropy.try_fill_bytes(&mut [0; 1]).unwrap();
 }
