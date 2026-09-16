@@ -32,10 +32,10 @@ pub struct PairingKey {
 
 impl PairingKey {
     pub fn new() -> Result<Self, Error> {
-        Self::with_entropy(getrandom::fill)
+        Self::with_randomness(getrandom::fill)
     }
 
-    fn with_entropy(
+    fn with_randomness(
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<Self, Error> {
         let mut orb_private_key_bytes = Zeroizing::new([0; KEY_LEN]);
@@ -90,7 +90,7 @@ pub fn encrypt_ipcp_image_payload(
     let ipcp_image = Zeroizing::new(ipcp_image);
     async move {
         tokio::task::spawn_blocking(move || {
-            encrypt_ipcp_image_with_entropy(
+            encrypt_ipcp_image_with_randomness(
                 &orb_public_key,
                 &ipcp_image,
                 getrandom::fill,
@@ -101,22 +101,22 @@ pub fn encrypt_ipcp_image_payload(
     }
 }
 
-fn encrypt_ipcp_image_with_entropy(
+fn encrypt_ipcp_image_with_randomness(
     orb_public_key: &[u8],
     ipcp_image: &[u8],
     fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
 ) -> Result<IpcpImageHpkePayload, Error> {
-    let mut app_ephemeral_entropy = AppEphemeralEntropy {
+    let mut app_ephemeral_key_material = AppEphemeralKeyMaterial {
         bytes: Zeroizing::new([0; KEY_LEN]),
         position: 0,
     };
-    fill(app_ephemeral_entropy.bytes.as_mut()).map_err(|_| Error::Randomness)?;
+    fill(app_ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
     encrypt_ipcp_image_with_context(
         orb_public_key,
         ipcp_image,
         INFO,
         AAD,
-        &mut app_ephemeral_entropy,
+        &mut app_ephemeral_key_material,
     )
 }
 
@@ -125,7 +125,7 @@ fn encrypt_ipcp_image_with_context(
     ipcp_image: &[u8],
     info: &[u8],
     aad: &[u8],
-    app_ephemeral_entropy: &mut AppEphemeralEntropy,
+    app_ephemeral_key_material: &mut AppEphemeralKeyMaterial,
 ) -> Result<IpcpImageHpkePayload, Error> {
     let orb_public_key = <Profile as Kem>::PublicKey::from_bytes(orb_public_key_bytes)
         .map_err(|_| Error::InvalidKey)?;
@@ -136,7 +136,7 @@ fn encrypt_ipcp_image_with_context(
     let tag_start = len - TAG_LEN;
     let mut ciphertext = Zeroizing::new(vec![0; len]);
     ciphertext[..tag_start].copy_from_slice(ipcp_image);
-    let (app_encapsulation, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
+    let (app_public_key, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
         AesGcm256,
         HkdfSha256,
         Profile,
@@ -146,12 +146,12 @@ fn encrypt_ipcp_image_with_context(
         info,
         ciphertext[..tag_start].as_mut().into(),
         aad,
-        app_ephemeral_entropy,
+        app_ephemeral_key_material,
     )
     .map_err(|_| Error::Encryption)?;
     ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
     Ok(IpcpImageHpkePayload {
-        enc: app_encapsulation.to_bytes().to_vec(),
+        enc: app_public_key.to_bytes().to_vec(),
         ciphertext: std::mem::take(&mut *ciphertext),
     })
 }
@@ -183,7 +183,7 @@ fn decrypt_ipcp_image_with_context(
         return Err(Error::InvalidPayload);
     }
     let tag_start = encrypted_ipcp_image_payload.ciphertext.len() - TAG_LEN;
-    let app_encapsulation =
+    let app_public_key =
         <Profile as Kem>::EncappedKey::from_bytes(&encrypted_ipcp_image_payload.enc)
             .map_err(|_| Error::InvalidPayload)?;
     let tag = AeadTag::<AesGcm256>::from_bytes(
@@ -195,7 +195,7 @@ fn decrypt_ipcp_image_with_context(
     hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
         &OpModeR::Base,
         orb_private_key,
-        &app_encapsulation,
+        &app_public_key,
         info,
         decrypted_ipcp_image_bytes.as_mut_slice().into(),
         aad,
@@ -205,12 +205,12 @@ fn decrypt_ipcp_image_with_context(
     Ok(decrypted_ipcp_image_bytes)
 }
 
-struct AppEphemeralEntropy {
+struct AppEphemeralKeyMaterial {
     bytes: Zeroizing<[u8; KEY_LEN]>,
     position: usize,
 }
 
-impl TryRng for AppEphemeralEntropy {
+impl TryRng for AppEphemeralKeyMaterial {
     type Error = Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Infallible> {
@@ -229,18 +229,18 @@ impl TryRng for AppEphemeralEntropy {
         let end = self
             .position
             .checked_add(output.len())
-            .expect("Entropy overflow");
+            .expect("App key material offset overflow");
         output.copy_from_slice(
             self.bytes
                 .get(self.position..end)
-                .expect("X25519 entropy exhausted"),
+                .expect("App key material exhausted"),
         );
         self.position = end;
         Ok(())
     }
 }
 
-impl TryCryptoRng for AppEphemeralEntropy {}
+impl TryCryptoRng for AppEphemeralKeyMaterial {}
 
 #[cfg(test)]
 mod tests;

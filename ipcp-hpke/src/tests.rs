@@ -21,8 +21,8 @@ fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> IpcpImageHpkePa
     }
 }
 
-fn app_ephemeral_entropy_from_fixture(fixture: &Value) -> AppEphemeralEntropy {
-    AppEphemeralEntropy {
+fn app_ephemeral_key_material_from_fixture(fixture: &Value) -> AppEphemeralKeyMaterial {
+    AppEphemeralKeyMaterial {
         bytes: Zeroizing::new(bytes(fixture, "ikmE").try_into().unwrap()),
         position: 0,
     }
@@ -64,7 +64,7 @@ async fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 #[test]
 fn pairing_key_matches_existing_x25519_fixture() {
     let f = ipcp_image_fixture();
-    let orb_pairing_key = PairingKey::with_entropy(|output| {
+    let orb_pairing_key = PairingKey::with_randomness(|output| {
         output.copy_from_slice(&bytes(&f, "skRm"));
         Ok(())
     })
@@ -80,9 +80,9 @@ fn pairing_key_matches_existing_x25519_fixture() {
 }
 
 #[test]
-fn pairing_key_entropy_failure_returns_randomness_error() {
+fn pairing_key_randomness_failure_returns_randomness_error() {
     assert!(matches!(
-        PairingKey::with_entropy(|output| {
+        PairingKey::with_randomness(|output| {
             output.fill(0xa5);
             Err(getrandom::Error::UNSUPPORTED)
         }),
@@ -106,7 +106,7 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
     );
     let ipcp_image = bytes(&f, "pt");
     let encrypted_ipcp_image_payload =
-        encrypt_ipcp_image_with_entropy(&bytes(&f, "pkRm"), &ipcp_image, |output| {
+        encrypt_ipcp_image_with_randomness(&bytes(&f, "pkRm"), &ipcp_image, |output| {
             output.copy_from_slice(&bytes(&f, "ikmE"));
             Ok(())
         })
@@ -139,19 +139,19 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
 #[test]
 fn published_cfrg_vector_matches() {
     let f = fixture(include_str!("fixtures/ipcp-hpke-cfrg.json"));
-    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
+    let mut app_ephemeral_key_material = app_ephemeral_key_material_from_fixture(&f);
     let test_plaintext_bytes = bytes(&f, "pt");
     let encrypted_test_payload = encrypt_ipcp_image_with_context(
         &bytes(&f, "pkRm"),
         &test_plaintext_bytes,
         &bytes(&f, "info"),
         &bytes(&f, "aad"),
-        &mut app_ephemeral_entropy,
+        &mut app_ephemeral_key_material,
     )
     .unwrap();
     assert_eq!(encrypted_test_payload.enc, bytes(&f, "enc"));
     assert_eq!(encrypted_test_payload.ciphertext, bytes(&f, "ct"));
-    assert_eq!(app_ephemeral_entropy.position, KEY_LEN);
+    assert_eq!(app_ephemeral_key_material.position, KEY_LEN);
     let decrypted_test_plaintext_bytes = decrypt_ipcp_image_with_context(
         &<Profile as Kem>::PrivateKey::from_bytes(&bytes(&f, "skRm")).unwrap(),
         &encrypted_test_payload,
@@ -166,7 +166,7 @@ fn published_cfrg_vector_matches() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn system_entropy_roundtrips_ipcp_image_and_produces_fresh_encapsulation() {
+async fn system_randomness_roundtrips_ipcp_image_and_produces_fresh_app_public_key() {
     let f = ipcp_image_fixture();
     let orb_public_key_bytes = bytes(&f, "pkRm");
     let orb_private_key_bytes = bytes(&f, "skRm");
@@ -253,7 +253,7 @@ fn wrong_recipient_and_invalid_key_lengths_are_rejected() {
             Err(Error::InvalidKey)
         ));
         assert!(matches!(
-            encrypt_ipcp_image_with_entropy(&invalid_key_bytes, b"test", |output| {
+            encrypt_ipcp_image_with_randomness(&invalid_key_bytes, b"test", |output| {
                 output.fill(1);
                 Ok(())
             }),
@@ -273,7 +273,7 @@ fn all_zero_and_low_order_public_keys_are_rejected() {
             b"test",
             INFO,
             AAD,
-            &mut app_ephemeral_entropy_from_fixture(&f)
+            &mut app_ephemeral_key_material_from_fixture(&f)
         )
         .is_err());
         let mut encrypted_ipcp_image_payload =
@@ -395,7 +395,7 @@ fn incorrect_info_and_aad_are_rejected() {
             &bytes(&f, "pt"),
             info,
             aad,
-            &mut app_ephemeral_entropy_from_fixture(&f),
+            &mut app_ephemeral_key_material_from_fixture(&f),
         )
         .unwrap();
         assert!(decrypt_ipcp_image_payload(&orb_private_key_bytes, &altered).is_err());
@@ -403,8 +403,8 @@ fn incorrect_info_and_aad_are_rejected() {
 }
 
 #[test]
-fn entropy_failure_returns_randomness_error() {
-    let result = encrypt_ipcp_image_with_entropy(
+fn encryption_randomness_failure_returns_randomness_error() {
+    let result = encrypt_ipcp_image_with_randomness(
         &bytes(&ipcp_image_fixture(), "pkRm"),
         b"test",
         |output| {
@@ -427,7 +427,7 @@ fn crypto_state_cleanup_guards_are_enabled() {
 }
 
 #[test]
-fn ipcp_image_and_entropy_use_zeroizing_guards() {
+fn ipcp_image_and_app_key_material_use_zeroizing_guards() {
     fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
     let f = ipcp_image_fixture();
     let mut decrypted_ipcp_image_bytes = decrypt_ipcp_image_payload(
@@ -439,40 +439,42 @@ fn ipcp_image_and_entropy_use_zeroizing_guards() {
     assert!(!decrypted_ipcp_image_bytes.is_empty());
     decrypted_ipcp_image_bytes.as_mut_slice().zeroize();
     assert!(decrypted_ipcp_image_bytes.iter().all(|&byte| byte == 0));
-    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
-    assert_drop_guard(&app_ephemeral_entropy.bytes);
-    app_ephemeral_entropy.bytes.zeroize();
-    assert_eq!(*app_ephemeral_entropy.bytes, [0; KEY_LEN]);
+    let mut app_ephemeral_key_material = app_ephemeral_key_material_from_fixture(&f);
+    assert_drop_guard(&app_ephemeral_key_material.bytes);
+    app_ephemeral_key_material.bytes.zeroize();
+    assert_eq!(*app_ephemeral_key_material.bytes, [0; KEY_LEN]);
 }
 
 #[test]
-fn entropy_reads_advance_without_repeating_bytes() {
+fn app_key_material_reads_advance_without_repeating_bytes() {
     let f = ipcp_image_fixture();
     let source = bytes(&f, "ikmE");
-    let mut app_ephemeral_entropy = app_ephemeral_entropy_from_fixture(&f);
+    let mut app_ephemeral_key_material = app_ephemeral_key_material_from_fixture(&f);
     assert_eq!(
-        app_ephemeral_entropy.try_next_u32().unwrap(),
+        app_ephemeral_key_material.try_next_u32().unwrap(),
         u32::from_le_bytes(source[..4].try_into().unwrap())
     );
     assert_eq!(
-        app_ephemeral_entropy.try_next_u64().unwrap(),
+        app_ephemeral_key_material.try_next_u64().unwrap(),
         u64::from_le_bytes(source[4..12].try_into().unwrap())
     );
     let mut remaining = [0; 20];
-    app_ephemeral_entropy
+    app_ephemeral_key_material
         .try_fill_bytes(&mut remaining)
         .unwrap();
     assert_eq!(remaining, source[12..]);
-    assert_eq!(app_ephemeral_entropy.position, KEY_LEN);
+    assert_eq!(app_ephemeral_key_material.position, KEY_LEN);
 }
 
 #[test]
-#[should_panic(expected = "X25519 entropy exhausted")]
-fn entropy_exhaustion_cannot_reuse_randomness() {
-    let mut app_ephemeral_entropy =
-        app_ephemeral_entropy_from_fixture(&ipcp_image_fixture());
-    app_ephemeral_entropy
+#[should_panic(expected = "App key material exhausted")]
+fn app_key_material_exhaustion_cannot_reuse_randomness() {
+    let mut app_ephemeral_key_material =
+        app_ephemeral_key_material_from_fixture(&ipcp_image_fixture());
+    app_ephemeral_key_material
         .try_fill_bytes(&mut [0; KEY_LEN])
         .unwrap();
-    app_ephemeral_entropy.try_fill_bytes(&mut [0; 1]).unwrap();
+    app_ephemeral_key_material
+        .try_fill_bytes(&mut [0; 1])
+        .unwrap();
 }
