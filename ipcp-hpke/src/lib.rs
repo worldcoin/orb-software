@@ -156,21 +156,6 @@ fn encrypt_ipcp_image_with_context(
     })
 }
 
-pub fn decrypt_ipcp_image_payload(
-    orb_private_key_bytes: &[u8],
-    encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
-) -> Result<Zeroizing<Vec<u8>>, Error> {
-    let orb_private_key =
-        <Profile as Kem>::PrivateKey::from_bytes(orb_private_key_bytes)
-            .map_err(|_| Error::InvalidKey)?;
-    decrypt_ipcp_image_with_context(
-        &orb_private_key,
-        encrypted_ipcp_image_payload,
-        INFO,
-        AAD,
-    )
-}
-
 fn decrypt_ipcp_image_with_context(
     orb_private_key: &<Profile as Kem>::PrivateKey,
     encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
