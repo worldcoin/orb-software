@@ -9,7 +9,6 @@ use hpke::{
     Deserializable, Kem, OpModeR, OpModeS, Serializable,
 };
 use rand_core::{TryCryptoRng, TryRng};
-use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 type Profile = X25519HkdfSha256;
@@ -131,12 +130,6 @@ fn open(
     )
     .map_err(|_| Error::Decryption)?;
     Ok(plaintext)
-}
-
-pub fn encrypted_ipcp_image_payload_hash(
-    encrypted_ipcp_image_payload: &[u8],
-) -> [u8; 32] {
-    Sha256::digest(encrypted_ipcp_image_payload).into()
 }
 
 struct EphemeralEntropy {

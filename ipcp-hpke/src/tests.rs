@@ -29,7 +29,7 @@ fn entropy(fixture: &Value) -> EphemeralEntropy {
 }
 
 #[test]
-fn ipcp_image_fixture_matches_encryption_decryption_and_hash() {
+fn ipcp_image_fixture_matches_encryption_and_decryption() {
     let f = ipcp_image_fixture();
     for (field, expected) in
         [("mode", 0), ("kem_id", 32), ("kdf_id", 1), ("aead_id", 2)]
@@ -60,10 +60,6 @@ fn ipcp_image_fixture_matches_encryption_decryption_and_hash() {
     );
     let packed = [payload.enc.as_slice(), payload.ciphertext.as_slice()].concat();
     assert_eq!(packed, bytes(&f, "encrypted_ipcp"));
-    assert_eq!(
-        encrypted_ipcp_image_payload_hash(&packed).as_slice(),
-        bytes(&f, "encrypted_ipcp_hash")
-    );
     assert_eq!(
         decrypt_ipcp_image_payload(&bytes(&f, "skRm"), &payload)
             .unwrap()
@@ -220,7 +216,6 @@ fn modification_at_every_payload_byte_is_rejected() {
     let f = ipcp_image_fixture();
     let private = bytes(&f, "skRm");
     let payload = payload(&f);
-    let hash = encrypted_ipcp_image_payload_hash(&bytes(&f, "encrypted_ipcp"));
     for index in 0..payload.enc.len() + payload.ciphertext.len() {
         let mut modified = payload.clone();
         if index < modified.enc.len() {
@@ -231,12 +226,6 @@ fn modification_at_every_payload_byte_is_rejected() {
         assert!(
             decrypt_ipcp_image_payload(&private, &modified).is_err(),
             "byte {index}"
-        );
-        assert_ne!(
-            encrypted_ipcp_image_payload_hash(
-                &[modified.enc, modified.ciphertext].concat()
-            ),
-            hash
         );
     }
 }
