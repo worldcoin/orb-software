@@ -48,7 +48,7 @@ pub fn encrypt_ipcp_image_payload(
 
 fn encrypt_with_entropy(
     orb_public_key: &[u8],
-    plaintext: &[u8],
+    ipcp_image: &[u8],
     fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
 ) -> Result<IpcpImageHpkePayload, Error> {
     let mut entropy = EphemeralEntropy {
@@ -56,25 +56,25 @@ fn encrypt_with_entropy(
         position: 0,
     };
     fill(entropy.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-    seal(orb_public_key, plaintext, INFO, AAD, &mut entropy)
+    seal(orb_public_key, ipcp_image, INFO, AAD, &mut entropy)
 }
 
 fn seal(
     orb_public_key: &[u8],
-    plaintext: &[u8],
+    ipcp_image: &[u8],
     info: &[u8],
     aad: &[u8],
     entropy: &mut EphemeralEntropy,
 ) -> Result<IpcpImageHpkePayload, Error> {
     let public_key = <Profile as Kem>::PublicKey::from_bytes(orb_public_key)
         .map_err(|_| Error::InvalidKey)?;
-    let len = plaintext
+    let len = ipcp_image
         .len()
         .checked_add(TAG_LEN)
         .ok_or(Error::InvalidPayload)?;
     let tag_start = len - TAG_LEN;
     let mut ciphertext = Zeroizing::new(vec![0; len]);
-    ciphertext[..tag_start].copy_from_slice(plaintext);
+    ciphertext[..tag_start].copy_from_slice(ipcp_image);
     let (enc, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
         AesGcm256,
         HkdfSha256,
@@ -97,39 +97,45 @@ fn seal(
 
 pub fn decrypt_ipcp_image_payload(
     orb_private_key: &[u8],
-    payload: &IpcpImageHpkePayload,
+    encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
 ) -> Result<Zeroizing<Vec<u8>>, Error> {
-    open(orb_private_key, payload, INFO, AAD)
+    open(orb_private_key, encrypted_ipcp_image_payload, INFO, AAD)
 }
 
 fn open(
     orb_private_key: &[u8],
-    payload: &IpcpImageHpkePayload,
+    encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
     info: &[u8],
     aad: &[u8],
 ) -> Result<Zeroizing<Vec<u8>>, Error> {
-    if payload.enc.len() != KEY_LEN || payload.ciphertext.len() < TAG_LEN {
+    if encrypted_ipcp_image_payload.enc.len() != KEY_LEN
+        || encrypted_ipcp_image_payload.ciphertext.len() < TAG_LEN
+    {
         return Err(Error::InvalidPayload);
     }
-    let tag_start = payload.ciphertext.len() - TAG_LEN;
+    let tag_start = encrypted_ipcp_image_payload.ciphertext.len() - TAG_LEN;
     let private_key = <Profile as Kem>::PrivateKey::from_bytes(orb_private_key)
         .map_err(|_| Error::InvalidKey)?;
-    let enc = <Profile as Kem>::EncappedKey::from_bytes(&payload.enc)
-        .map_err(|_| Error::InvalidPayload)?;
-    let tag = AeadTag::<AesGcm256>::from_bytes(&payload.ciphertext[tag_start..])
-        .map_err(|_| Error::InvalidPayload)?;
-    let mut plaintext = Zeroizing::new(payload.ciphertext[..tag_start].to_vec());
+    let enc =
+        <Profile as Kem>::EncappedKey::from_bytes(&encrypted_ipcp_image_payload.enc)
+            .map_err(|_| Error::InvalidPayload)?;
+    let tag = AeadTag::<AesGcm256>::from_bytes(
+        &encrypted_ipcp_image_payload.ciphertext[tag_start..],
+    )
+    .map_err(|_| Error::InvalidPayload)?;
+    let mut decrypted_ipcp_image_bytes =
+        Zeroizing::new(encrypted_ipcp_image_payload.ciphertext[..tag_start].to_vec());
     hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
         &OpModeR::Base,
         &private_key,
         &enc,
         info,
-        plaintext.as_mut_slice().into(),
+        decrypted_ipcp_image_bytes.as_mut_slice().into(),
         aad,
         &tag,
     )
     .map_err(|_| Error::Decryption)?;
-    Ok(plaintext)
+    Ok(decrypted_ipcp_image_bytes)
 }
 
 struct EphemeralEntropy {
