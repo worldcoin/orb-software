@@ -34,7 +34,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let pairing_key = PairingKey::new();
     let other_pairing_key = PairingKey::new();
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
-    let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
+    let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let mut encrypted_ipcp_image_payload =
         PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
     assert_eq!(
@@ -42,7 +42,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
             .decrypt(&encrypted_ipcp_image_payload)
             .unwrap()
             .as_slice(),
-        ipcp_image
+        ipcp_image.as_slice()
     );
     assert!(matches!(
         other_pairing_key.decrypt(&encrypted_ipcp_image_payload),
@@ -58,7 +58,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 #[test]
 fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let pairing_key = PairingKey::new();
-    let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
+    let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
         PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
     let announcement = AnnounceAppId {
@@ -73,7 +73,7 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
             .decrypt(&decoded.encrypted_ipcp_payload.unwrap())
             .unwrap()
             .as_slice(),
-        ipcp_image
+        ipcp_image.as_slice()
     );
 }
 

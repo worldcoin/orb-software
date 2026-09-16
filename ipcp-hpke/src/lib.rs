@@ -60,9 +60,8 @@ impl PairingKey {
 
     pub fn encrypt(
         recipient_pk: &<Profile as Kem>::PublicKey,
-        plaintext: Vec<u8>,
+        plaintext: Zeroizing<Vec<u8>>,
     ) -> Result<EncryptedPayload, Error> {
-        let plaintext = Zeroizing::new(plaintext);
         let len = plaintext
             .len()
             .checked_add(TAG_LEN)
