@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::{convert::Infallible, future::Future};
+use std::convert::Infallible;
 
 use hpke::{
     aead::{AeadTag, AesGcm256},
@@ -8,7 +8,7 @@ use hpke::{
     kem::X25519HkdfSha256,
     Deserializable, Kem, OpModeR, OpModeS, Serializable,
 };
-pub use orb_relay_messages::common::v1::IpcpHpkePayload as IpcpImageHpkePayload;
+pub use orb_relay_messages::common::v1::IpcpHpkePayload;
 use rand_core::{TryCryptoRng, TryRng};
 use zeroize::Zeroizing;
 
@@ -21,8 +21,8 @@ const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
 
 pub struct PairingKey {
-    orb_private_key: <Profile as Kem>::PrivateKey,
-    orb_public_key: [u8; KEY_LEN],
+    private_key: <Profile as Kem>::PrivateKey,
+    public_key: [u8; KEY_LEN],
 }
 
 impl PairingKey {
@@ -33,32 +33,126 @@ impl PairingKey {
     fn with_randomness(
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<Self, Error> {
-        let mut orb_private_key_bytes = Zeroizing::new([0; KEY_LEN]);
-        fill(orb_private_key_bytes.as_mut()).map_err(|_| Error::Randomness)?;
-        let orb_private_key =
-            <Profile as Kem>::PrivateKey::from_bytes(orb_private_key_bytes.as_ref())
+        let mut private_key_bytes = Zeroizing::new([0; KEY_LEN]);
+        fill(private_key_bytes.as_mut()).map_err(|_| Error::Randomness)?;
+        let private_key =
+            <Profile as Kem>::PrivateKey::from_bytes(private_key_bytes.as_ref())
                 .map_err(|_| Error::InvalidKey)?;
-        let orb_public_key = Profile::sk_to_pk(&orb_private_key).to_bytes().into();
+        let public_key = Profile::sk_to_pk(&private_key).to_bytes().into();
         Ok(Self {
-            orb_private_key,
-            orb_public_key,
+            private_key,
+            public_key,
         })
     }
 
     pub fn public_key(&self) -> &[u8; KEY_LEN] {
-        &self.orb_public_key
+        &self.public_key
     }
 
-    pub fn decrypt_ipcp_image_payload(
+    pub fn decrypt(
         &self,
-        encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
+        encrypted_payload: &IpcpHpkePayload,
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
-        decrypt_ipcp_image_with_context(
-            &self.orb_private_key,
-            encrypted_ipcp_image_payload,
-            INFO,
-            AAD,
+        self.decrypt_with_context(encrypted_payload, INFO, AAD)
+    }
+
+    fn decrypt_with_context(
+        &self,
+        encrypted_payload: &IpcpHpkePayload,
+        info: &[u8],
+        aad: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>, Error> {
+        if encrypted_payload.enc.len() != KEY_LEN
+            || encrypted_payload.ciphertext.len() < TAG_LEN
+        {
+            return Err(Error::InvalidPayload);
+        }
+        let tag_start = encrypted_payload.ciphertext.len() - TAG_LEN;
+        let ephemeral_public_key =
+            <Profile as Kem>::EncappedKey::from_bytes(&encrypted_payload.enc)
+                .map_err(|_| Error::InvalidPayload)?;
+        let tag = AeadTag::<AesGcm256>::from_bytes(
+            &encrypted_payload.ciphertext[tag_start..],
         )
+        .map_err(|_| Error::InvalidPayload)?;
+        let mut plaintext =
+            Zeroizing::new(encrypted_payload.ciphertext[..tag_start].to_vec());
+        hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
+            &OpModeR::Base,
+            &self.private_key,
+            &ephemeral_public_key,
+            info,
+            plaintext.as_mut_slice().into(),
+            aad,
+            &tag,
+        )
+        .map_err(|_| Error::Decryption)?;
+        Ok(plaintext)
+    }
+}
+
+pub struct RecipientKey {
+    public_key: <Profile as Kem>::PublicKey,
+}
+
+impl RecipientKey {
+    pub fn from_public_key(public_key: &[u8]) -> Result<Self, Error> {
+        let public_key = <Profile as Kem>::PublicKey::from_bytes(public_key)
+            .map_err(|_| Error::InvalidKey)?;
+        Ok(Self { public_key })
+    }
+
+    pub fn encrypt(&self, plaintext: Vec<u8>) -> Result<IpcpHpkePayload, Error> {
+        let plaintext = Zeroizing::new(plaintext);
+        self.encrypt_with_randomness(&plaintext, getrandom::fill)
+    }
+
+    fn encrypt_with_randomness(
+        &self,
+        plaintext: &[u8],
+        fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
+    ) -> Result<IpcpHpkePayload, Error> {
+        let mut ephemeral_key_material = EphemeralKeyMaterial {
+            bytes: Zeroizing::new([0; KEY_LEN]),
+            position: 0,
+        };
+        fill(ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
+        self.encrypt_with_context(plaintext, INFO, AAD, &mut ephemeral_key_material)
+    }
+
+    fn encrypt_with_context(
+        &self,
+        plaintext: &[u8],
+        info: &[u8],
+        aad: &[u8],
+        ephemeral_key_material: &mut EphemeralKeyMaterial,
+    ) -> Result<IpcpHpkePayload, Error> {
+        let len = plaintext
+            .len()
+            .checked_add(TAG_LEN)
+            .ok_or(Error::InvalidPayload)?;
+        let tag_start = len - TAG_LEN;
+        let mut ciphertext = Zeroizing::new(vec![0; len]);
+        ciphertext[..tag_start].copy_from_slice(plaintext);
+        let (ephemeral_public_key, tag) =
+            hpke::single_shot_seal_inout_detached_with_rng::<
+                AesGcm256,
+                HkdfSha256,
+                Profile,
+            >(
+                &OpModeS::Base,
+                &self.public_key,
+                info,
+                ciphertext[..tag_start].as_mut().into(),
+                aad,
+                ephemeral_key_material,
+            )
+            .map_err(|_| Error::Encryption)?;
+        ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
+        Ok(IpcpHpkePayload {
+            enc: ephemeral_public_key.to_bytes().to_vec(),
+            ciphertext: std::mem::take(&mut *ciphertext),
+        })
     }
 }
 
@@ -66,131 +160,22 @@ impl PairingKey {
 pub enum Error {
     #[error("Invalid X25519 key")]
     InvalidKey,
-    #[error("Invalid encrypted iPCP image payload")]
+    #[error("Invalid encrypted payload")]
     InvalidPayload,
     #[error("System randomness unavailable")]
     Randomness,
-    #[error("iPCP image encryption failed")]
+    #[error("HPKE encryption failed")]
     Encryption,
-    #[error("iPCP image encryption task failed")]
-    EncryptionTask(#[source] tokio::task::JoinError),
-    #[error("iPCP image decryption failed")]
+    #[error("HPKE decryption failed")]
     Decryption,
 }
 
-pub fn encrypt_ipcp_image_payload(
-    orb_public_key: Vec<u8>,
-    ipcp_image: Vec<u8>,
-) -> impl Future<Output = Result<IpcpImageHpkePayload, Error>> + Send {
-    let ipcp_image = Zeroizing::new(ipcp_image);
-    async move {
-        tokio::task::spawn_blocking(move || {
-            encrypt_ipcp_image_with_randomness(
-                &orb_public_key,
-                &ipcp_image,
-                getrandom::fill,
-            )
-        })
-        .await
-        .map_err(Error::EncryptionTask)?
-    }
-}
-
-fn encrypt_ipcp_image_with_randomness(
-    orb_public_key: &[u8],
-    ipcp_image: &[u8],
-    fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
-) -> Result<IpcpImageHpkePayload, Error> {
-    let mut app_ephemeral_key_material = AppEphemeralKeyMaterial {
-        bytes: Zeroizing::new([0; KEY_LEN]),
-        position: 0,
-    };
-    fill(app_ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-    encrypt_ipcp_image_with_context(
-        orb_public_key,
-        ipcp_image,
-        INFO,
-        AAD,
-        &mut app_ephemeral_key_material,
-    )
-}
-
-fn encrypt_ipcp_image_with_context(
-    orb_public_key_bytes: &[u8],
-    ipcp_image: &[u8],
-    info: &[u8],
-    aad: &[u8],
-    app_ephemeral_key_material: &mut AppEphemeralKeyMaterial,
-) -> Result<IpcpImageHpkePayload, Error> {
-    let orb_public_key = <Profile as Kem>::PublicKey::from_bytes(orb_public_key_bytes)
-        .map_err(|_| Error::InvalidKey)?;
-    let len = ipcp_image
-        .len()
-        .checked_add(TAG_LEN)
-        .ok_or(Error::InvalidPayload)?;
-    let tag_start = len - TAG_LEN;
-    let mut ciphertext = Zeroizing::new(vec![0; len]);
-    ciphertext[..tag_start].copy_from_slice(ipcp_image);
-    let (app_public_key, tag) = hpke::single_shot_seal_inout_detached_with_rng::<
-        AesGcm256,
-        HkdfSha256,
-        Profile,
-    >(
-        &OpModeS::Base,
-        &orb_public_key,
-        info,
-        ciphertext[..tag_start].as_mut().into(),
-        aad,
-        app_ephemeral_key_material,
-    )
-    .map_err(|_| Error::Encryption)?;
-    ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
-    Ok(IpcpImageHpkePayload {
-        enc: app_public_key.to_bytes().to_vec(),
-        ciphertext: std::mem::take(&mut *ciphertext),
-    })
-}
-
-fn decrypt_ipcp_image_with_context(
-    orb_private_key: &<Profile as Kem>::PrivateKey,
-    encrypted_ipcp_image_payload: &IpcpImageHpkePayload,
-    info: &[u8],
-    aad: &[u8],
-) -> Result<Zeroizing<Vec<u8>>, Error> {
-    if encrypted_ipcp_image_payload.enc.len() != KEY_LEN
-        || encrypted_ipcp_image_payload.ciphertext.len() < TAG_LEN
-    {
-        return Err(Error::InvalidPayload);
-    }
-    let tag_start = encrypted_ipcp_image_payload.ciphertext.len() - TAG_LEN;
-    let app_public_key =
-        <Profile as Kem>::EncappedKey::from_bytes(&encrypted_ipcp_image_payload.enc)
-            .map_err(|_| Error::InvalidPayload)?;
-    let tag = AeadTag::<AesGcm256>::from_bytes(
-        &encrypted_ipcp_image_payload.ciphertext[tag_start..],
-    )
-    .map_err(|_| Error::InvalidPayload)?;
-    let mut decrypted_ipcp_image_bytes =
-        Zeroizing::new(encrypted_ipcp_image_payload.ciphertext[..tag_start].to_vec());
-    hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
-        &OpModeR::Base,
-        orb_private_key,
-        &app_public_key,
-        info,
-        decrypted_ipcp_image_bytes.as_mut_slice().into(),
-        aad,
-        &tag,
-    )
-    .map_err(|_| Error::Decryption)?;
-    Ok(decrypted_ipcp_image_bytes)
-}
-
-struct AppEphemeralKeyMaterial {
+struct EphemeralKeyMaterial {
     bytes: Zeroizing<[u8; KEY_LEN]>,
     position: usize,
 }
 
-impl TryRng for AppEphemeralKeyMaterial {
+impl TryRng for EphemeralKeyMaterial {
     type Error = Infallible;
 
     fn try_next_u32(&mut self) -> Result<u32, Infallible> {
@@ -209,18 +194,18 @@ impl TryRng for AppEphemeralKeyMaterial {
         let end = self
             .position
             .checked_add(output.len())
-            .expect("App key material offset overflow");
+            .expect("Ephemeral key material offset overflow");
         output.copy_from_slice(
             self.bytes
                 .get(self.position..end)
-                .expect("App key material exhausted"),
+                .expect("Ephemeral key material exhausted"),
         );
         self.position = end;
         Ok(())
     }
 }
 
-impl TryCryptoRng for AppEphemeralKeyMaterial {}
+impl TryCryptoRng for EphemeralKeyMaterial {}
 
 #[cfg(test)]
 mod tests;
