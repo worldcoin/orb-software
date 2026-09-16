@@ -3,6 +3,9 @@ use orb_relay_messages::{common::v1::AnnounceAppId, prost::Message};
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+const IPCP_INFO: &[u8] = b"worldcoin/ipcp/hpke/v1";
+const IPCP_AAD: &[u8] = b"";
+
 fn fixture(source: &str) -> Value {
     serde_json::from_str(source).unwrap()
 }
@@ -45,23 +48,24 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let public_key_bytes = *pairing_key.public_key();
     let recipient_key = RecipientKey::from_public_key(&public_key_bytes).unwrap();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
-    let mut encrypted_ipcp_image_payload =
-        recipient_key.encrypt(ipcp_image.clone()).unwrap();
+    let mut encrypted_ipcp_image_payload = recipient_key
+        .encrypt(ipcp_image.clone(), IPCP_INFO, IPCP_AAD)
+        .unwrap();
     assert_eq!(*pairing_key.public_key(), public_key_bytes);
     assert_eq!(
         pairing_key
-            .decrypt(&encrypted_ipcp_image_payload)
+            .decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD)
             .unwrap()
             .as_slice(),
         ipcp_image
     );
     assert!(matches!(
-        other_pairing_key.decrypt(&encrypted_ipcp_image_payload),
+        other_pairing_key.decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD),
         Err(Error::Decryption)
     ));
     encrypted_ipcp_image_payload.ciphertext[0] ^= 1;
     assert!(matches!(
-        pairing_key.decrypt(&encrypted_ipcp_image_payload),
+        pairing_key.decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD),
         Err(Error::Decryption)
     ));
 }
@@ -72,8 +76,9 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let recipient_key =
         RecipientKey::from_public_key(pairing_key.public_key()).unwrap();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
-    let encrypted_ipcp_image_payload =
-        recipient_key.encrypt(ipcp_image.clone()).unwrap();
+    let encrypted_ipcp_image_payload = recipient_key
+        .encrypt(ipcp_image.clone(), IPCP_INFO, IPCP_AAD)
+        .unwrap();
     let announcement = AnnounceAppId {
         encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
         ..Default::default()
@@ -83,7 +88,11 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     assert_eq!(decoded, announcement);
     assert_eq!(
         pairing_key
-            .decrypt(&decoded.encrypted_ipcp_payload.unwrap())
+            .decrypt(
+                &decoded.encrypted_ipcp_payload.unwrap(),
+                IPCP_INFO,
+                IPCP_AAD
+            )
             .unwrap()
             .as_slice(),
         ipcp_image
@@ -109,12 +118,12 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
     {
         assert_eq!(f[field].as_u64(), Some(expected), "{field}");
     }
-    assert_eq!(bytes(&f, "info"), INFO);
-    assert_eq!(bytes(&f, "aad"), AAD);
+    assert_eq!(bytes(&f, "info"), IPCP_INFO);
+    assert_eq!(bytes(&f, "aad"), IPCP_AAD);
     let recipient_key = RecipientKey::from_public_key(&bytes(&f, "pkRm")).unwrap();
     let ipcp_image = bytes(&f, "pt");
     let encrypted_ipcp_image_payload = recipient_key
-        .encrypt_with_randomness(&ipcp_image, |output| {
+        .encrypt_with_randomness(&ipcp_image, IPCP_INFO, IPCP_AAD, |output| {
             output.copy_from_slice(&bytes(&f, "ikmE"));
             Ok(())
         })
@@ -132,7 +141,7 @@ fn ipcp_image_fixture_matches_encryption_and_decryption() {
     );
     assert_eq!(
         pairing_key_from_fixture(&f)
-            .decrypt(&encrypted_ipcp_image_payload)
+            .decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD)
             .unwrap()
             .as_slice(),
         ipcp_image
@@ -158,7 +167,7 @@ fn published_cfrg_vector_matches() {
     assert_eq!(encrypted_test_payload.ciphertext, bytes(&f, "ct"));
     assert_eq!(ephemeral_key_material.position, KEY_LEN);
     let decrypted_test_plaintext_bytes = pairing_key
-        .decrypt_with_context(
+        .decrypt(
             &encrypted_test_payload,
             &bytes(&f, "info"),
             &bytes(&f, "aad"),
@@ -171,27 +180,46 @@ fn published_cfrg_vector_matches() {
 }
 
 #[test]
-fn system_randomness_roundtrips_ipcp_image_and_produces_fresh_ephemeral_public_key() {
+fn system_randomness_roundtrips_protocol_contexts_with_fresh_ephemeral_public_keys() {
     let f = ipcp_image_fixture();
     let recipient_key = RecipientKey::from_public_key(&bytes(&f, "pkRm")).unwrap();
     let pairing_key = pairing_key_from_fixture(&f);
-    for test_plaintext_bytes in [bytes(&f, "pt"), Vec::new()] {
-        let first = recipient_key.encrypt(test_plaintext_bytes.clone()).unwrap();
-        let second = recipient_key.encrypt(test_plaintext_bytes.clone()).unwrap();
-        assert_ne!(first.enc, second.enc);
-        for encrypted_test_payload in [first, second] {
-            assert_eq!(encrypted_test_payload.enc.len(), KEY_LEN);
-            assert_eq!(
-                encrypted_test_payload.ciphertext.len(),
-                test_plaintext_bytes.len() + TAG_LEN
-            );
-            assert_eq!(
-                pairing_key
-                    .decrypt(&encrypted_test_payload)
-                    .unwrap()
-                    .as_slice(),
-                test_plaintext_bytes
-            );
+    for (info, aad) in [
+        (IPCP_INFO, IPCP_AAD),
+        (b"another/protocol/v1".as_slice(), b"session:42".as_slice()),
+    ] {
+        for test_plaintext_bytes in [bytes(&f, "pt"), Vec::new()] {
+            let first = recipient_key
+                .encrypt(test_plaintext_bytes.clone(), info, aad)
+                .unwrap();
+            let second = recipient_key
+                .encrypt(test_plaintext_bytes.clone(), info, aad)
+                .unwrap();
+            assert_ne!(first.enc, second.enc);
+            for encrypted_test_payload in [first, second] {
+                assert_eq!(encrypted_test_payload.enc.len(), KEY_LEN);
+                assert_eq!(
+                    encrypted_test_payload.ciphertext.len(),
+                    test_plaintext_bytes.len() + TAG_LEN
+                );
+                assert_eq!(
+                    pairing_key
+                        .decrypt(&encrypted_test_payload, info, aad)
+                        .unwrap()
+                        .as_slice(),
+                    test_plaintext_bytes
+                );
+                if info != IPCP_INFO {
+                    assert!(matches!(
+                        pairing_key.decrypt(
+                            &encrypted_test_payload,
+                            IPCP_INFO,
+                            IPCP_AAD
+                        ),
+                        Err(Error::Decryption)
+                    ));
+                }
+            }
         }
     }
 }
@@ -205,7 +233,7 @@ fn recipient_key_rejects_invalid_keys() {
     assert!(matches!(
         RecipientKey::from_public_key(&[0; KEY_LEN])
             .unwrap()
-            .encrypt(b"test".to_vec()),
+            .encrypt(b"test".to_vec(), IPCP_INFO, IPCP_AAD),
         Err(Error::Encryption)
     ));
 }
@@ -222,8 +250,8 @@ fn all_zero_and_low_order_public_keys_are_rejected() {
         assert!(recipient_key
             .encrypt_with_context(
                 b"test",
-                INFO,
-                AAD,
+                IPCP_INFO,
+                IPCP_AAD,
                 &mut ephemeral_key_material_from_fixture(&f)
             )
             .is_err());
@@ -232,7 +260,9 @@ fn all_zero_and_low_order_public_keys_are_rejected() {
         encrypted_ipcp_image_payload
             .enc
             .copy_from_slice(&invalid_public_key_bytes);
-        assert!(pairing_key.decrypt(&encrypted_ipcp_image_payload).is_err());
+        assert!(pairing_key
+            .decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD)
+            .is_err());
     }
 }
 
@@ -245,20 +275,20 @@ fn truncated_and_extended_payloads_are_rejected() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.enc.truncate(length);
         assert!(matches!(
-            pairing_key.decrypt(&truncated),
+            pairing_key.decrypt(&truncated, IPCP_INFO, IPCP_AAD),
             Err(Error::InvalidPayload)
         ));
     }
     let mut extended = encrypted_ipcp_image_payload.clone();
     extended.enc.push(0);
     assert!(matches!(
-        pairing_key.decrypt(&extended),
+        pairing_key.decrypt(&extended, IPCP_INFO, IPCP_AAD),
         Err(Error::InvalidPayload)
     ));
     for length in 0..encrypted_ipcp_image_payload.ciphertext.len() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.ciphertext.truncate(length);
-        let result = pairing_key.decrypt(&truncated);
+        let result = pairing_key.decrypt(&truncated, IPCP_INFO, IPCP_AAD);
         assert!(
             if length < TAG_LEN {
                 matches!(result, Err(Error::InvalidPayload))
@@ -271,7 +301,7 @@ fn truncated_and_extended_payloads_are_rejected() {
     let mut extended = encrypted_ipcp_image_payload;
     extended.ciphertext.push(0);
     assert!(matches!(
-        pairing_key.decrypt(&extended),
+        pairing_key.decrypt(&extended, IPCP_INFO, IPCP_AAD),
         Err(Error::Decryption)
     ));
 }
@@ -294,7 +324,7 @@ fn moving_bytes_across_payload_field_boundary_is_rejected() {
             original_field_bytes
         );
         assert!(matches!(
-            pairing_key.decrypt(&malformed),
+            pairing_key.decrypt(&malformed, IPCP_INFO, IPCP_AAD),
             Err(Error::InvalidPayload)
         ));
     }
@@ -307,11 +337,11 @@ fn incorrect_info_and_aad_are_rejected() {
     let recipient_key = RecipientKey::from_public_key(&bytes(&f, "pkRm")).unwrap();
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     for (info, aad) in [
-        (b"worldcoin/ipcp/hpke/v2".as_slice(), AAD),
-        (INFO, b"unexpected metadata".as_slice()),
+        (b"worldcoin/ipcp/hpke/v2".as_slice(), IPCP_AAD),
+        (IPCP_INFO, b"unexpected metadata".as_slice()),
     ] {
         assert!(pairing_key
-            .decrypt_with_context(&encrypted_ipcp_image_payload, info, aad)
+            .decrypt(&encrypted_ipcp_image_payload, info, aad)
             .is_err());
         let altered = recipient_key
             .encrypt_with_context(
@@ -321,7 +351,7 @@ fn incorrect_info_and_aad_are_rejected() {
                 &mut ephemeral_key_material_from_fixture(&f),
             )
             .unwrap();
-        assert!(pairing_key.decrypt(&altered).is_err());
+        assert!(pairing_key.decrypt(&altered, IPCP_INFO, IPCP_AAD).is_err());
     }
 }
 
@@ -329,10 +359,11 @@ fn incorrect_info_and_aad_are_rejected() {
 fn encryption_randomness_failure_returns_randomness_error() {
     let recipient_key =
         RecipientKey::from_public_key(&bytes(&ipcp_image_fixture(), "pkRm")).unwrap();
-    let result = recipient_key.encrypt_with_randomness(b"test", |output| {
-        output.fill(0xa5);
-        Err(getrandom::Error::UNSUPPORTED)
-    });
+    let result =
+        recipient_key.encrypt_with_randomness(b"test", IPCP_INFO, IPCP_AAD, |output| {
+            output.fill(0xa5);
+            Err(getrandom::Error::UNSUPPORTED)
+        });
     assert!(matches!(result, Err(Error::Randomness)));
 }
 
@@ -352,7 +383,11 @@ fn ipcp_image_and_ephemeral_key_material_use_zeroizing_guards() {
     fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
     let f = ipcp_image_fixture();
     let mut decrypted_ipcp_image_bytes = pairing_key_from_fixture(&f)
-        .decrypt(&encrypted_ipcp_image_payload_from_fixture(&f))
+        .decrypt(
+            &encrypted_ipcp_image_payload_from_fixture(&f),
+            IPCP_INFO,
+            IPCP_AAD,
+        )
         .unwrap();
     assert_drop_guard(&decrypted_ipcp_image_bytes);
     assert!(!decrypted_ipcp_image_bytes.is_empty());

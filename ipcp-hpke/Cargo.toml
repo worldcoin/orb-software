@@ -1,7 +1,7 @@
 [package]
 name = "orb-ipcp-hpke"
 version = "0.1.0"
-description = "Shared iPCP image HPKE encryption and decryption"
+description = "Shared HPKE encryption and decryption"
 publish = false
 edition.workspace = true
 license.workspace = true

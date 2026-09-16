@@ -14,8 +14,6 @@ use zeroize::Zeroizing;
 
 type Profile = X25519HkdfSha256;
 
-const INFO: &[u8] = b"worldcoin/ipcp/hpke/v1";
-const AAD: &[u8] = b"";
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
@@ -50,13 +48,6 @@ impl PairingKey {
     }
 
     pub fn decrypt(
-        &self,
-        encrypted_payload: &EncryptedPayload,
-    ) -> Result<Zeroizing<Vec<u8>>, Error> {
-        self.decrypt_with_context(encrypted_payload, INFO, AAD)
-    }
-
-    fn decrypt_with_context(
         &self,
         encrypted_payload: &EncryptedPayload,
         info: &[u8],
@@ -102,14 +93,21 @@ impl RecipientKey {
         Ok(Self { public_key })
     }
 
-    pub fn encrypt(&self, plaintext: Vec<u8>) -> Result<EncryptedPayload, Error> {
+    pub fn encrypt(
+        &self,
+        plaintext: Vec<u8>,
+        info: &[u8],
+        aad: &[u8],
+    ) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
-        self.encrypt_with_randomness(&plaintext, getrandom::fill)
+        self.encrypt_with_randomness(&plaintext, info, aad, getrandom::fill)
     }
 
     fn encrypt_with_randomness(
         &self,
         plaintext: &[u8],
+        info: &[u8],
+        aad: &[u8],
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<EncryptedPayload, Error> {
         let mut ephemeral_key_material = EphemeralKeyMaterial {
@@ -117,7 +115,7 @@ impl RecipientKey {
             position: 0,
         };
         fill(ephemeral_key_material.bytes.as_mut()).map_err(|_| Error::Randomness)?;
-        self.encrypt_with_context(plaintext, INFO, AAD, &mut ephemeral_key_material)
+        self.encrypt_with_context(plaintext, info, aad, &mut ephemeral_key_material)
     }
 
     fn encrypt_with_context(
