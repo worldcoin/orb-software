@@ -19,8 +19,8 @@ const TAG_LEN: usize = 16;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
 
 pub struct PairingKey {
-    private_key: <Profile as Kem>::PrivateKey,
-    public_key: [u8; KEY_LEN],
+    pairing_private_key: <Profile as Kem>::PrivateKey,
+    pairing_public_key: [u8; KEY_LEN],
 }
 
 impl PairingKey {
@@ -31,20 +31,22 @@ impl PairingKey {
     fn with_randomness(
         fill: impl FnOnce(&mut [u8]) -> Result<(), getrandom::Error>,
     ) -> Result<Self, Error> {
-        let mut private_key_bytes = Zeroizing::new([0; KEY_LEN]);
-        fill(private_key_bytes.as_mut()).map_err(|_| Error::Randomness)?;
-        let private_key =
-            <Profile as Kem>::PrivateKey::from_bytes(private_key_bytes.as_ref())
-                .map_err(|_| Error::InvalidKey)?;
-        let public_key = Profile::sk_to_pk(&private_key).to_bytes().into();
+        let mut pairing_private_key_bytes = Zeroizing::new([0; KEY_LEN]);
+        fill(pairing_private_key_bytes.as_mut()).map_err(|_| Error::Randomness)?;
+        let pairing_private_key = <Profile as Kem>::PrivateKey::from_bytes(
+            pairing_private_key_bytes.as_ref(),
+        )
+        .map_err(|_| Error::InvalidKey)?;
+        let pairing_public_key =
+            Profile::sk_to_pk(&pairing_private_key).to_bytes().into();
         Ok(Self {
-            private_key,
-            public_key,
+            pairing_private_key,
+            pairing_public_key,
         })
     }
 
-    pub fn public_key(&self) -> &[u8; KEY_LEN] {
-        &self.public_key
+    pub fn pairing_public_key(&self) -> &[u8; KEY_LEN] {
+        &self.pairing_public_key
     }
 
     pub fn decrypt(
@@ -70,7 +72,7 @@ impl PairingKey {
             Zeroizing::new(encrypted_payload.ciphertext[..tag_start].to_vec());
         hpke::single_shot_open_inout_detached::<AesGcm256, HkdfSha256, Profile>(
             &OpModeR::Base,
-            &self.private_key,
+            &self.pairing_private_key,
             &ephemeral_public_key,
             info,
             plaintext.as_mut_slice().into(),
@@ -83,14 +85,17 @@ impl PairingKey {
 }
 
 pub struct RecipientKey {
-    public_key: <Profile as Kem>::PublicKey,
+    recipient_public_key: <Profile as Kem>::PublicKey,
 }
 
 impl RecipientKey {
-    pub fn from_public_key(public_key: &[u8]) -> Result<Self, Error> {
-        let public_key = <Profile as Kem>::PublicKey::from_bytes(public_key)
-            .map_err(|_| Error::InvalidKey)?;
-        Ok(Self { public_key })
+    pub fn from_public_key(recipient_public_key: &[u8]) -> Result<Self, Error> {
+        let recipient_public_key =
+            <Profile as Kem>::PublicKey::from_bytes(recipient_public_key)
+                .map_err(|_| Error::InvalidKey)?;
+        Ok(Self {
+            recipient_public_key,
+        })
     }
 
     pub fn encrypt(
@@ -139,7 +144,7 @@ impl RecipientKey {
                 Profile,
             >(
                 &OpModeS::Base,
-                &self.public_key,
+                &self.recipient_public_key,
                 info,
                 ciphertext[..tag_start].as_mut().into(),
                 aad,

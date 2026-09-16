@@ -44,14 +44,18 @@ fn ephemeral_key_material_from_fixture(fixture: &Value) -> EphemeralKeyMaterial 
 fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let pairing_key = PairingKey::new().unwrap();
     let other_pairing_key = PairingKey::new().unwrap();
-    assert_ne!(pairing_key.public_key(), other_pairing_key.public_key());
-    let public_key_bytes = *pairing_key.public_key();
-    let recipient_key = RecipientKey::from_public_key(&public_key_bytes).unwrap();
+    assert_ne!(
+        pairing_key.pairing_public_key(),
+        other_pairing_key.pairing_public_key()
+    );
+    let pairing_public_key_bytes = *pairing_key.pairing_public_key();
+    let recipient_key =
+        RecipientKey::from_public_key(&pairing_public_key_bytes).unwrap();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let mut encrypted_ipcp_image_payload = recipient_key
         .encrypt(ipcp_image.clone(), IPCP_INFO, IPCP_AAD)
         .unwrap();
-    assert_eq!(*pairing_key.public_key(), public_key_bytes);
+    assert_eq!(*pairing_key.pairing_public_key(), pairing_public_key_bytes);
     assert_eq!(
         pairing_key
             .decrypt(&encrypted_ipcp_image_payload, IPCP_INFO, IPCP_AAD)
@@ -74,7 +78,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let pairing_key = PairingKey::new().unwrap();
     let recipient_key =
-        RecipientKey::from_public_key(pairing_key.public_key()).unwrap();
+        RecipientKey::from_public_key(pairing_key.pairing_public_key()).unwrap();
     let ipcp_image = bytes(&ipcp_image_fixture(), "pt");
     let encrypted_ipcp_image_payload = recipient_key
         .encrypt(ipcp_image.clone(), IPCP_INFO, IPCP_AAD)
