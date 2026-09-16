@@ -32,8 +32,6 @@ impl PairingKey {
     pub fn decrypt(
         &self,
         encrypted_payload: &EncryptedPayload,
-        info: &[u8],
-        aad: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
         if encrypted_payload.enc.len() != KEY_LEN
             || encrypted_payload.ciphertext.len() < TAG_LEN
@@ -54,9 +52,9 @@ impl PairingKey {
             &OpModeR::Base,
             &self.pairing_private_key,
             &ephemeral_public_key,
-            info,
+            &[],
             plaintext.as_mut_slice().into(),
-            aad,
+            &[],
             &tag,
         )
         .map_err(|_| Error::Decryption)?;
@@ -66,8 +64,6 @@ impl PairingKey {
     pub fn encrypt(
         recipient_public_key: &[u8],
         plaintext: Vec<u8>,
-        info: &[u8],
-        aad: &[u8],
     ) -> Result<EncryptedPayload, Error> {
         let plaintext = Zeroizing::new(plaintext);
         let recipient_public_key =
@@ -84,9 +80,9 @@ impl PairingKey {
             hpke::single_shot_seal_inout_detached::<AesGcm256, HkdfSha256, Profile>(
                 &OpModeS::Base,
                 &recipient_public_key,
-                info,
+                &[],
                 ciphertext[..tag_start].as_mut().into(),
-                aad,
+                &[],
             )
             .map_err(|_| Error::Encryption)?;
         ciphertext[tag_start..].copy_from_slice(&tag.to_bytes());
