@@ -142,8 +142,6 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
-                    // Nice to have only: BlueZ may truncate this if ServiceData needs the room.
-                    local_name: Some("Orb".to_owned()),
                     service_data: BTreeMap::from([(service_id, payload.clone())]),
                     timeout: Some(Duration::ZERO),
                     ..Default::default()
