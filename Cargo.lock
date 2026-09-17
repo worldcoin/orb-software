@@ -7732,7 +7732,7 @@ dependencies = [
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=ed1d3b0d6e3b62d3c81a2b52db6c23a331a4eb44)",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.17",
@@ -7952,23 +7952,6 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27#6d43cf5f05874b5e12dfc1272ceafa238e9a6e27"
-dependencies = [
- "blake3",
- "prost 0.14.1",
- "prost-build 0.14.1",
- "prost-types 0.14.1",
- "schemars 0.8.22",
- "serde",
- "thiserror 2.0.17",
- "tonic 0.14.2",
- "tonic-prost",
- "tonic-prost-build",
-]
-
-[[package]]
-name = "orb-relay-messages"
-version = "0.0.0"
 source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=9bc83771b15cbf22796e93a7276040db4d63a64d#9bc83771b15cbf22796e93a7276040db4d63a64d"
 dependencies = [
  "blake3",
@@ -7991,6 +7974,23 @@ dependencies = [
  "prost-types 0.14.1",
  "schemars 0.8.22",
  "serde",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
+name = "orb-relay-messages"
+version = "0.0.0"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=ed1d3b0d6e3b62d3c81a2b52db6c23a331a4eb44#ed1d3b0d6e3b62d3c81a2b52db6c23a331a4eb44"
+dependencies = [
+ "blake3",
+ "prost 0.14.1",
+ "prost-build 0.14.1",
+ "prost-types 0.14.1",
+ "schemars 0.8.22",
+ "serde",
+ "thiserror 2.0.17",
  "tonic 0.14.2",
  "tonic-prost",
  "tonic-prost-build",
