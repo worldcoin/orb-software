@@ -18,6 +18,12 @@ pub struct PairingKey {
     pub pk: <Profile as Kem>::PublicKey,
 }
 
+impl Default for PairingKey {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PairingKey {
     pub fn new() -> Self {
         let (sk, pk) = Profile::gen_keypair();

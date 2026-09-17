@@ -31,8 +31,8 @@ fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayloa
 
 #[test]
 fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
-    let pairing_key = PairingKey::new();
-    let other_pairing_key = PairingKey::new();
+    let pairing_key = PairingKey::default();
+    let other_pairing_key = PairingKey::default();
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
