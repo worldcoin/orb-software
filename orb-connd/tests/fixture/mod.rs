@@ -4,6 +4,7 @@ use async_tempfile::TempDir;
 use async_trait::async_trait;
 use bon::bon;
 use color_eyre::Result;
+use dbus_launch::{BusType, Daemon, Launcher};
 use escargot::CargoBuild;
 use faux::when;
 use mockall::mock;
@@ -43,6 +44,9 @@ use tokio_util::sync::CancellationToken;
 use zbus::Address;
 use zenorb::{zenoh, Zenorb};
 
+mod bluez;
+use bluez::FakeBluez;
+
 pub struct Fixture {
     orb_id: OrbId,
     platform: OrbOsPlatform,
@@ -52,6 +56,7 @@ pub struct Fixture {
     wpa_ctrl: Option<MockWpaCli>,
     registry: Option<crabwire::Registry>,
 
+    pub bluez: FakeBluez,
     pub container_tempdir: TempDir,
     sysfs: PathBuf,
     procfs: PathBuf,
@@ -61,6 +66,8 @@ pub struct Fixture {
 
 pub struct FxHandle {
     pub container: Container,
+    pub cap: OrbCapabilities,
+    pub bluez: FakeBluez,
 
     zenorb: Zenorb,
     zenoh_router_socket: PathBuf,
@@ -75,6 +82,7 @@ pub struct FxHandle {
     dogstatsd_tempdir: TempDir,
 
     pub speare: speare::mini::Ctx,
+    _bluez_bus: Option<Daemon>,
 }
 
 #[bon]
@@ -83,7 +91,8 @@ impl Fixture {
     pub async fn new(
         #[builder(start_fn)] platform: OrbOsPlatform,
         release: OrbRelease,
-        #[builder(default = OrbCapabilities::WifiOnly)] cap: OrbCapabilities,
+        #[builder(default = false)] cellular: bool,
+        #[builder(default = false)] bluetooth: bool,
         wpa_ctrl: Option<MockWpaCli>,
         registry: Option<crabwire::Registry>,
     ) -> Self {
@@ -96,6 +105,11 @@ impl Fixture {
                 .run()
                 .unwrap()
         });
+
+        let cap = OrbCapabilities {
+            cellular,
+            bluetooth,
+        };
 
         let container_tempdir = TempDir::new().await.unwrap();
         let usr_persistent = setup_usr_persistent(&container_tempdir).await;
@@ -111,6 +125,7 @@ impl Fixture {
             cap,
             wpa_ctrl,
             registry,
+            bluez: FakeBluez::default(),
             container_tempdir,
             usr_persistent,
             sysfs,
@@ -148,6 +163,29 @@ impl Fixture {
         if log {
             let _ = orb_telemetry::TelemetryConfig::new().init();
         }
+
+        let mut bluez = std::mem::take(&mut self.bluez);
+        let bluez_bus = if self.cap.bluetooth && self.platform == OrbOsPlatform::Diamond
+        {
+            let bus = task::spawn_blocking(|| {
+                Launcher::daemon()
+                    .bus_type(BusType::Session)
+                    .launch()
+                    .expect("failed to launch Bluetooth test bus")
+            })
+            .await
+            .unwrap();
+
+            unsafe {
+                env::set_var("DBUS_SYSTEM_BUS_ADDRESS", bus.address());
+            }
+
+            bluez.start(bus.address()).await.unwrap();
+
+            Some(bus)
+        } else {
+            None
+        };
 
         let (container, zenoh_router_socket) =
             setup_container(&self.container_tempdir).await;
@@ -257,6 +295,8 @@ impl Fixture {
 
         FxHandle {
             container,
+            cap: self.cap,
+            bluez,
             zenorb,
             zenoh_router_socket,
             dbus,
@@ -266,6 +306,7 @@ impl Fixture {
             dogstatsd,
             dogstatsd_tempdir,
             speare,
+            _bluez_bus: bluez_bus,
         }
     }
 }
@@ -278,10 +319,12 @@ impl Drop for FxHandle {
 }
 
 impl FxHandle {
-    pub async fn stop(self) {
+    pub async fn stop(mut self) {
         self.secure_storage_cancel_token.cancel();
         self.speare.abort_children().unwrap();
+        let bluez_result = self.bluez.stop().await;
         self.container.rm().await;
+        bluez_result.unwrap();
     }
 
     pub async fn connd(&self) -> ConndProxy<'_> {
@@ -290,6 +333,25 @@ impl FxHandle {
 
     pub fn zenoh(&self) -> &Zenorb {
         &self.zenorb
+    }
+
+    pub async fn ble_publisher(&self) -> zenoh::pubsub::Publisher<'_> {
+        self.zenorb
+            .session()
+            .declare_publisher(format!("{}/test/ble_beacon", self.zenorb.orb_id()))
+            .await
+            .unwrap()
+    }
+
+    pub async fn publish_ble(&self, service_id: &str, payload: Option<&[u8]>) {
+        self.ble_publisher()
+            .await
+            .put(
+                serde_json::json!({ "service_id": service_id, "payload": payload })
+                    .to_string(),
+            )
+            .await
+            .unwrap();
     }
 }
 
@@ -308,7 +370,7 @@ async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {
         .await
         .unwrap();
 
-    if cap == OrbCapabilities::CellularAndWifi {
+    if cap.cellular {
         let stats = net_dir.join("wwan0").join("statistics");
         let tx = stats.join("tx_bytes");
         let rx = stats.join("rx_bytes");
@@ -318,6 +380,12 @@ async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {
         fs::write(rx, "0").await.unwrap();
 
         fs::write(net_dir.join("wwan0").join("operstate"), "unknown\n")
+            .await
+            .unwrap();
+    }
+
+    if cap.bluetooth {
+        fs::create_dir_all(sysfs.join("class").join("bluetooth").join("hci0"))
             .await
             .unwrap();
     }

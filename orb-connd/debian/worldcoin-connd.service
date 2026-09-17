@@ -2,6 +2,7 @@
 Description=Worldcoin Connection Daemon
 Requires=NetworkManager.service
 After=NetworkManager.service
+After=bluetooth.service
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
 After=zenohd.service
