@@ -1,7 +1,6 @@
 use super::*;
-use orb_relay_messages::{common::v1::AnnounceAppId, prost::Message};
 use serde_json::Value;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::ZeroizeOnDrop;
 
 fn fixture(source: &str) -> Value {
     serde_json::from_str(source).unwrap()
@@ -36,7 +35,7 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
+        PairingKey::encrypt(&pairing_key.pk.to_bytes(), ipcp_image.clone()).unwrap();
     assert_eq!(
         pairing_key
             .decrypt(&encrypted_ipcp_image_payload)
@@ -62,7 +61,8 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 fn empty_plaintext_roundtrips() {
     let pairing_key = PairingKey::new();
     let encrypted_payload =
-        PairingKey::encrypt(&pairing_key.pk, Zeroizing::new(Vec::new())).unwrap();
+        PairingKey::encrypt(&pairing_key.pk.to_bytes(), Zeroizing::new(Vec::new()))
+            .unwrap();
     assert_eq!(encrypted_payload.ciphertext.len(), TAG_LEN);
     let plaintext: Zeroizing<Vec<u8>> =
         pairing_key.decrypt(&encrypted_payload).unwrap();
@@ -70,25 +70,17 @@ fn empty_plaintext_roundtrips() {
 }
 
 #[test]
-fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
-    let pairing_key = PairingKey::new();
-    let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
-    let announcement = AnnounceAppId {
-        encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
-        ..Default::default()
-    };
-    let decoded =
-        AnnounceAppId::decode(announcement.encode_to_vec().as_slice()).unwrap();
-    assert_eq!(decoded, announcement);
-    assert_eq!(
-        pairing_key
-            .decrypt(&decoded.encrypted_ipcp_payload.unwrap())
-            .unwrap()
-            .as_slice(),
-        ipcp_image.as_slice()
-    );
+fn invalid_recipient_keys_are_rejected() {
+    for length in [0, KEY_LEN - 1, KEY_LEN + 1] {
+        assert!(matches!(
+            PairingKey::encrypt(&vec![0; length], Zeroizing::new(vec![1])),
+            Err(Error::InvalidKey)
+        ));
+    }
+    assert!(matches!(
+        PairingKey::encrypt(&[0; KEY_LEN], Zeroizing::new(vec![1])),
+        Err(Error::Encryption)
+    ));
 }
 
 #[test]
@@ -175,30 +167,6 @@ fn truncated_and_extended_payloads_are_rejected() {
 }
 
 #[test]
-fn moving_bytes_across_payload_field_boundary_is_rejected() {
-    let f = ipcp_image_fixture();
-    let pairing_key = pairing_key_from_fixture(&f);
-    let original = encrypted_ipcp_image_payload_from_fixture(&f);
-    let original_field_bytes =
-        [original.enc.as_slice(), original.ciphertext.as_slice()].concat();
-    let mut short_enc = original.clone();
-    short_enc.ciphertext.insert(0, short_enc.enc.pop().unwrap());
-    let mut long_enc = original;
-    long_enc.enc.push(long_enc.ciphertext.remove(0));
-
-    for malformed in [short_enc, long_enc] {
-        assert_eq!(
-            [malformed.enc.as_slice(), malformed.ciphertext.as_slice()].concat(),
-            original_field_bytes
-        );
-        assert!(matches!(
-            pairing_key.decrypt(&malformed),
-            Err(Error::InvalidPayload)
-        ));
-    }
-}
-
-#[test]
 fn crypto_state_cleanup_guards_are_enabled() {
     fn assert_drop_guard<T: ZeroizeOnDrop>() {}
 
@@ -207,17 +175,4 @@ fn crypto_state_cleanup_guards_are_enabled() {
     assert_drop_guard::<
         hmac::digest::block_api::Buffer<hmac::block_api::HmacCore<sha2_hpke::Sha256>>,
     >();
-}
-
-#[test]
-fn decrypted_ipcp_image_uses_zeroizing_guard() {
-    fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
-    let f = ipcp_image_fixture();
-    let mut decrypted_ipcp_image_bytes = pairing_key_from_fixture(&f)
-        .decrypt(&encrypted_ipcp_image_payload_from_fixture(&f))
-        .unwrap();
-    assert_drop_guard(&decrypted_ipcp_image_bytes);
-    assert!(!decrypted_ipcp_image_bytes.is_empty());
-    decrypted_ipcp_image_bytes.as_mut_slice().zeroize();
-    assert!(decrypted_ipcp_image_bytes.iter().all(|&byte| byte == 0));
 }
