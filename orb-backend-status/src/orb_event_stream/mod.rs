@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use zenorb::zenoh::{bytes::Encoding, sample::Sample};
 
-pub mod reroute;
+pub(crate) mod collector;
 
 mod flusher;
 

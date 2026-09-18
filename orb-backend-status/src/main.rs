@@ -1,22 +1,33 @@
 use color_eyre::eyre::Result;
 use orb_dogd::DogstatsdClient;
-use orb_endpoints::{v2::Endpoints, Backend};
-use orb_info::{orb_os_release::OrbOsRelease, OrbId, OrbJabilId, OrbName};
-use reqwest::Url;
-use std::default::Default;
 use std::time::Duration;
 use tokio::signal::unix::{self, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-const SYSLOG_IDENTIFIER: &str = "worldcoin-backend-status";
+mod startup;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(target_os = "android")]
+    color_eyre::config::HookBuilder::default()
+        .theme(color_eyre::config::Theme::new())
+        .install()?;
+
+    #[cfg(not(target_os = "android"))]
     color_eyre::install()?;
-    let telemetry = orb_telemetry::TelemetryConfig::new()
-        .with_journald(SYSLOG_IDENTIFIER)
-        .init();
+
+    #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+    let args = <startup::android::Args as clap::Parser>::parse();
+
+    let telemetry = orb_telemetry::TelemetryConfig::new();
+
+    #[cfg(all(target_os = "linux", feature = "linux-collectors"))]
+    let telemetry = telemetry.with_journald("worldcoin-backend-status");
+
+    #[cfg(all(target_os = "android", feature = "android-collectors"))]
+    let telemetry = telemetry.with_logcat(c"orb-backend-status");
+    let telemetry = telemetry.init();
 
     let shutdown_token = CancellationToken::new();
 
@@ -33,36 +44,40 @@ async fn main() -> Result<()> {
         }
     });
 
-    // TODO: add better error context
-    let orb_id = OrbId::read().await?;
-    let endpoint = Endpoints::new(Backend::from_env()?, &orb_id).status;
-    let endpoint = Url::parse(endpoint.as_str())?;
+    #[cfg(feature = "linux-collectors")]
+    let config = startup::linux::configure().await?;
+    #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+    let config = {
+        let orb_id = orb_info::OrbId::read().await?;
+        startup::android::configure(args, orb_id).await?
+    };
 
-    let orb_name = OrbName::read().await.unwrap_or_else(|e| {
-        warn!("failed to read orb name: {e:?}");
-        OrbName("unknown".to_string())
-    });
-    let orb_jabil_id = OrbJabilId::read().await.unwrap_or_else(|e| {
-        warn!("failed to read orb jabil id: {e:?}");
-        OrbJabilId("unknown".to_string())
-    });
-
-    let zsession = zenorb::Zenorb::from_cfg(zenorb::default_cfg())
-        .orb_id(orb_id.clone())
+    let zsession = zenorb::Zenorb::from_cfg(config.zenoh)
+        .orb_id(config.orb_id.clone())
         .with_name("orb-backend-status")
         .await?;
 
+    let metrics = match config.metrics_socket {
+        Some(socket) => DogstatsdClient::new_with(
+            4096,
+            25,
+            Duration::from_millis(50),
+            socket,
+            Duration::from_secs(10),
+        ),
+        None => DogstatsdClient::default(),
+    };
+
     let result = orb_backend_status::program()
-        .metrics(DogstatsdClient::default())
-        .dbus(zbus::Connection::session().await?)
+        .metrics(metrics)
+        .collector_config(config.collectors)
         .zsession(&zsession)
-        .endpoint(endpoint)
-        .orb_os_version(OrbOsRelease::read().await?.platform_version())
-        .orb_id(orb_id)
-        .orb_name(orb_name)
-        .orb_jabil_id(orb_jabil_id)
+        .endpoint(config.endpoint)
+        .orb_os_version(config.orb_os_version)
+        .orb_id(config.orb_id)
+        .orb_name(config.orb_name)
+        .orb_jabil_id(config.orb_jabil_id)
         .procfs("/proc")
-        .net_stats_poll_interval(Duration::from_secs(30))
         .sender_interval(Duration::from_secs(30))
         .req_timeout(Duration::from_secs(2))
         .req_min_retry_interval(Duration::from_millis(100))

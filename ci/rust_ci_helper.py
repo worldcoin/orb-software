@@ -5,6 +5,7 @@
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -81,17 +82,22 @@ def workspace_crates():
     return result
 
 
-def build_crate_with_features(*, cargo_profile, targets, features):
-    targets_option = " ".join([f"--target {t}-unknown-linux-gnu" for t in targets])
-    feature_option = " ".join([f"--features {f}" for f in features])
-    run(
-        f"cargo zigbuild --all "
-        f"--locked "  # ensures that the lockfile is up to date.
-        f"--profile {cargo_profile} "
-        f"{targets_option} "
-        f"--no-default-features "
-        f"{feature_option}"
-    )
+def build_crate_with_features(*, crate, cargo_profile, targets, features):
+    command = [
+        "cargo",
+        "zigbuild",
+        "--package",
+        crate["id"],
+        "--locked",
+        "--profile",
+        cargo_profile,
+        "--no-default-features",
+    ]
+    for target in targets:
+        command.extend(["--target", f"{target}-unknown-linux-gnu"])
+    for feature in features:
+        command.extend(["--features", feature])
+    run(shlex.join(command))
 
 
 def build_all_crates(*, cargo_profile, targets):
@@ -245,6 +251,7 @@ def subcmd_build_linux_artifacts(args):
         for flavor_name, features in flavors.items():
             stderr(f"Building crate: name={crate_name}, flavor={flavor_name}")
             build_crate_with_features(
+                crate=crate,
                 cargo_profile=args.cargo_profile,
                 targets=targets,
                 features=features,

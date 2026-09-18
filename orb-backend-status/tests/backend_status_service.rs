@@ -1,3 +1,5 @@
+#![cfg(feature = "linux-collectors")]
+
 mod fixture;
 
 use fixture::{mocks, Fixture};
