@@ -55,13 +55,13 @@ impl PairingKey {
     }
 
     pub fn encrypt(
-        recipient_pk: &<Profile as Kem>::PublicKey,
+        recipient_pk: &RecipientPublicKey,
         plaintext: Zeroizing<Vec<u8>>,
     ) -> Result<EncryptedPayload, Error> {
         let (ephemeral_public_key, ciphertext) =
             hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
                 &OpModeS::Base,
-                recipient_pk,
+                &recipient_pk.0,
                 &[],
                 &plaintext,
                 &[],
@@ -71,6 +71,28 @@ impl PairingKey {
             enc: ephemeral_public_key.to_bytes().to_vec(),
             ciphertext,
         })
+    }
+}
+
+pub struct RecipientPublicKey(<Profile as Kem>::PublicKey);
+
+impl TryFrom<&[u8]> for RecipientPublicKey {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        <Profile as Kem>::PublicKey::from_bytes(bytes)
+            .map(Self)
+            .map_err(|_| Error::InvalidKey)
+    }
+}
+
+impl RecipientPublicKey {
+    pub fn from_pk(key: <Profile as Kem>::PublicKey) -> Self {
+        Self(key)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_bytes().to_vec()
     }
 }
 
