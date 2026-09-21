@@ -7911,6 +7911,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-pcp"
+version = "0.1.0"
+dependencies = [
+ "data-encoding",
+ "serde_json",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "orb-pcp-defs"
 version = "0.0.0"
 dependencies = [

@@ -41,6 +41,7 @@ members = [
 	"orb-monitoring-auth",
 	"orbd",
 	"ota-backend",
+	"pcp",
 	"pcp-defs/rust",
 	"prelude",
 	"qr-link",

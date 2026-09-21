@@ -1,0 +1,14 @@
+[package]
+name = "orb-pcp"
+version = "0.1.0"
+description = "Personal Custody Package construction primitives"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+data-encoding.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
