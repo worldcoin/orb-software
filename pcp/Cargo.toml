@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 data-encoding.workspace = true
 flate2.workspace = true
+orb-pcp-defs = { path = "../pcp-defs/rust" }
 serde_json.workspace = true
 tar.workspace = true
 thiserror.workspace = true

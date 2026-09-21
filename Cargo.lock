@@ -7916,6 +7916,7 @@ version = "0.1.0"
 dependencies = [
  "data-encoding",
  "flate2",
+ "orb-pcp-defs",
  "serde_json",
  "tar",
  "thiserror 2.0.17",
