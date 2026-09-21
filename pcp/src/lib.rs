@@ -1,21 +1,33 @@
 //! Portable Personal Custody Package construction.
 //!
-//! [`builder`] composes payload encoding, legacy Hyrax generation, tier layout,
-//! digest signing and sealed-box encryption into a construction prototype.
-//! Consumer integration and untrusted-package verification remain separate work.
+//! [build] assembles, hashes, signs and encrypts consumer-prepared inputs.
+//! Callers supply encoded PNGs, biometric values/shares, authorized recipient
+//! keys and a callback signing the raw SHA-256 digest. Call from a blocking
+//! worker in async applications. This is not an untrusted-package verifier.
+//! Plaintext intermediates are not all automatically zeroized.
 //!
-//! Building requires `protoc` for the `orb-pcp-defs` schemas and libsodium
-//! discoverable through `pkg-config`.
+//! Building requires protoc and libsodium discoverable through pkg-config.
 
 #![forbid(unsafe_code)]
 
-pub mod archive;
-pub mod builder;
-pub mod commitment;
-pub mod di;
-pub mod encryption;
-pub mod inner;
-pub mod layout;
-pub mod manifest;
-pub mod metadata;
-pub mod payload;
+mod archive;
+mod builder;
+mod crypto;
+mod manifest;
+mod metadata;
+mod payload;
+
+pub use archive::{
+    ArchiveError, FraudImages, InnerArchiveError, IrisEye, IrisFrame,
+    NormalizedIrisFrame, PackageImages,
+};
+pub use builder::{
+    build, BiometricData, BiometricPolicy, BuildError, BuildRequest, IrisShares,
+    Package, PcpVersion,
+};
+pub use crypto::{CommitmentError, SealingError};
+pub use manifest::{ManifestError, SigningError};
+pub use metadata::{MetadataError, PackageInfo};
+pub use payload::{
+    BackendKey, BackendKeys, DiEncodingError, DiEye, FaceEmbedding, IrisCodes,
+};

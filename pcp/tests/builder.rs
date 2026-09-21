@@ -1,8 +1,8 @@
 use std::time::UNIX_EPOCH;
 
 use orb_pcp::{
-    builder::{self, Biometrics, Request, Version},
-    metadata, payload,
+    self as pcp, BackendKey, BackendKeys, BiometricPolicy, BuildError, BuildRequest,
+    MetadataError, PackageInfo, PcpVersion,
 };
 use rand::{CryptoRng, RngCore};
 use sodiumoxide::crypto::box_;
@@ -11,15 +11,15 @@ use sodiumoxide::crypto::box_;
 #[error("synthetic signing failure")]
 struct SignerError;
 
-fn request(key: &[u8; 32]) -> Request<'_> {
-    let backend = || payload::BackendKey {
+fn request(key: &[u8; 32]) -> BuildRequest<'_> {
+    let backend = || BackendKey {
         public_key: key,
         encrypted_private_key: "synthetic-envelope",
     };
-    Request {
-        version: Version::V2_8,
+    BuildRequest {
+        version: PcpVersion::V2_8,
         timestamp: 1,
-        info: metadata::Info {
+        info: PackageInfo {
             signup_id: "synthetic",
             signup_reason: "test",
             orb_id: "orb",
@@ -33,13 +33,13 @@ fn request(key: &[u8; 32]) -> Request<'_> {
             device_public_key: Some("device"),
         },
         user_public_key: key,
-        backend_keys: payload::BackendKeys {
+        backend_keys: BackendKeys {
             iris: backend(),
             normalized_iris: backend(),
             face: backend(),
             tier2: backend(),
         },
-        biometrics: Biometrics::Redacted,
+        biometrics: BiometricPolicy::Redacted,
     }
 }
 
@@ -64,21 +64,18 @@ impl RngCore for FailingRng {
 
 #[test]
 fn version_device_binding_mismatches_fail_before_signing() {
-    for version in [Version::V2_7, Version::V2_8] {
+    for version in [PcpVersion::V2_7, PcpVersion::V2_8] {
         let mut input = request(&[0; 32]);
         input.version = version;
-        if version == Version::V2_8 {
+        if version == PcpVersion::V2_8 {
             input.info.device_public_key = None;
         }
-        let result = builder::build(
+        let result = pcp::build(
             &input,
             &mut FailingRng,
             |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
         );
-        assert!(matches!(
-            result,
-            Err(builder::Error::DeviceKeyVersionMismatch)
-        ));
+        assert!(matches!(result, Err(BuildError::DeviceKeyVersionMismatch)));
     }
 }
 
@@ -86,16 +83,14 @@ fn version_device_binding_mismatches_fail_before_signing() {
 fn oversized_archive_timestamp_fails_before_signing() {
     let mut input = request(&[0; 32]);
     input.timestamp = u64::from(u32::MAX) + 1;
-    let result = builder::build(
+    let result = pcp::build(
         &input,
         &mut FailingRng,
         |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
     );
     assert!(matches!(
         result,
-        Err(builder::Error::Archive(
-            orb_pcp::archive::Error::TimestampOutOfRange
-        ))
+        Err(BuildError::Archive(pcp::ArchiveError::TimestampOutOfRange))
     ));
 }
 
@@ -103,29 +98,27 @@ fn oversized_archive_timestamp_fails_before_signing() {
 fn randomness_failure_returns_no_package_or_signature() {
     sodiumoxide::init().unwrap();
     let (key, _) = box_::gen_keypair();
-    let result = builder::build(
+    let result = pcp::build(
         &request(&key.0),
         &mut FailingRng,
         |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
     );
     assert!(matches!(
         result,
-        Err(builder::Error::Metadata(metadata::Error::Randomness(_)))
+        Err(BuildError::Metadata(MetadataError::Randomness(_)))
     ));
 }
 
 #[test]
 fn invalid_user_recipient_returns_no_package_or_signature() {
-    let result = builder::build(
+    let result = pcp::build(
         &request(&[0; 32]),
         &mut rand::rngs::OsRng,
         |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
     );
     assert!(matches!(
         result,
-        Err(builder::Error::Encryption(
-            orb_pcp::encryption::Error::InvalidRecipient
-        ))
+        Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
     ));
 }
 
@@ -134,15 +127,13 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
     sodiumoxide::init().unwrap();
     let (key, _) = box_::gen_keypair();
     let mut calls = 0;
-    let result = builder::build(&request(&key.0), &mut rand::rngs::OsRng, |_| {
+    let result = pcp::build(&request(&key.0), &mut rand::rngs::OsRng, |_| {
         calls += 1;
         Err::<Vec<u8>, _>(SignerError)
     });
     assert_eq!(calls, 1);
     assert!(matches!(
         result,
-        Err(builder::Error::Signing(
-            orb_pcp::manifest::SigningError::Signer(SignerError)
-        ))
+        Err(BuildError::Signing(pcp::SigningError::Signer(SignerError)))
     ));
 }

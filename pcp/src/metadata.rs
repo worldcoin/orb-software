@@ -12,7 +12,10 @@ use rand::{CryptoRng, RngCore};
 use ring::digest::{Context, SHA256};
 use serde_json::json;
 
-pub struct Info<'a> {
+/// Caller-authorized metadata. The legacy manifest covers salted identity fields,
+/// but not the certificate, image IDs or `info.json` as a whole. Construction
+/// does not authenticate these inputs.
+pub struct PackageInfo<'a> {
     pub signup_id: &'a str,
     pub signup_reason: &'a str,
     pub orb_id: &'a str,
@@ -28,7 +31,7 @@ pub struct Info<'a> {
     pub device_public_key: Option<&'a str>,
 }
 
-pub struct IrisImageIds<'a> {
+pub(crate) struct IrisImageIds<'a> {
     pub primary: &'a str,
     pub multiframe: &'a [&'a str],
 }
@@ -36,7 +39,7 @@ pub struct IrisImageIds<'a> {
 /// Availability is distinct from redaction. The current wire profile requires
 /// both eye groups and a thumbnail ID; absent groups return an error. Optional
 /// groups preserve that distinction for future partial-data support.
-pub struct ImageIds<'a> {
+pub(crate) struct ImageIds<'a> {
     pub left: Option<IrisImageIds<'a>>,
     pub right: Option<IrisImageIds<'a>>,
     pub thumbnail: Option<&'a str>,
@@ -46,19 +49,19 @@ pub struct ImageIds<'a> {
 
 /// The higher-level builder must derive this choice from its single package
 /// redaction decision, together with payload and manifest inclusion.
-pub enum Images<'a> {
+pub(crate) enum ImageIdPolicy<'a> {
     Redacted,
     Included(ImageIds<'a>),
 }
 
-pub struct Encoded {
+pub(crate) struct EncodedMetadata {
     pub info_json: Vec<u8>,
     /// Salted identity metadata only; no image IDs or certificate digest.
     pub hashes: BTreeMap<&'static str, [u8; 32]>,
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum MetadataError {
     #[error("missing required metadata image ID: {field}")]
     MissingImageId { field: &'static str },
     #[error("could not generate metadata salt")]
@@ -75,25 +78,25 @@ pub enum Error {
 /// Capture time uses whole Unix seconds, clamping pre-epoch times to zero.
 /// Redaction clears all image IDs but retains identity metadata and its hashes.
 /// Missing included image groups are rejected before drawing randomness.
-pub fn encode(
-    info: &Info<'_>,
-    images: &Images<'_>,
+pub(crate) fn encode(
+    info: &PackageInfo<'_>,
+    images: &ImageIdPolicy<'_>,
     rng: &mut (impl RngCore + CryptoRng),
-) -> Result<Encoded, Error> {
+) -> Result<EncodedMetadata, MetadataError> {
     let empty_eye = IrisImageIds {
         primary: "",
         multiframe: &[],
     };
     let (left, right, thumbnail, left_aggregate, right_aggregate) = match images {
-        Images::Redacted => (&empty_eye, &empty_eye, "", &[][..], &[][..]),
-        Images::Included(ids) => (
-            ids.left.as_ref().ok_or(Error::MissingImageId {
+        ImageIdPolicy::Redacted => (&empty_eye, &empty_eye, "", &[][..], &[][..]),
+        ImageIdPolicy::Included(ids) => (
+            ids.left.as_ref().ok_or(MetadataError::MissingImageId {
                 field: "left_ir_image_id",
             })?,
-            ids.right.as_ref().ok_or(Error::MissingImageId {
+            ids.right.as_ref().ok_or(MetadataError::MissingImageId {
                 field: "right_ir_image_id",
             })?,
-            ids.thumbnail.ok_or(Error::MissingImageId {
+            ids.thumbnail.ok_or(MetadataError::MissingImageId {
                 field: "thumbnail_image_id",
             })?,
             ids.left_iris_code_aggregate,
@@ -141,7 +144,8 @@ pub fn encode(
     .chain(info.device_public_key.map(|key| ("device_public_key", key)))
     {
         let mut salt = [0; 16];
-        rng.try_fill_bytes(&mut salt).map_err(Error::Randomness)?;
+        rng.try_fill_bytes(&mut salt)
+            .map_err(MetadataError::Randomness)?;
         let salt = HEXLOWER.encode(&salt);
         let mut hash = Context::new(&SHA256);
         hash.update(value.as_bytes());
@@ -156,8 +160,12 @@ pub fn encode(
         fields.insert(name.to_owned(), json!(value));
         fields.insert(format!("{name}_salt"), json!(salt));
     }
-    Ok(Encoded {
+    Ok(EncodedMetadata {
         info_json: serde_json::to_vec(&fields)?,
         hashes,
     })
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/metadata.rs"]
+mod tests;

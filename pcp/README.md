@@ -25,10 +25,20 @@ example's P-256 prehash signature, and checks the complete manifest against
 decrypted payloads, salted metadata, and version-3 encrypted tier hashes. It only
 prints version, redaction state, encrypted lengths and success; it writes no
 packages, keys or payloads to disk. The example is also an integration test.
+It includes extra captured IR images without normalized outputs, as supported
+by the existing format, and checks their files, metadata IDs and manifest hashes.
 
 P-256 is an example signer choice, not a requirement of the library. Certificates,
 embeddings and shares in the example are placeholders, not a real signup or a
 proof of biometric validity.
+
+## API
+
+Use `orb_pcp::build` with a `BuildRequest` and explicit `PcpVersion`.
+`BiometricPolicy::Included(&BiometricData)` supplies biometric inputs;
+`BiometricPolicy::Redacted` omits them. Input types and errors are exported
+directly from `orb_pcp`; archive layout and intermediate encoders are private.
+See `examples/build_pcp.rs` for a complete caller using this API.
 
 ## Scope and limitations
 
@@ -38,7 +48,7 @@ The consumer owns signer/recipient authorization, signer deadlines and retries,
 PNG encoding, quantization and secret sharing. Plaintext intermediates are not
 all automatically zeroized.
 
-`Biometrics::Redacted` removes biometric files, their hashes and image IDs
+`BiometricPolicy::Redacted` removes biometric files, their hashes and image IDs
 together; it deliberately retains identity/signup metadata. `Included` accepts
 the currently supported complete profile. Optional input fields anticipate
 partial-data support, but the existing wire behavior is preserved until that

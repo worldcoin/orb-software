@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
 
 use data_encoding::{BASE64, HEXLOWER};
 use flate2::read::GzDecoder;
-use orb_pcp::{builder, inner, metadata, payload};
+use orb_pcp as pcp;
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey,
@@ -31,30 +31,30 @@ pub fn run() -> Result<()> {
     sodiumoxide::init().map_err(|()| "libsodium initialization failed")?;
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
-    let extra_left = [inner::Frame {
+    let extra_left = [pcp::IrisFrame {
         image_id: "synthetic-extra-left",
         ir_png: &png,
         normalized: None,
     }];
-    let extra_right = [inner::Frame {
+    let extra_right = [pcp::IrisFrame {
         image_id: "synthetic-extra-right",
         ir_png: &png,
         normalized: None,
     }];
-    let included = builder::Included {
-        images: inner::Images {
-            left: Some(inner::Eye {
+    let included = pcp::BiometricData {
+        images: pcp::PackageImages {
+            left: Some(pcp::IrisEye {
                 primary: frame("synthetic-left", &png, &normalized),
                 multiframe: &extra_left,
             }),
-            right: Some(inner::Eye {
+            right: Some(pcp::IrisEye {
                 primary: frame("synthetic-right", &png, &normalized),
                 multiframe: &extra_right,
             }),
             thumbnail_png: Some(&png),
             face_ir_png: Some(&png),
             thermal_png: Some(&png),
-            fraud: Some(inner::Fraud {
+            fraud: Some(pcp::FraudImages {
                 scc_rgb_png: &png,
                 left_rgb_png: &png,
                 right_rgb_png: &png,
@@ -68,20 +68,20 @@ pub fn run() -> Result<()> {
         thumbnail_image_id: Some("synthetic-thumbnail"),
         left_iris_code_aggregate_image_ids: &["synthetic-left"],
         right_iris_code_aggregate_image_ids: &["synthetic-right"],
-        face_embeddings: &[payload::FaceEmbedding {
+        face_embeddings: &[pcp::FaceEmbedding {
             embedding: "synthetic-embedding",
             embedding_type: "synthetic",
             embedding_version: "example",
             embedding_inference_backend: "none",
         }],
-        iris_codes: payload::IrisCodes {
+        iris_codes: pcp::IrisCodes {
             iris_version: Some("synthetic"),
             left_iris_code: Some("synthetic-left-iris"),
             left_mask_code: Some("synthetic-left-mask"),
             right_iris_code: Some("synthetic-right-iris"),
             right_mask_code: Some("synthetic-right-mask"),
         },
-        iris_shares: builder::IrisShares {
+        iris_shares: pcp::IrisShares {
             version: "synthetic",
             left_iris: ["synthetic-share"; 3],
             left_mask: ["synthetic-share"; 3],
@@ -94,9 +94,9 @@ pub fn run() -> Result<()> {
     };
 
     for version in [
-        builder::Version::V2_7,
-        builder::Version::V2_8,
-        builder::Version::V3_0,
+        pcp::PcpVersion::V2_7,
+        pcp::PcpVersion::V2_8,
+        pcp::PcpVersion::V3_0,
     ] {
         for redacted in [false, true] {
             let user = box_::gen_keypair();
@@ -104,10 +104,10 @@ pub fn run() -> Result<()> {
             let encrypted_keys: [String; 4] = std::array::from_fn(|index| {
                 BASE64.encode(&sealedbox::seal(backends[index].1.as_ref(), &user.0))
             });
-            let request = builder::Request {
+            let request = pcp::BuildRequest {
                 version,
                 timestamp: TIMESTAMP,
-                info: metadata::Info {
+                info: pcp::PackageInfo {
                     signup_id: "synthetic-signup",
                     signup_reason: "synthetic-example",
                     orb_id: "synthetic-orb",
@@ -120,26 +120,26 @@ pub fn run() -> Result<()> {
                     orb_country: "XX",
                     orb_public_key_certificate:
                         b"synthetic-placeholder-not-a-certificate",
-                    device_public_key: (version != builder::Version::V2_7)
+                    device_public_key: (version != pcp::PcpVersion::V2_7)
                         .then_some("synthetic-device-key"),
                 },
                 user_public_key: &user.0 .0,
-                backend_keys: payload::BackendKeys {
+                backend_keys: pcp::BackendKeys {
                     iris: backend_key(&backends[0], &encrypted_keys[0]),
                     normalized_iris: backend_key(&backends[1], &encrypted_keys[1]),
                     face: backend_key(&backends[2], &encrypted_keys[2]),
                     tier2: backend_key(&backends[3], &encrypted_keys[3]),
                 },
                 biometrics: if redacted {
-                    builder::Biometrics::Redacted
+                    pcp::BiometricPolicy::Redacted
                 } else {
-                    builder::Biometrics::Included(&included)
+                    pcp::BiometricPolicy::Included(&included)
                 },
             };
             // P-256 is only this example's caller-owned signer choice.
             let signer = SigningKey::random(&mut OsRng);
             let mut calls = 0;
-            let package = builder::build(&request, &mut OsRng, |hash| {
+            let package = pcp::build(&request, &mut OsRng, |hash| {
                 calls += 1;
                 let signature: Signature = signer.sign_prehash(hash)?;
                 Ok::<_, p256::ecdsa::Error>(signature.to_der().as_bytes().to_vec())
@@ -155,11 +155,11 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> inner::Frame<'a> {
-    inner::Frame {
+fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> pcp::IrisFrame<'a> {
+    pcp::IrisFrame {
         image_id: id,
         ir_png: png,
-        normalized: Some(inner::NormalizedFrame {
+        normalized: Some(pcp::NormalizedIrisFrame {
             image: data,
             mask: data,
             image_resized: data,
@@ -168,8 +168,8 @@ fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> inner::Frame<'a> {
     }
 }
 
-fn backend_key<'a>(pair: &'a KeyPair, encrypted: &'a str) -> payload::BackendKey<'a> {
-    payload::BackendKey {
+fn backend_key<'a>(pair: &'a KeyPair, encrypted: &'a str) -> pcp::BackendKey<'a> {
+    pcp::BackendKey {
         public_key: &pair.0 .0,
         encrypted_private_key: encrypted,
     }
@@ -216,8 +216,8 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
 }
 
 fn verify(
-    package: &builder::Package,
-    version: builder::Version,
+    package: &pcp::Package,
+    version: pcp::PcpVersion,
     redacted: bool,
     user: &KeyPair,
     backends: &[KeyPair; 4],
@@ -256,7 +256,7 @@ fn verify(
     }
     assert_eq!(
         expected.len(),
-        if version == builder::Version::V2_7 {
+        if version == pcp::PcpVersion::V2_7 {
             9
         } else {
             10
@@ -298,9 +298,9 @@ fn verify(
         hash(&tier0["backend_keys.json"]),
     );
     let wire_version = match version {
-        builder::Version::V2_7 => "2.7",
-        builder::Version::V2_8 => "2.8",
-        builder::Version::V3_0 => {
+        pcp::PcpVersion::V2_7 => "2.7",
+        pcp::PcpVersion::V2_8 => "2.8",
+        pcp::PcpVersion::V3_0 => {
             expected.insert("tier_1".to_owned(), hash(&package.tier1));
             expected.insert("tier_2".to_owned(), hash(&package.tier2));
             for name in ["tier_3", "tier_4", "tier_5"] {
@@ -312,7 +312,7 @@ fn verify(
     expected.insert("version".to_owned(), wire_version.to_owned());
     assert_eq!(
         info.get("device_public_key").is_some(),
-        version != builder::Version::V2_7
+        version != pcp::PcpVersion::V2_7
     );
     if redacted {
         assert_eq!(tier0.len(), 4);
@@ -347,7 +347,7 @@ fn verify(
             info["right_ir_multiframe_image_ids"],
             serde_json::json!(["synthetic-extra-right"])
         );
-        let archives = if version == builder::Version::V3_0 {
+        let archives = if version == pcp::PcpVersion::V3_0 {
             assert_eq!(tier0.len(), 13);
             assert_eq!(tier1.len(), 4);
             assert_eq!(tier2.len(), 1);
@@ -389,7 +389,7 @@ fn verify(
                 );
             }
         }
-        let modalities = if version == builder::Version::V3_0 {
+        let modalities = if version == pcp::PcpVersion::V3_0 {
             files(&tier2["face_ir_and_thermal.tar"])?
         } else {
             files(&open(&tier0["face_ir_and_thermal.tar"], &backends[3])?)?

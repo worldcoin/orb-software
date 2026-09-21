@@ -10,10 +10,10 @@ use std::collections::BTreeMap;
 
 use rand::{CryptoRng, RngCore};
 
-use crate::{archive, di, encryption, inner, layout, manifest, metadata, payload};
+use crate::{archive, crypto, manifest, metadata, payload};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Version {
+pub enum PcpVersion {
     V2_7,
     V2_8,
     V3_0,
@@ -28,34 +28,40 @@ pub struct IrisShares<'a> {
     pub right_mask: [&'a str; 3],
 }
 
-pub struct Included<'a> {
-    pub images: inner::Images<'a>,
+/// Consumer-prepared data. Encoding does not verify that shares reconstruct the
+/// supplied codes or embeddings. Hyrax commitments are generated from the
+/// supplied normalized bytes; imported commitments are not accepted.
+pub struct BiometricData<'a> {
+    pub images: archive::PackageImages<'a>,
+    /// Required in the current profile, even when the thumbnail PNG is absent.
     pub thumbnail_image_id: Option<&'a str>,
     pub left_iris_code_aggregate_image_ids: &'a [&'a str],
     pub right_iris_code_aggregate_image_ids: &'a [&'a str],
     pub face_embeddings: &'a [payload::FaceEmbedding<'a>],
     pub iris_codes: payload::IrisCodes<'a>,
     pub iris_shares: IrisShares<'a>,
-    pub di_left: Option<&'a di::Eye<'a>>,
-    pub di_right: Option<&'a di::Eye<'a>>,
+    /// If either DI eye is absent, both are ignored and all four DI files are empty.
+    pub di_left: Option<&'a payload::DiEye<'a>>,
+    /// If either DI eye is absent, both are ignored and all four DI files are empty.
+    pub di_right: Option<&'a payload::DiEye<'a>>,
     pub di_shares_version: &'a str,
 }
 
 /// One privacy decision controls files, manifest hashes and metadata image IDs.
-pub enum Biometrics<'a> {
+pub enum BiometricPolicy<'a> {
     Redacted,
-    Included(&'a Included<'a>),
+    Included(&'a BiometricData<'a>),
 }
 
-pub struct Request<'a> {
-    pub version: Version,
+pub struct BuildRequest<'a> {
+    pub version: PcpVersion,
     /// Whole Unix seconds used for archive and gzip headers.
     pub timestamp: u64,
-    pub info: metadata::Info<'a>,
+    pub info: metadata::PackageInfo<'a>,
     pub user_public_key: &'a [u8; 32],
     /// These same public keys are serialized and used for inner encryption.
     pub backend_keys: payload::BackendKeys<'a>,
-    pub biometrics: Biometrics<'a>,
+    pub biometrics: BiometricPolicy<'a>,
 }
 
 /// Final encrypted tiers and SHA-256 checksums of those ciphertext bytes.
@@ -69,23 +75,23 @@ pub struct Package {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error<E> {
+pub enum BuildError<E> {
     #[error("device key presence does not match the requested PCP version")]
     DeviceKeyVersionMismatch,
     #[error("duplicate package hash name")]
     DuplicateHash,
     #[error("metadata construction failed")]
-    Metadata(#[from] metadata::Error),
+    Metadata(#[from] metadata::MetadataError),
     #[error("inner archive construction failed")]
-    Inner(#[from] inner::Error),
+    Inner(#[from] archive::InnerArchiveError),
     #[error("payload serialization failed")]
     Json(#[from] serde_json::Error),
     #[error("DI encoding failed")]
-    Di(#[from] di::Error),
+    Di(#[from] payload::DiEncodingError),
     #[error("archive encoding failed")]
-    Archive(#[from] archive::Error),
+    Archive(#[from] archive::ArchiveError),
     #[error("encryption failed")]
-    Encryption(#[from] encryption::Error),
+    Encryption(#[from] crypto::SealingError),
     #[error("manifest signing failed")]
     Signing(#[from] manifest::SigningError<E>),
 }
@@ -95,29 +101,29 @@ pub enum Error<E> {
 /// deadline policy. V2.7 requires no device key; V2.8 requires one; V3 accepts
 /// either. Version negotiation remains a consumer responsibility.
 pub fn build<E>(
-    request: &Request<'_>,
+    request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
     sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
-) -> Result<Package, Error<E>> {
+) -> Result<Package, BuildError<E>> {
     match (request.version, request.info.device_public_key.is_some()) {
-        (Version::V2_7, true) | (Version::V2_8, false) => {
-            return Err(Error::DeviceKeyVersionMismatch)
+        (PcpVersion::V2_7, true) | (PcpVersion::V2_8, false) => {
+            return Err(BuildError::DeviceKeyVersionMismatch)
         }
         _ => (),
     }
     if request.timestamp > u64::from(u32::MAX) {
-        return Err(archive::Error::TimestampOutOfRange.into());
+        return Err(archive::ArchiveError::TimestampOutOfRange.into());
     }
     let format = match request.version {
-        Version::V2_7 | Version::V2_8 => layout::Format::V2,
-        Version::V3_0 => layout::Format::V3,
+        PcpVersion::V2_7 | PcpVersion::V2_8 => archive::TierFormat::V2,
+        PcpVersion::V3_0 => archive::TierFormat::V3,
     };
     let backend_keys_json = payload::backend_keys(&request.backend_keys)?;
     let mut hashes =
         BTreeMap::from([("backend_keys.json".to_owned(), sha256(&backend_keys_json))]);
     let prepared = match &request.biometrics {
-        Biometrics::Redacted => None,
-        Biometrics::Included(input) => Some(prepare(input, request, rng)?),
+        BiometricPolicy::Redacted => None,
+        BiometricPolicy::Included(input) => Some(prepare(input, request, rng)?),
     };
     if let Some(prepared) = &prepared {
         for (name, hash) in &prepared.archives.hashes {
@@ -126,7 +132,7 @@ pub fn build<E>(
     }
     let biometric_files = prepared.as_ref().map(Prepared::layout);
     let auxiliary =
-        layout::auxiliary_tiers(format, request.timestamp, biometric_files.as_ref())?;
+        archive::auxiliary_tiers(format, request.timestamp, biometric_files.as_ref())?;
     let tier1 = seal_tier(&auxiliary.tier1, request, "tier1.tar.gz")?;
     let tier2 = seal_tier(&auxiliary.tier2, request, "tier2.tar.gz")?;
     let tier1_checksum = sha256(&tier1);
@@ -137,9 +143,9 @@ pub fn build<E>(
         insert_hash(&mut hashes, name.to_owned(), hash)?;
     }
     let version = match request.version {
-        Version::V2_7 => manifest::Version::V2_7,
-        Version::V2_8 => manifest::Version::V2_8,
-        Version::V3_0 => manifest::Version::V3_0 {
+        PcpVersion::V2_7 => manifest::ManifestFormat::V2_7,
+        PcpVersion::V2_8 => manifest::ManifestFormat::V2_8,
+        PcpVersion::V3_0 => manifest::ManifestFormat::V3_0 {
             tier_1: tier1_checksum,
             tier_2: tier2_checksum,
         },
@@ -149,10 +155,10 @@ pub fn build<E>(
         hashes.iter().map(|(name, hash)| (name.as_str(), *hash)),
         sign_digest,
     )?;
-    let tier0 = layout::tier0(
+    let tier0 = archive::tier0(
         format,
         request.timestamp,
-        layout::Tier0Files {
+        archive::Tier0Files {
             info_json: &info.info_json,
             hashes_json: &signed.hashes_json,
             hashes_signature: &signed.hashes_signature,
@@ -172,17 +178,17 @@ pub fn build<E>(
 }
 
 struct Prepared {
-    archives: inner::Encoded,
+    archives: archive::InnerArchives,
     face_embeddings: Vec<u8>,
     iris_codes: Vec<u8>,
     iris_shares: [Vec<u8>; 3],
-    di: di::Encoded,
+    di: payload::EncodedDi,
 }
 
 impl Prepared {
-    fn layout(&self) -> layout::Biometrics<'_> {
-        layout::Biometrics {
-            archives: layout::BiometricArchives {
+    fn layout(&self) -> archive::PreparedBiometricFiles<'_> {
+        archive::PreparedBiometricFiles {
+            archives: archive::BiometricArchives {
                 iris_sealed: &self.archives.iris,
                 normalized_iris_sealed: &self.archives.normalized_iris,
                 face_sealed: &self.archives.face,
@@ -207,26 +213,24 @@ impl Prepared {
 }
 
 fn prepare<E>(
-    input: &Included<'_>,
-    request: &Request<'_>,
+    input: &BiometricData<'_>,
+    request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
-) -> Result<Prepared, Error<E>> {
-    let mut archives = inner::encode(request.timestamp, &input.images, rng)?;
-    archives.iris =
-        encryption::seal(&archives.iris, request.backend_keys.iris.public_key)?;
-    archives.normalized_iris = encryption::seal(
+) -> Result<Prepared, BuildError<E>> {
+    let mut archives = archive::encode_inner(request.timestamp, &input.images, rng)?;
+    archives.iris = crypto::seal(&archives.iris, request.backend_keys.iris.public_key)?;
+    archives.normalized_iris = crypto::seal(
         &archives.normalized_iris,
         request.backend_keys.normalized_iris.public_key,
     )?;
-    archives.face =
-        encryption::seal(&archives.face, request.backend_keys.face.public_key)?;
+    archives.face = crypto::seal(&archives.face, request.backend_keys.face.public_key)?;
     archives.fraud = archives
         .fraud
         .as_deref()
-        .map(|tar| encryption::seal(tar, request.backend_keys.face.public_key))
+        .map(|tar| crypto::seal(tar, request.backend_keys.face.public_key))
         .transpose()?;
-    if request.version != Version::V3_0 {
-        archives.face_ir_and_thermal = encryption::seal(
+    if request.version != PcpVersion::V3_0 {
+        archives.face_ir_and_thermal = crypto::seal(
             &archives.face_ir_and_thermal,
             request.backend_keys.tier2.public_key,
         )?;
@@ -244,7 +248,8 @@ fn prepare<E>(
         })
     });
     let iris_shares = [share0?, share1?, share2?];
-    let di = di::encode(input.di_left, input.di_right, input.di_shares_version)?;
+    let di =
+        payload::encode_di(input.di_left, input.di_right, input.di_shares_version)?;
     for (name, bytes) in [
         ("face_embeddings.json", face_embeddings.as_slice()),
         ("iris_codes.json", iris_codes.as_slice()),
@@ -274,14 +279,14 @@ fn prepare<E>(
 }
 
 fn encode_metadata(
-    request: &Request<'_>,
+    request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
-) -> Result<metadata::Encoded, metadata::Error> {
+) -> Result<metadata::EncodedMetadata, metadata::MetadataError> {
     match &request.biometrics {
-        Biometrics::Redacted => {
-            metadata::encode(&request.info, &metadata::Images::Redacted, rng)
+        BiometricPolicy::Redacted => {
+            metadata::encode(&request.info, &metadata::ImageIdPolicy::Redacted, rng)
         }
-        Biometrics::Included(input) => {
+        BiometricPolicy::Included(input) => {
             let left_ids: Vec<_> = input
                 .images
                 .left
@@ -297,7 +302,7 @@ fn encode_metadata(
                 .flat_map(|eye| eye.multiframe.iter().map(|frame| frame.image_id))
                 .collect();
             let images =
-                metadata::Images::Included(metadata::ImageIds {
+                metadata::ImageIdPolicy::Included(metadata::ImageIds {
                     left: input.images.left.as_ref().map(|eye| {
                         metadata::IrisImageIds {
                             primary: eye.primary.image_id,
@@ -324,20 +329,20 @@ fn insert_hash<E>(
     hashes: &mut BTreeMap<String, [u8; 32]>,
     name: String,
     hash: [u8; 32],
-) -> Result<(), Error<E>> {
+) -> Result<(), BuildError<E>> {
     if hashes.insert(name, hash).is_some() {
-        return Err(Error::DuplicateHash);
+        return Err(BuildError::DuplicateHash);
     }
     Ok(())
 }
 
 fn seal_tier<E>(
     tar: &[u8],
-    request: &Request<'_>,
+    request: &BuildRequest<'_>,
     name: &str,
-) -> Result<Vec<u8>, Error<E>> {
+) -> Result<Vec<u8>, BuildError<E>> {
     let gzip = archive::compress(tar, request.timestamp, name)?;
-    Ok(encryption::seal(&gzip, request.user_public_key)?)
+    Ok(crypto::seal(&gzip, request.user_public_key)?)
 }
 
 fn sha256(bytes: &[u8]) -> [u8; 32] {
