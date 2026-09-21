@@ -7832,6 +7832,7 @@ dependencies = [
  "data-encoding",
  "flate2",
  "orb-pcp-defs",
+ "ring",
  "serde_json",
  "sodiumoxide",
  "tar",

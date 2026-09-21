@@ -26,6 +26,46 @@ pub enum Error {
     Serialization(#[from] serde_json::Error),
 }
 
+/// Exact manifest and signer output bytes, ready for archive assembly.
+pub struct Signed {
+    pub hashes_json: Vec<u8>,
+    pub hashes_signature: Vec<u8>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SigningError<E> {
+    #[error("could not encode the manifest for signing")]
+    Manifest(#[from] Error),
+    #[error("manifest signer failed")]
+    Signer(#[source] E),
+}
+
+/// Encodes the manifest and calls `sign_digest` once with its raw SHA-256 digest.
+///
+/// The callback must sign this precomputed 32-byte digest without hashing it
+/// again. Its returned bytes become `hashes.sign` unchanged. This function does
+/// not inspect their signature format or verify the signer/identity. The caller
+/// owns key access, retry policy and deadlines; no retries occur here.
+/// Encoding failures do not invoke the signer. Signer failures return no signed
+/// result and retain the caller's error as [`SigningError::Signer`].
+pub fn encode_and_sign<'a, E>(
+    version: Version,
+    hashes: impl IntoIterator<Item = (&'a str, [u8; 32])>,
+    sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+) -> Result<Signed, SigningError<E>> {
+    let hashes_json = encode(version, hashes)?;
+    let digest = ring::digest::digest(&ring::digest::SHA256, &hashes_json);
+    let digest = digest
+        .as_ref()
+        .try_into()
+        .expect("SHA-256 produces 32 bytes");
+    let hashes_signature = sign_digest(digest).map_err(SigningError::Signer)?;
+    Ok(Signed {
+        hashes_json,
+        hashes_signature,
+    })
+}
+
 /// Encodes named SHA-256 digests as compact, lexicographically sorted JSON.
 ///
 /// Names can represent payloads or salted metadata. Their digests are supplied

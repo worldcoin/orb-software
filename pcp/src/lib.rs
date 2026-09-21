@@ -1,7 +1,8 @@
 //! Personal Custody Package construction primitives.
 //!
 //! Provides JSON/protobuf payload, archive, tier-layout and hash-manifest encoding
-//! plus sealed-box encryption, not a complete builder or an untrusted-package verifier.
+//! plus digest signing and sealed-box encryption, not a complete builder or an
+//! untrusted-package verifier.
 //!
 //! Building requires `protoc` for the `orb-pcp-defs` schemas and libsodium
 //! discoverable through `pkg-config`.
