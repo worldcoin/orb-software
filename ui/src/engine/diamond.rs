@@ -189,6 +189,7 @@ impl Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             sound,
             capture_sound: sound::capture::CaptureLoopSound::default(),
             state: UiState::Booting,
+            ambient_light_blackout_until: None,
             gimbal: None,
             operating_mode: OperatingMode::default(),
         }
@@ -1109,6 +1110,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
                 self.operator_idle.battery_charging(*is_charging);
             }
 
+            Event::AmbientLightSample { duration_ms } => {
+                self.ambient_light_blackout_until = (*duration_ms > 0).then(|| {
+                    std::time::Instant::now()
+                        + Duration::from_millis(u64::from((*duration_ms).min(5000)))
+                });
+            }
             _ => {}
         }
         Ok(())
@@ -1119,9 +1126,17 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.center_animations_stack.run(&mut self.center_frame, dt);
 
         let paused = matches!(self.state, UiState::Paused(_));
+        let blackout = self
+            .ambient_light_blackout_until
+            .is_some_and(|until| std::time::Instant::now() < until);
 
         if !paused {
-            interface_tx.try_send(WrappedCenterMessage::from(self.center_frame).0)?;
+            let frame = if blackout {
+                [Argb(Some(0), 0, 0, 0); DIAMOND_CENTER_LED_COUNT]
+            } else {
+                self.center_frame
+            };
+            interface_tx.try_send(WrappedCenterMessage::from(frame).0)?;
         }
 
         self.operator_idle
@@ -1144,7 +1159,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
         self.ring_animations_stack.run(&mut self.ring_frame, dt);
         if !paused {
             time::sleep(Duration::from_millis(2)).await;
-            interface_tx.try_send(WrappedRingMessage::from(self.ring_frame).0)?;
+            let frame = if blackout {
+                [Argb(Some(0), 0, 0, 0); DIAMOND_RING_LED_COUNT]
+            } else {
+                self.ring_frame
+            };
+            interface_tx.try_send(WrappedRingMessage::from(frame).0)?;
         }
         if let Some(animation) = &mut self.cone_animations_stack
             && let Some(frame) = &mut self.cone_frame
@@ -1152,7 +1172,12 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             animation.run(frame, dt);
             if !paused {
                 time::sleep(Duration::from_millis(2)).await;
-                interface_tx.try_send(WrappedConeMessage::from(*frame).0)?;
+                let frame = if blackout {
+                    [Argb(Some(0), 0, 0, 0); DIAMOND_CONE_LED_COUNT]
+                } else {
+                    *frame
+                };
+                interface_tx.try_send(WrappedConeMessage::from(frame).0)?;
             }
         }
 
