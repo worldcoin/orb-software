@@ -225,7 +225,7 @@ impl ConndService {
         }
 
         if self.release != OrbRelease::Dev
-            && self.cap == OrbCapabilities::WifiOnly
+            && !self.cap.cellular
             && !self.nm.wifi_enabled().await?
         {
             self.nm.set_wifi(true).await?;
