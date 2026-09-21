@@ -215,7 +215,7 @@ in
           export RANLIB_aarch64_linux_android="${androidNdk.ranlib}";
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${androidNdk.cc}";
 
-          # Lets pkg-config-based build scripts (e.g. `alkali`'s
+          # Lets pkg-config-based build scripts (e.g. `sodiumoxide`'s
           # `use-pkg-config` feature, `openssl-sys`) find libsodium/OpenSSL
           # cross-built for Android.
           export PKG_CONFIG_ALLOW_CROSS_aarch64_linux_android=1;
