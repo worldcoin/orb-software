@@ -20,6 +20,26 @@ there are two ways of sending arumgents:
   wifi_add {"ssid":"tfh_orbs","pwd":"12345678","sec":"Wpa2Psk"}
   ```
 
+## operator_qr_refresh
+
+Validates and applies replacement operator QR data in Orb Core. The refreshed
+operator is used immediately while the Orb is idle, or for the next signup when
+a signup is already in progress.
+
+**Command format:** `operator_qr_refresh <json>`
+
+**Arguments:**
+- `qr_code`: String - A normal operator QR string.
+
+**Example:**
+```text
+operator_qr_refresh {"qr_code":"userid:00000000-0000-0000-0000-000000000000:0"}
+```
+
+**Response:** Success with no output after Orb Core validates and applies the
+operator data. Invalid or temporarily unverifiable QR data fails the job. The QR
+payload is redacted from jobs-agent logs.
+
 ## wifi_add
 
 Adds a WiFi network profile to the system. Optionally connects to the network immediately if `join_now` is true.
