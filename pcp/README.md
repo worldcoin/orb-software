@@ -58,6 +58,21 @@ two present eyes with empty vectors still emit present protobuf records.
 Missing iris codes/masks/version serialize as JSON null, while iris shares
 remain required.
 
+## Unencrypted diagnostics
+
+For local diagnostics only, explicitly enable the `not-prod-diagnostics` feature
+and call `build_unencrypted_for_diagnostics`. It returns a distinct
+`DiagnosticPackage`: three gzip-compressed tiers containing plaintext inner
+archives. Hashing, signing, redaction and layout still run; V3 tier hashes cover
+the diagnostic gzip bytes. Recipient keys are not validated or used to encrypt.
+
+These buffers can contain identity metadata, raw biometrics, secret shares and
+Hyrax blinding factors. **Never upload them as a PCP, publish them or log them.**
+The caller owns access control, secure storage and cleanup; buffers are not
+automatically zeroized. The library writes no files. The normal `build` function
+always encrypts, even with this feature enabled; there is no global disable switch
+or conversion from `DiagnosticPackage` to `Package`.
+
 ## Scope and limitations
 
 This is a working construction prototype, not a production cutover or an

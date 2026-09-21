@@ -44,7 +44,7 @@ pub struct BuildRequest<'a> {
     pub timestamp: u64,
     pub info: metadata::PackageInfo<'a>,
     pub user_public_key: &'a [u8; 32],
-    /// These same public keys are serialized and used for inner encryption.
+    /// Normal builds serialize these same keys and use them for inner encryption.
     pub backend_keys: payload::BackendKeys<'a>,
     pub biometrics: BiometricPolicy<'a>,
 }
@@ -58,6 +58,25 @@ pub struct Package {
     pub tier1_checksum: [u8; 32],
     pub tier2_checksum: [u8; 32],
 }
+
+/// Unencrypted diagnostic gzip tiers. Never upload these as a PCP.
+///
+/// Inner archives are also plaintext and may contain biometrics, shares and
+/// Hyrax blinding factors. Even redacted output retains identity metadata.
+/// The caller must protect and clear these buffers; they are not zeroized on drop.
+#[cfg(feature = "not-prod-diagnostics")]
+pub struct DiagnosticPackage {
+    pub tier0: Vec<u8>,
+    pub tier1: Vec<u8>,
+    pub tier2: Vec<u8>,
+}
+
+struct BuiltTiers {
+    tiers: [Vec<u8>; 3],
+    checksums: [[u8; 32]; 3],
+}
+
+type Sealer = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, crypto::SealingError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError<E> {
@@ -83,11 +102,58 @@ pub enum BuildError<E> {
 /// No successful package is returned on failure. The signer owns its retry and
 /// deadline policy. V2.7 requires no device key; V2.8 requires one; V3 accepts
 /// either. Version negotiation remains a consumer responsibility.
+/// This function always encrypts, including when diagnostic features are enabled.
 pub fn build<E>(
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
     sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
 ) -> Result<Package, BuildError<E>> {
+    let BuiltTiers {
+        tiers: [tier0, tier1, tier2],
+        checksums: [tier0_checksum, tier1_checksum, tier2_checksum],
+    } = build_with_sealer(request, rng, sign_digest, crypto::seal)?;
+    Ok(Package {
+        tier0,
+        tier1,
+        tier2,
+        tier0_checksum,
+        tier1_checksum,
+        tier2_checksum,
+    })
+}
+
+/// Builds sensitive, unencrypted diagnostics, never a deliverable PCP.
+///
+/// Requires the explicitly enabled `not-prod-diagnostics` feature. Both inner
+/// sealing and outer sealing are skipped, but hashing, signing and gzip remain.
+/// V3 tier hashes cover these diagnostic gzip bytes, not encrypted tier bytes.
+/// Backend keys are still serialized; recipient keys are not validated or used
+/// for encryption.
+/// This performs no filesystem writes. Never upload, publish or log the output.
+/// Enabling this feature does not change the encrypted behavior of [`build`].
+#[cfg(feature = "not-prod-diagnostics")]
+pub fn build_unencrypted_for_diagnostics<E>(
+    request: &BuildRequest<'_>,
+    rng: &mut (impl RngCore + CryptoRng),
+    sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+) -> Result<DiagnosticPackage, BuildError<E>> {
+    let BuiltTiers {
+        tiers: [tier0, tier1, tier2],
+        ..
+    } = build_with_sealer(request, rng, sign_digest, |bytes, _| Ok(bytes.to_vec()))?;
+    Ok(DiagnosticPackage {
+        tier0,
+        tier1,
+        tier2,
+    })
+}
+
+fn build_with_sealer<E>(
+    request: &BuildRequest<'_>,
+    rng: &mut (impl RngCore + CryptoRng),
+    sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+    seal: Sealer,
+) -> Result<BuiltTiers, BuildError<E>> {
     match (request.version, request.info.device_public_key.is_some()) {
         (PcpVersion::V2_7, true) | (PcpVersion::V2_8, false) => {
             return Err(BuildError::DeviceKeyVersionMismatch)
@@ -112,7 +178,15 @@ pub fn build<E>(
             iris,
             di,
             ..
-        } => Some(prepare(images, face_embeddings, iris, *di, request, rng)?),
+        } => Some(prepare(
+            images,
+            face_embeddings,
+            iris,
+            *di,
+            request,
+            rng,
+            seal,
+        )?),
     };
     if let Some(prepared) = &prepared {
         for (name, hash) in &prepared.archives.hashes {
@@ -122,8 +196,8 @@ pub fn build<E>(
     let biometric_files = prepared.as_ref().map(Prepared::layout);
     let auxiliary =
         archive::auxiliary_tiers(format, request.timestamp, biometric_files.as_ref())?;
-    let tier1 = seal_tier(&auxiliary.tier1, request, "tier1.tar.gz")?;
-    let tier2 = seal_tier(&auxiliary.tier2, request, "tier2.tar.gz")?;
+    let tier1 = seal_tier(&auxiliary.tier1, request, "tier1.tar.gz", seal)?;
+    let tier2 = seal_tier(&auxiliary.tier2, request, "tier2.tar.gz", seal)?;
     let tier1_checksum = sha256(&tier1);
     let tier2_checksum = sha256(&tier2);
 
@@ -155,14 +229,10 @@ pub fn build<E>(
         },
         biometric_files.as_ref(),
     )?;
-    let tier0 = seal_tier(&tier0, request, "tier0.tar.gz")?;
-    Ok(Package {
-        tier0_checksum: sha256(&tier0),
-        tier1_checksum,
-        tier2_checksum,
-        tier0,
-        tier1,
-        tier2,
+    let tier0 = seal_tier(&tier0, request, "tier0.tar.gz", seal)?;
+    Ok(BuiltTiers {
+        checksums: [sha256(&tier0), tier1_checksum, tier2_checksum],
+        tiers: [tier0, tier1, tier2],
     })
 }
 
@@ -208,21 +278,22 @@ fn prepare<E>(
     di: Option<&payload::DiData<'_>>,
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
+    seal: Sealer,
 ) -> Result<Prepared, BuildError<E>> {
     let mut archives = archive::encode_inner(request.timestamp, images, rng)?;
-    archives.iris = crypto::seal(&archives.iris, request.backend_keys.iris.public_key)?;
-    archives.normalized_iris = crypto::seal(
+    archives.iris = seal(&archives.iris, request.backend_keys.iris.public_key)?;
+    archives.normalized_iris = seal(
         &archives.normalized_iris,
         request.backend_keys.normalized_iris.public_key,
     )?;
-    archives.face = crypto::seal(&archives.face, request.backend_keys.face.public_key)?;
+    archives.face = seal(&archives.face, request.backend_keys.face.public_key)?;
     archives.fraud = archives
         .fraud
         .as_deref()
-        .map(|tar| crypto::seal(tar, request.backend_keys.face.public_key))
+        .map(|tar| seal(tar, request.backend_keys.face.public_key))
         .transpose()?;
     if request.version != PcpVersion::V3_0 {
-        archives.face_ir_and_thermal = crypto::seal(
+        archives.face_ir_and_thermal = seal(
             &archives.face_ir_and_thermal,
             request.backend_keys.tier2.public_key,
         )?;
@@ -319,9 +390,10 @@ fn seal_tier<E>(
     tar: &[u8],
     request: &BuildRequest<'_>,
     name: &str,
+    seal: Sealer,
 ) -> Result<Vec<u8>, BuildError<E>> {
     let gzip = archive::compress(tar, request.timestamp, name)?;
-    Ok(crypto::seal(&gzip, request.user_public_key)?)
+    Ok(seal(&gzip, request.user_public_key)?)
 }
 
 fn sha256(bytes: &[u8]) -> [u8; 32] {

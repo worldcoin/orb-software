@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+not-prod-diagnostics = []
+
 [dependencies]
 data-encoding.workspace = true
 flate2.workspace = true

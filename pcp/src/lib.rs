@@ -24,6 +24,8 @@ pub use archive::{
 pub use builder::{
     build, BiometricPolicy, BuildError, BuildRequest, Package, PcpVersion,
 };
+#[cfg(feature = "not-prod-diagnostics")]
+pub use builder::{build_unencrypted_for_diagnostics, DiagnosticPackage};
 pub use crypto::{CommitmentError, SealingError};
 pub use manifest::{ManifestError, SigningError};
 pub use metadata::{MetadataError, PackageInfo};
