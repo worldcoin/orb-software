@@ -14,4 +14,5 @@ pub mod di;
 pub mod encryption;
 pub mod layout;
 pub mod manifest;
+pub mod metadata;
 pub mod payload;
