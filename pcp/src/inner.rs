@@ -18,7 +18,8 @@ pub struct NormalizedFrame<'a> {
 pub struct Frame<'a> {
     pub image_id: &'a str,
     pub ir_png: &'a [u8],
-    pub normalized: NormalizedFrame<'a>,
+    /// Required for primary frames; extra captures may have no normalized output.
+    pub normalized: Option<NormalizedFrame<'a>>,
 }
 
 pub struct Eye<'a> {
@@ -61,6 +62,10 @@ pub enum Error {
     MissingLeftEye,
     #[error("right eye is required by the current package format")]
     MissingRightEye,
+    #[error("left primary normalized data is required by the current package format")]
+    MissingLeftNormalization,
+    #[error("right primary normalized data is required by the current package format")]
+    MissingRightNormalization,
     #[error("duplicate inner archive manifest name")]
     DuplicateName,
     #[error("inner archive encoding failed")]
@@ -81,6 +86,16 @@ pub fn encode(
 ) -> Result<Encoded, Error> {
     let left = images.left.as_ref().ok_or(Error::MissingLeftEye)?;
     let right = images.right.as_ref().ok_or(Error::MissingRightEye)?;
+    let left_normalized = left
+        .primary
+        .normalized
+        .as_ref()
+        .ok_or(Error::MissingLeftNormalization)?;
+    let right_normalized = right
+        .primary
+        .normalized
+        .as_ref()
+        .ok_or(Error::MissingRightNormalization)?;
     let mut hashes = BTreeMap::new();
 
     let mut iris_files = vec![
@@ -99,18 +114,19 @@ pub fn encode(
     let mut normalized_files = Vec::new();
     // Generation order is part of deterministic compatibility with seeded callers.
     for resized in [false, true] {
-        for (prefix, frame) in [
-            ("left", &left.primary.normalized),
-            ("right", &right.primary.normalized),
-        ] {
+        for (prefix, frame) in [("left", left_normalized), ("right", right_normalized)]
+        {
             normalized_files.extend(normalized_pair(prefix, frame, resized, rng)?);
         }
     }
     for frame in left.multiframe.iter().chain(right.multiframe) {
+        let Some(normalized) = &frame.normalized else {
+            continue;
+        };
         for resized in [false, true] {
             normalized_files.extend(normalized_pair(
                 frame.image_id,
-                &frame.normalized,
+                normalized,
                 resized,
                 rng,
             )?);

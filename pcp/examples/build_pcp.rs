@@ -31,15 +31,25 @@ pub fn run() -> Result<()> {
     sodiumoxide::init().map_err(|()| "libsodium initialization failed")?;
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
+    let extra_left = [inner::Frame {
+        image_id: "synthetic-extra-left",
+        ir_png: &png,
+        normalized: None,
+    }];
+    let extra_right = [inner::Frame {
+        image_id: "synthetic-extra-right",
+        ir_png: &png,
+        normalized: None,
+    }];
     let included = builder::Included {
         images: inner::Images {
             left: Some(inner::Eye {
                 primary: frame("synthetic-left", &png, &normalized),
-                multiframe: &[],
+                multiframe: &extra_left,
             }),
             right: Some(inner::Eye {
                 primary: frame("synthetic-right", &png, &normalized),
-                multiframe: &[],
+                multiframe: &extra_right,
             }),
             thumbnail_png: Some(&png),
             face_ir_png: Some(&png),
@@ -149,12 +159,12 @@ fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> inner::Frame<'a> {
     inner::Frame {
         image_id: id,
         ir_png: png,
-        normalized: inner::NormalizedFrame {
+        normalized: Some(inner::NormalizedFrame {
             image: data,
             mask: data,
             image_resized: data,
             mask_resized: data,
-        },
+        }),
     }
 }
 
@@ -329,6 +339,14 @@ fn verify(
         assert!(info["left_ir_image_id"] == "synthetic-left");
         assert!(info["right_ir_image_id"] == "synthetic-right");
         assert!(info["thumbnail_image_id"] == "synthetic-thumbnail");
+        assert_eq!(
+            info["left_ir_multiframe_image_ids"],
+            serde_json::json!(["synthetic-extra-left"])
+        );
+        assert_eq!(
+            info["right_ir_multiframe_image_ids"],
+            serde_json::json!(["synthetic-extra-right"])
+        );
         let archives = if version == builder::Version::V3_0 {
             assert_eq!(tier0.len(), 13);
             assert_eq!(tier1.len(), 4);
@@ -346,6 +364,18 @@ fn verify(
             ("fraud.tar", &backends[2]),
         ] {
             let inner = files(&open(&archives[name], key)?)?;
+            if name == "iris.tar" {
+                assert_eq!(inner.len(), 4);
+                for id in ["synthetic-extra-left", "synthetic-extra-right"] {
+                    assert!(inner[&format!("{id}.png")] == inner["left_ir.png"]);
+                }
+            }
+            if name == "normalized_iris.tar" {
+                assert_eq!(inner.len(), 24);
+                assert!(inner
+                    .keys()
+                    .all(|name| !name.starts_with("synthetic-extra")));
+            }
             for (name, bytes) in inner {
                 if name.contains("commitment") || name.contains("blinding_factors") {
                     assert!(

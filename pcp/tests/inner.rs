@@ -11,12 +11,12 @@ fn frame(id: &str) -> Frame<'_> {
     Frame {
         image_id: id,
         ir_png: b"synthetic-png",
-        normalized: NormalizedFrame {
+        normalized: Some(NormalizedFrame {
             image: &[1; 512],
             mask: b"mask",
             image_resized: b"resized image",
             mask_resized: b"resized mask",
-        },
+        }),
     }
 }
 
@@ -126,6 +126,64 @@ fn archives_preserve_order_and_hash_every_file() {
         }
     }
     assert_eq!(encoded.hashes, hashes);
+}
+
+#[test]
+fn captured_multiframes_without_normalization_keep_images_but_add_no_normalized_files()
+{
+    use rand::RngCore;
+
+    let mut extra_left = frame("extra-left");
+    extra_left.normalized = None;
+    let mut extra_right = frame("extra-right");
+    extra_right.normalized = None;
+    let mut rng = StdRng::seed_from_u64(7);
+    let mut primary_rng = rng.clone();
+    let primary = inner::encode(123, &images(&[], &[]), &mut primary_rng).unwrap();
+    let encoded =
+        inner::encode(123, &images(&[extra_left], &[extra_right]), &mut rng).unwrap();
+
+    assert_eq!(entries(&encoded.iris).len(), 4);
+    assert_eq!(encoded.normalized_iris, primary.normalized_iris);
+    assert_eq!(rng.next_u64(), primary_rng.next_u64());
+    let mut expected_hashes = primary.hashes;
+    for id in ["extra-left", "extra-right"] {
+        let name = format!("{id}.png");
+        assert!(
+            entries(&encoded.iris).contains(&(name.clone(), b"synthetic-png".to_vec()))
+        );
+        expected_hashes.insert(
+            name,
+            digest(&SHA256, b"synthetic-png")
+                .as_ref()
+                .try_into()
+                .unwrap(),
+        );
+    }
+    assert_eq!(encoded.hashes, expected_hashes);
+}
+
+#[test]
+fn missing_primary_normalization_fails_before_randomness() {
+    use rand::RngCore;
+
+    for left_missing in [true, false] {
+        let mut input = images(&[], &[]);
+        let eye = if left_missing {
+            &mut input.left
+        } else {
+            &mut input.right
+        };
+        eye.as_mut().unwrap().primary.normalized = None;
+        let mut rng = StdRng::seed_from_u64(0);
+        let error = inner::encode(123, &input, &mut rng).err().unwrap();
+        assert!(matches!(
+            (left_missing, error),
+            (true, inner::Error::MissingLeftNormalization)
+                | (false, inner::Error::MissingRightNormalization)
+        ));
+        assert_eq!(rng.next_u64(), StdRng::seed_from_u64(0).next_u64());
+    }
 }
 
 #[test]
