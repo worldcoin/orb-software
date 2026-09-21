@@ -6,6 +6,10 @@ use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
 use data_encoding::{BASE64, HEXLOWER};
 use flate2::read::GzDecoder;
 use orb_pcp as pcp;
+use orb_pcp_defs::{
+    prost::Message,
+    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
+};
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
     Signature, SigningKey,
@@ -41,56 +45,66 @@ pub fn run() -> Result<()> {
         ir_png: &png,
         normalized: None,
     }];
-    let included = pcp::BiometricData {
-        images: pcp::PackageImages {
-            left: Some(pcp::IrisEye {
-                primary: frame("synthetic-left", &png, &normalized),
-                multiframe: &extra_left,
-            }),
-            right: Some(pcp::IrisEye {
-                primary: frame("synthetic-right", &png, &normalized),
-                multiframe: &extra_right,
-            }),
-            thumbnail_png: Some(&png),
-            face_ir_png: Some(&png),
-            thermal_png: Some(&png),
-            fraud: Some(pcp::FraudImages {
-                scc_rgb_png: &png,
-                left_rgb_png: &png,
-                right_rgb_png: &png,
-                left_thermal_png: Some(&png),
-                right_thermal_png: Some(&png),
-                scc_depth_png: Some(&png),
-                left_depth_png: Some(&png),
-                right_depth_png: Some(&png),
-            }),
+    let images = pcp::PackageImages {
+        left: Some(pcp::IrisEye {
+            primary: frame("synthetic-left", &png, &normalized),
+            multiframe: &extra_left,
+        }),
+        right: Some(pcp::IrisEye {
+            primary: frame("synthetic-right", &png, &normalized),
+            multiframe: &extra_right,
+        }),
+        thumbnail_png: Some(&png),
+        face_ir_png: Some(&png),
+        thermal_png: Some(&png),
+        fraud: Some(pcp::FraudImages {
+            scc_rgb_png: &png,
+            left_rgb_png: &png,
+            right_rgb_png: &png,
+            left_thermal_png: Some(&png),
+            right_thermal_png: Some(&png),
+            scc_depth_png: Some(&png),
+            left_depth_png: Some(&png),
+            right_depth_png: Some(&png),
+        }),
+    };
+    let iris = pcp::IrisData {
+        iris_version: Some("synthetic"),
+        shares_version: "synthetic-sharing",
+        left: pcp::IrisEyeData {
+            iris_code: Some("synthetic-left-iris"),
+            mask_code: Some("synthetic-left-mask"),
+            iris_code_shares: ["left-iris-0", "left-iris-1", "left-iris-2"],
+            mask_code_shares: ["left-mask-0", "left-mask-1", "left-mask-2"],
         },
-        thumbnail_image_id: Some("synthetic-thumbnail"),
-        left_iris_code_aggregate_image_ids: &["synthetic-left"],
-        right_iris_code_aggregate_image_ids: &["synthetic-right"],
-        face_embeddings: &[pcp::FaceEmbedding {
-            embedding: "synthetic-embedding",
-            embedding_type: "synthetic",
-            embedding_version: "example",
-            embedding_inference_backend: "none",
-        }],
-        iris_codes: pcp::IrisCodes {
-            iris_version: Some("synthetic"),
-            left_iris_code: Some("synthetic-left-iris"),
-            left_mask_code: Some("synthetic-left-mask"),
-            right_iris_code: Some("synthetic-right-iris"),
-            right_mask_code: Some("synthetic-right-mask"),
+        right: pcp::IrisEyeData {
+            iris_code: Some("synthetic-right-iris"),
+            mask_code: Some("synthetic-right-mask"),
+            iris_code_shares: ["right-iris-0", "right-iris-1", "right-iris-2"],
+            mask_code_shares: ["right-mask-0", "right-mask-1", "right-mask-2"],
         },
-        iris_shares: pcp::IrisShares {
-            version: "synthetic",
-            left_iris: ["synthetic-share"; 3],
-            left_mask: ["synthetic-share"; 3],
-            right_iris: ["synthetic-share"; 3],
-            right_mask: ["synthetic-share"; 3],
-        },
-        di_left: None,
-        di_right: None,
-        di_shares_version: "synthetic",
+    };
+    let di = pcp::DiData {
+        model_version: "synthetic-model",
+        embedding_version: "synthetic-embedding",
+        inference_backend: "none",
+        shares_version: "synthetic-di-sharing",
+        left: Some(pcp::DiEyeData {
+            embedding: &[-1, 2],
+            mirror_embedding: &[3, -4],
+            embedding_f32: &[1.0, 2.0],
+            mirror_embedding_f32: &[3.0, -4.0],
+            embedding_shares: [&[10], &[11], &[12]],
+            mirror_embedding_shares: [&[20], &[21], &[22]],
+        }),
+        right: Some(pcp::DiEyeData {
+            embedding: &[5, -6],
+            mirror_embedding: &[-7, 8],
+            embedding_f32: &[5.0, -6.0],
+            mirror_embedding_f32: &[-7.0, 8.0],
+            embedding_shares: [&[30], &[31], &[32]],
+            mirror_embedding_shares: [&[40], &[41], &[42]],
+        }),
     };
 
     for version in [
@@ -133,7 +147,20 @@ pub fn run() -> Result<()> {
                 biometrics: if redacted {
                     pcp::BiometricPolicy::Redacted
                 } else {
-                    pcp::BiometricPolicy::Included(&included)
+                    pcp::BiometricPolicy::Included {
+                        images: &images,
+                        thumbnail_image_id: Some("synthetic-thumbnail"),
+                        left_iris_code_aggregate_image_ids: &["synthetic-left"],
+                        right_iris_code_aggregate_image_ids: &["synthetic-right"],
+                        face_embeddings: &[pcp::FaceEmbedding {
+                            embedding: "synthetic-embedding",
+                            embedding_type: "synthetic",
+                            embedding_version: "example",
+                            embedding_inference_backend: "none",
+                        }],
+                        iris: &iris,
+                        di: Some(&di),
+                    }
                 },
             };
             // P-256 is only this example's caller-owned signer choice.
@@ -336,6 +363,53 @@ fn verify(
             );
         }
     } else {
+        let iris: serde_json::Value =
+            serde_json::from_slice(&tier0["iris_codes.json"])?;
+        assert_eq!(iris["IRIS_version"], "synthetic");
+        assert_eq!(iris["left_iris_code"], "synthetic-left-iris");
+        assert_eq!(iris["left_mask_code"], "synthetic-left-mask");
+        assert_eq!(iris["right_iris_code"], "synthetic-right-iris");
+        assert_eq!(iris["right_mask_code"], "synthetic-right-mask");
+        let di = DiIrisEmbeddings::decode(tier0["di_iris_embeddings.pb"].as_slice())?
+            .embedding_v1
+            .ok_or("missing DI record")?;
+        assert_eq!(di.model_version, "synthetic-model");
+        assert_eq!(di.embedding_version, "synthetic-embedding");
+        assert_eq!(di.embedding_inference_backend, "none");
+        assert_eq!(di.left_embedding, [-1, 2]);
+        assert_eq!(di.left_mirror_embedding, [3, -4]);
+        assert_eq!(di.right_embedding, [5, -6]);
+        assert_eq!(di.right_mirror_embedding, [-7, 8]);
+        assert_eq!(di.left_embedding_f32, [1.0, 2.0]);
+        assert_eq!(di.left_mirror_embedding_f32, [3.0, -4.0]);
+        assert_eq!(di.right_embedding_f32, [5.0, -6.0]);
+        assert_eq!(di.right_mirror_embedding_f32, [-7.0, 8.0]);
+        for i in 0..3 {
+            let shares: serde_json::Value =
+                serde_json::from_slice(&tier0[&format!("iris_code_shares_{i}.json")])?;
+            assert_eq!(shares["IRIS_version"], iris["IRIS_version"]);
+            assert_eq!(shares["IRIS_shares_version"], "synthetic-sharing");
+            for eye in ["left", "right"] {
+                for code in ["iris", "mask"] {
+                    assert_eq!(
+                        shares[format!("{eye}_{code}_code_shares")],
+                        format!("{eye}-{code}-{i}")
+                    );
+                }
+            }
+            let shares = DiIrisEmbeddingShares::decode(
+                tier0[&format!("di_iris_embeddings_shares_{i}.pb")].as_slice(),
+            )?
+            .share_v1
+            .ok_or("missing DI share record")?;
+            assert_eq!(shares.model_version, di.model_version);
+            assert_eq!(shares.embedding_version, di.embedding_version);
+            assert_eq!(shares.shares_version, "synthetic-di-sharing");
+            assert_eq!(shares.left_share, [10 + i]);
+            assert_eq!(shares.left_mirror_share, [20 + i]);
+            assert_eq!(shares.right_share, [30 + i]);
+            assert_eq!(shares.right_mirror_share, [40 + i]);
+        }
         assert!(info["left_ir_image_id"] == "synthetic-left");
         assert!(info["right_ir_image_id"] == "synthetic-right");
         assert!(info["thumbnail_image_id"] == "synthetic-thumbnail");

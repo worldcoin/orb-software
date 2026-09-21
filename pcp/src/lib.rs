@@ -22,12 +22,11 @@ pub use archive::{
     NormalizedIrisFrame, PackageImages,
 };
 pub use builder::{
-    build, BiometricData, BiometricPolicy, BuildError, BuildRequest, IrisShares,
-    Package, PcpVersion,
+    build, BiometricPolicy, BuildError, BuildRequest, Package, PcpVersion,
 };
 pub use crypto::{CommitmentError, SealingError};
 pub use manifest::{ManifestError, SigningError};
 pub use metadata::{MetadataError, PackageInfo};
 pub use payload::{
-    BackendKey, BackendKeys, DiEncodingError, DiEye, FaceEmbedding, IrisCodes,
+    BackendKey, BackendKeys, DiData, DiEyeData, FaceEmbedding, IrisData, IrisEyeData,
 };

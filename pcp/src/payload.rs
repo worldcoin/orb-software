@@ -26,26 +26,23 @@ pub struct FaceEmbedding<'a> {
     pub embedding_inference_backend: &'a str,
 }
 
-/// Missing values are encoded as JSON `null`, not omitted.
-pub struct IrisCodes<'a> {
+/// Prepared iris codes and shares with common pipeline and sharing versions.
+pub struct IrisData<'a> {
+    /// Pipeline/library version, not a per-eye code version. Missing means JSON null.
     pub iris_version: Option<&'a str>,
-    pub left_iris_code: Option<&'a str>,
-    pub left_mask_code: Option<&'a str>,
-    pub right_iris_code: Option<&'a str>,
-    pub right_mask_code: Option<&'a str>,
+    pub shares_version: &'a str,
+    pub left: IrisEyeData<'a>,
+    pub right: IrisEyeData<'a>,
 }
 
-/// One recipient's shares. All four share strings must be supplied.
-///
-/// The higher-level builder must supply the complete set of three recipients;
-/// this encoder only serializes one recipient's record.
-pub(crate) struct IrisCodeShare<'a> {
-    pub iris_version: Option<&'a str>,
-    pub iris_shares_version: &'a str,
-    pub left_iris_code_shares: &'a str,
-    pub left_mask_code_shares: &'a str,
-    pub right_iris_code_shares: &'a str,
-    pub right_mask_code_shares: &'a str,
+/// Missing codes become JSON null; all three recipients' shares remain required.
+/// Same-index shares belong to the same recipient across eyes and code/mask.
+/// Encoding does not verify that shares reconstruct the supplied values.
+pub struct IrisEyeData<'a> {
+    pub iris_code: Option<&'a str>,
+    pub mask_code: Option<&'a str>,
+    pub iris_code_shares: [&'a str; 3],
+    pub mask_code_shares: [&'a str; 3],
 }
 
 pub struct BackendKey<'a> {
@@ -83,27 +80,36 @@ pub(crate) fn face_embeddings(
     serde_json::to_vec(&records)
 }
 
-pub(crate) fn iris_codes(codes: &IrisCodes<'_>) -> Result<Vec<u8>, serde_json::Error> {
+pub(crate) fn iris_codes(data: &IrisData<'_>) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(&BTreeMap::from([
-        ("IRIS_version", codes.iris_version),
-        ("left_iris_code", codes.left_iris_code),
-        ("left_mask_code", codes.left_mask_code),
-        ("right_iris_code", codes.right_iris_code),
-        ("right_mask_code", codes.right_mask_code),
+        ("IRIS_version", data.iris_version),
+        ("left_iris_code", data.left.iris_code),
+        ("left_mask_code", data.left.mask_code),
+        ("right_iris_code", data.right.iris_code),
+        ("right_mask_code", data.right.mask_code),
     ]))
 }
 
-pub(crate) fn iris_code_share(
-    share: &IrisCodeShare<'_>,
-) -> Result<Vec<u8>, serde_json::Error> {
-    serde_json::to_vec(&BTreeMap::from([
-        ("IRIS_version", share.iris_version),
-        ("IRIS_shares_version", Some(share.iris_shares_version)),
-        ("left_iris_code_shares", Some(share.left_iris_code_shares)),
-        ("left_mask_code_shares", Some(share.left_mask_code_shares)),
-        ("right_iris_code_shares", Some(share.right_iris_code_shares)),
-        ("right_mask_code_shares", Some(share.right_mask_code_shares)),
-    ]))
+pub(crate) fn iris_code_shares(
+    data: &IrisData<'_>,
+) -> Result<[Vec<u8>; 3], serde_json::Error> {
+    let [first, second, third] = [0, 1, 2].map(|i| {
+        serde_json::to_vec(&BTreeMap::from([
+            ("IRIS_version", data.iris_version),
+            ("IRIS_shares_version", Some(data.shares_version)),
+            ("left_iris_code_shares", Some(data.left.iris_code_shares[i])),
+            ("left_mask_code_shares", Some(data.left.mask_code_shares[i])),
+            (
+                "right_iris_code_shares",
+                Some(data.right.iris_code_shares[i]),
+            ),
+            (
+                "right_mask_code_shares",
+                Some(data.right.mask_code_shares[i]),
+            ),
+        ]))
+    });
+    Ok([first?, second?, third?])
 }
 
 /// Encodes all four roles with sorted keys at both object levels.
@@ -133,12 +139,23 @@ pub(crate) fn backend_keys(
     serde_json::to_vec(&records)
 }
 
-/// Already-quantized embeddings and shares for one eye. Encoding checks paired
-/// metadata, not dimensions, floating-point validity or share reconstruction.
-pub struct DiEye<'a> {
+/// Prepared DI data with shared metadata. Before combining source eyes, the
+/// consumer must check agreement on model version, embedding version and backend.
+/// Encoding cannot recover or validate discarded per-eye source metadata.
+pub struct DiData<'a> {
     pub model_version: &'a str,
     pub inference_backend: &'a str,
     pub embedding_version: &'a str,
+    pub shares_version: &'a str,
+    /// If either eye is absent, all four DI files are empty in the current format.
+    pub left: Option<DiEyeData<'a>>,
+    pub right: Option<DiEyeData<'a>>,
+}
+
+/// Already-quantized embeddings and shares for one eye. Encoding does not check
+/// dimensions, floating-point validity or share reconstruction. Same-index
+/// shares belong to the same recipient across eyes and original/mirrored values.
+pub struct DiEyeData<'a> {
     pub embedding: &'a [i8],
     pub mirror_embedding: &'a [i8],
     pub embedding_f32: &'a [f32],
@@ -152,49 +169,32 @@ pub(crate) struct EncodedDi {
     pub shares: [Vec<u8>; 3],
 }
 
-/// Errors identify the mismatched field without including input values.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
-pub enum DiEncodingError {
-    #[error("DI model version differs between eyes")]
-    ModelVersionMismatch,
-    #[error("DI inference backend differs between eyes")]
-    InferenceBackendMismatch,
-    #[error("DI embedding version differs between eyes")]
-    EmbeddingVersionMismatch,
-}
-
 /// Encodes the embedding file and three same-index recipient share files.
 ///
 /// For compatibility, if either eye is absent, all four buffers are empty and
 /// the remaining eye is ignored. The caller must still include those empty files
 /// in a non-redacted package. Both eyes present with empty vectors instead produce
 /// present protobuf records. The caller supplies its sharing algorithm version.
-pub(crate) fn encode_di(
-    left: Option<&DiEye<'_>>,
-    right: Option<&DiEye<'_>>,
-    shares_version: &str,
-) -> Result<EncodedDi, DiEncodingError> {
-    let (Some(left), Some(right)) = (left, right) else {
-        return Ok(EncodedDi {
+pub(crate) fn encode_di(data: Option<&DiData<'_>>) -> EncodedDi {
+    let Some(
+        data @ DiData {
+            left: Some(left),
+            right: Some(right),
+            ..
+        },
+    ) = data
+    else {
+        return EncodedDi {
             embeddings: Vec::new(),
             shares: std::array::from_fn(|_| Vec::new()),
-        });
+        };
     };
-    if left.model_version != right.model_version {
-        return Err(DiEncodingError::ModelVersionMismatch);
-    }
-    if left.inference_backend != right.inference_backend {
-        return Err(DiEncodingError::InferenceBackendMismatch);
-    }
-    if left.embedding_version != right.embedding_version {
-        return Err(DiEncodingError::EmbeddingVersionMismatch);
-    }
 
     let embeddings = DiIrisEmbeddings {
         embedding_v1: Some(DiIrisEmbeddingV1 {
-            model_version: left.model_version.to_owned(),
-            embedding_inference_backend: left.inference_backend.to_owned(),
-            embedding_version: left.embedding_version.to_owned(),
+            model_version: data.model_version.to_owned(),
+            embedding_inference_backend: data.inference_backend.to_owned(),
+            embedding_version: data.embedding_version.to_owned(),
             left_embedding: left.embedding.iter().copied().map(i32::from).collect(),
             left_mirror_embedding: left
                 .mirror_embedding
@@ -220,9 +220,9 @@ pub(crate) fn encode_di(
     let shares = std::array::from_fn(|i| {
         DiIrisEmbeddingShares {
             share_v1: Some(DiIrisEmbeddingShareV1 {
-                model_version: left.model_version.to_owned(),
-                shares_version: shares_version.to_owned(),
-                embedding_version: left.embedding_version.to_owned(),
+                model_version: data.model_version.to_owned(),
+                shares_version: data.shares_version.to_owned(),
+                embedding_version: data.embedding_version.to_owned(),
                 left_share: left.embedding_shares[i]
                     .iter()
                     .copied()
@@ -247,7 +247,7 @@ pub(crate) fn encode_di(
         }
         .encode_to_vec()
     });
-    Ok(EncodedDi { embeddings, shares })
+    EncodedDi { embeddings, shares }
 }
 
 #[cfg(test)]

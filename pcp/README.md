@@ -35,10 +35,28 @@ proof of biometric validity.
 ## API
 
 Use `orb_pcp::build` with a `BuildRequest` and explicit `PcpVersion`.
-`BiometricPolicy::Included(&BiometricData)` supplies biometric inputs;
+`BiometricPolicy::Included { iris, di, face_embeddings, images, ... }` supplies
+separate named biometric inputs;
 `BiometricPolicy::Redacted` omits them. Input types and errors are exported
 directly from `orb_pcp`; archive layout and intermediate encoders are private.
 See `examples/build_pcp.rs` for a complete caller using this API.
+
+`IrisData` groups common pipeline/sharing versions with left and right
+`IrisEyeData` values (codes, masks and their three recipients' shares).
+`DiData` similarly groups common model/embedding/sharing versions and inference
+backend with optional left and right `DiEyeData` values (quantized/float
+embeddings, mirrored embeddings and shares). Shares at the same index belong
+to the same recipient throughout. These input groups do not change output
+filenames or wire formats.
+
+Before constructing `DiData` from independently produced eyes, the consumer
+adapter must reject disagreements in model version, embedding version or
+inference backend. The builder receives that metadata once and cannot check
+discarded per-eye metadata. It does not verify share reconstruction or model
+provenance. `di: None` or either missing eye emits four present, empty DI files;
+two present eyes with empty vectors still emit present protobuf records.
+Missing iris codes/masks/version serialize as JSON null, while iris shares
+remain required.
 
 ## Scope and limitations
 

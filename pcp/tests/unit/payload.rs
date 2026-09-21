@@ -1,7 +1,26 @@
 mod json {
     use crate::payload::{
-        self, BackendKey, BackendKeys, FaceEmbedding, IrisCodeShare, IrisCodes,
+        self, BackendKey, BackendKeys, FaceEmbedding, IrisData, IrisEyeData,
     };
+
+    fn iris() -> IrisData<'static> {
+        IrisData {
+            iris_version: None,
+            shares_version: "synthetic-sharing-v1",
+            left: IrisEyeData {
+                iris_code: None,
+                mask_code: None,
+                iris_code_shares: ["li", "li1", "li2"],
+                mask_code_shares: ["lm", "lm1", "lm2"],
+            },
+            right: IrisEyeData {
+                iris_code: None,
+                mask_code: None,
+                iris_code_shares: ["ri", "ri1", "ri2"],
+                mask_code_shares: ["rm", "rm1", "rm2"],
+            },
+        }
+    }
 
     #[test]
     fn face_vectors_and_order_are_preserved_with_sorted_keys() {
@@ -28,24 +47,16 @@ mod json {
 
     #[test]
     fn iris_codes_preserve_missing_and_empty_values() {
-        let codes = IrisCodes {
-            iris_version: Some("synthetic-version"),
-            left_iris_code: Some("left"),
-            left_mask_code: Some(""),
-            right_iris_code: None,
-            right_mask_code: Some("right-mask"),
-        };
+        let mut codes = iris();
+        codes.iris_version = Some("synthetic-version");
+        codes.left.iris_code = Some("left");
+        codes.left.mask_code = Some("");
+        codes.right.mask_code = Some("right-mask");
         assert_eq!(
             payload::iris_codes(&codes).unwrap(),
             br#"{"IRIS_version":"synthetic-version","left_iris_code":"left","left_mask_code":"","right_iris_code":null,"right_mask_code":"right-mask"}"#,
         );
-        let missing = IrisCodes {
-            iris_version: None,
-            left_iris_code: None,
-            left_mask_code: None,
-            right_iris_code: None,
-            right_mask_code: None,
-        };
+        let missing = iris();
         assert_eq!(
             payload::iris_codes(&missing).unwrap(),
             br#"{"IRIS_version":null,"left_iris_code":null,"left_mask_code":null,"right_iris_code":null,"right_mask_code":null}"#,
@@ -54,33 +65,43 @@ mod json {
 
     #[test]
     fn share_fields_and_versions_use_exact_wire_names() {
-        let mut share = IrisCodeShare {
-            iris_version: None,
-            iris_shares_version: "synthetic-sharing-v1",
-            left_iris_code_shares: "li",
-            left_mask_code_shares: "lm",
-            right_iris_code_shares: "ri",
-            right_mask_code_shares: "rm",
-        };
+        let mut data = iris();
         assert_eq!(
-            payload::iris_code_share(&share).unwrap(),
+            payload::iris_code_shares(&data).unwrap()[0],
             br#"{"IRIS_shares_version":"synthetic-sharing-v1","IRIS_version":null,"left_iris_code_shares":"li","left_mask_code_shares":"lm","right_iris_code_shares":"ri","right_mask_code_shares":"rm"}"#,
         );
-        share.iris_version = Some("synthetic-iris-v1");
-        let value: serde_json::Value =
-            serde_json::from_slice(&payload::iris_code_share(&share).unwrap()).unwrap();
-        assert_eq!(value["IRIS_version"], "synthetic-iris-v1");
+        data.iris_version = Some("synthetic-iris-v1");
+        let codes: serde_json::Value =
+            serde_json::from_slice(&payload::iris_codes(&data).unwrap()).unwrap();
+        for (i, bytes) in payload::iris_code_shares(&data).unwrap().iter().enumerate() {
+            let value: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            assert_eq!(value["IRIS_version"], codes["IRIS_version"]);
+            assert_eq!(value["IRIS_version"], "synthetic-iris-v1");
+            assert_eq!(value["IRIS_shares_version"], data.shares_version);
+            assert_eq!(
+                value["left_iris_code_shares"],
+                data.left.iris_code_shares[i]
+            );
+            assert_eq!(
+                value["left_mask_code_shares"],
+                data.left.mask_code_shares[i]
+            );
+            assert_eq!(
+                value["right_iris_code_shares"],
+                data.right.iris_code_shares[i]
+            );
+            assert_eq!(
+                value["right_mask_code_shares"],
+                data.right.mask_code_shares[i]
+            );
+        }
     }
 
     #[test]
     fn strings_are_json_escaped_without_interpreting_their_contents() {
-        let codes = IrisCodes {
-            iris_version: Some("\"\\\n\t\0é"),
-            left_iris_code: Some("not base64"),
-            left_mask_code: None,
-            right_iris_code: None,
-            right_mask_code: None,
-        };
+        let mut codes = iris();
+        codes.iris_version = Some("\"\\\n\t\0é");
+        codes.left.iris_code = Some("not base64");
         assert_eq!(
             payload::iris_codes(&codes).unwrap(),
             "{\"IRIS_version\":\"\\\"\\\\\\n\\t\\u0000é\",\"left_iris_code\":\"not base64\",\"left_mask_code\":null,\"right_iris_code\":null,\"right_mask_code\":null}".as_bytes(),
@@ -115,17 +136,14 @@ mod json {
 }
 
 mod di {
-    use crate::payload::{self, DiEncodingError, DiEye};
+    use crate::payload::{self, DiData, DiEyeData};
     use orb_pcp_defs::{
         prost::Message,
         v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
     };
 
-    fn left() -> DiEye<'static> {
-        DiEye {
-            model_version: "m",
-            inference_backend: "b",
-            embedding_version: "v",
+    fn left() -> DiEyeData<'static> {
+        DiEyeData {
             embedding: &[-128, 0, 127],
             mirror_embedding: &[-1],
             embedding_f32: &[1.0],
@@ -135,21 +153,31 @@ mod di {
         }
     }
 
-    fn right() -> DiEye<'static> {
-        DiEye {
+    fn right() -> DiEyeData<'static> {
+        DiEyeData {
             embedding: &[1],
             mirror_embedding: &[-2],
             embedding_f32: &[2.0],
             mirror_embedding_f32: &[0.5],
             embedding_shares: [&[1], &[5], &[9]],
             mirror_embedding_shares: [&[2], &[6], &[10]],
-            ..left()
+        }
+    }
+
+    fn data() -> DiData<'static> {
+        DiData {
+            model_version: "m",
+            inference_backend: "b",
+            embedding_version: "v",
+            shares_version: "s",
+            left: Some(left()),
+            right: Some(right()),
         }
     }
 
     #[test]
     fn embeddings_have_exact_wire_bytes_and_preserve_signed_values() {
-        let output = payload::encode_di(Some(&left()), Some(&right()), "s").unwrap();
+        let output = payload::encode_di(Some(&data()));
         assert_eq!(
             output.embeddings,
             [
@@ -177,7 +205,7 @@ mod di {
     fn shares_preserve_unsigned_values_and_recipient_eye_mirror_association() {
         let left = left();
         let right = right();
-        let output = payload::encode_di(Some(&left), Some(&right), "s").unwrap();
+        let output = payload::encode_di(Some(&data()));
         assert_eq!(
             output.shares[0],
             [
@@ -210,56 +238,32 @@ mod di {
     }
 
     #[test]
-    fn either_missing_eye_produces_four_empty_buffers() {
-        let eye = left();
-        for (left, right) in [(None, None), (Some(&eye), None), (None, Some(&eye))] {
-            let output = payload::encode_di(left, right, "s").unwrap();
+    fn absent_data_or_either_missing_eye_produces_four_empty_buffers() {
+        for data in [
+            None,
+            Some(DiData {
+                left: None,
+                right: None,
+                ..data()
+            }),
+            Some(DiData {
+                left: None,
+                ..data()
+            }),
+            Some(DiData {
+                right: None,
+                ..data()
+            }),
+        ] {
+            let output = payload::encode_di(data.as_ref());
             assert!(output.embeddings.is_empty());
             assert!(output.shares.iter().all(Vec::is_empty));
         }
     }
 
     #[test]
-    fn metadata_mismatches_return_field_only_errors() {
-        let left = left();
-        for (field, expected) in [
-            (0, DiEncodingError::ModelVersionMismatch),
-            (1, DiEncodingError::InferenceBackendMismatch),
-            (2, DiEncodingError::EmbeddingVersionMismatch),
-        ] {
-            let mut right = right();
-            match field {
-                0 => right.model_version = "sensitive-mismatched-value",
-                1 => right.inference_backend = "sensitive-mismatched-value",
-                _ => right.embedding_version = "sensitive-mismatched-value",
-            }
-            let error = payload::encode_di(Some(&left), Some(&right), "s")
-                .err()
-                .unwrap();
-            assert!(!error.to_string().contains("sensitive-mismatched-value"));
-            assert_eq!(error, expected);
-        }
-        let mut right = right();
-        right.model_version = "different-model";
-        right.inference_backend = "different-backend";
-        right.embedding_version = "different-embedding";
-        assert_eq!(
-            payload::encode_di(Some(&left), Some(&right), "s").err(),
-            Some(DiEncodingError::ModelVersionMismatch),
-        );
-        right.model_version = left.model_version;
-        assert_eq!(
-            payload::encode_di(Some(&left), Some(&right), "s").err(),
-            Some(DiEncodingError::InferenceBackendMismatch),
-        );
-    }
-
-    #[test]
     fn present_empty_vectors_are_not_absent_records() {
-        let eye = DiEye {
-            model_version: "",
-            inference_backend: "",
-            embedding_version: "",
+        let eye = || DiEyeData {
             embedding: &[],
             mirror_embedding: &[],
             embedding_f32: &[],
@@ -267,7 +271,14 @@ mod di {
             embedding_shares: [&[]; 3],
             mirror_embedding_shares: [&[]; 3],
         };
-        let output = payload::encode_di(Some(&eye), Some(&eye), "").unwrap();
+        let output = payload::encode_di(Some(&DiData {
+            model_version: "",
+            inference_backend: "",
+            embedding_version: "",
+            shares_version: "",
+            left: Some(eye()),
+            right: Some(eye()),
+        }));
         assert_eq!(output.embeddings, [0x0a, 0]);
         assert!(output.shares.iter().all(|bytes| bytes == &[0x0a, 0]));
     }
@@ -281,12 +292,16 @@ mod di {
             -0.0,
             f32::from_bits(1),
         ];
-        let eye = DiEye {
+        let eye = || DiEyeData {
             embedding_f32: &values,
             mirror_embedding_f32: &values,
             ..left()
         };
-        let output = payload::encode_di(Some(&eye), Some(&eye), "s").unwrap();
+        let output = payload::encode_di(Some(&DiData {
+            left: Some(eye()),
+            right: Some(eye()),
+            ..data()
+        }));
         let decoded = DiIrisEmbeddings::decode(output.embeddings.as_slice())
             .unwrap()
             .embedding_v1
