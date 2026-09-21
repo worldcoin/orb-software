@@ -1,0 +1,148 @@
+use std::time::UNIX_EPOCH;
+
+use orb_pcp::{
+    builder::{self, Biometrics, Request, Version},
+    metadata, payload,
+};
+use rand::{CryptoRng, RngCore};
+use sodiumoxide::crypto::box_;
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[error("synthetic signing failure")]
+struct SignerError;
+
+fn request(key: &[u8; 32]) -> Request<'_> {
+    let backend = || payload::BackendKey {
+        public_key: key,
+        encrypted_private_key: "synthetic-envelope",
+    };
+    Request {
+        version: Version::V2_8,
+        timestamp: 1,
+        info: metadata::Info {
+            signup_id: "synthetic",
+            signup_reason: "test",
+            orb_id: "orb",
+            operator_id: "operator",
+            capture_start: UNIX_EPOCH,
+            qr_code: "qr",
+            id_commitment: "id",
+            software_version: "test",
+            orb_country: "country",
+            orb_public_key_certificate: b"synthetic-certificate",
+            device_public_key: Some("device"),
+        },
+        user_public_key: key,
+        backend_keys: payload::BackendKeys {
+            iris: backend(),
+            normalized_iris: backend(),
+            face: backend(),
+            tier2: backend(),
+        },
+        biometrics: Biometrics::Redacted,
+    }
+}
+
+struct FailingRng;
+impl CryptoRng for FailingRng {}
+impl RngCore for FailingRng {
+    fn next_u32(&mut self) -> u32 {
+        panic!("unexpected randomness")
+    }
+    fn next_u64(&mut self) -> u64 {
+        panic!("unexpected randomness")
+    }
+    fn fill_bytes(&mut self, _: &mut [u8]) {
+        panic!("expected fallible randomness")
+    }
+    fn try_fill_bytes(&mut self, _: &mut [u8]) -> Result<(), rand::Error> {
+        Err(rand::Error::new(std::io::Error::other(
+            "synthetic entropy failure",
+        )))
+    }
+}
+
+#[test]
+fn version_device_binding_mismatches_fail_before_signing() {
+    for version in [Version::V2_7, Version::V2_8] {
+        let mut input = request(&[0; 32]);
+        input.version = version;
+        if version == Version::V2_8 {
+            input.info.device_public_key = None;
+        }
+        let result = builder::build(
+            &input,
+            &mut FailingRng,
+            |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+        );
+        assert!(matches!(
+            result,
+            Err(builder::Error::DeviceKeyVersionMismatch)
+        ));
+    }
+}
+
+#[test]
+fn oversized_archive_timestamp_fails_before_signing() {
+    let mut input = request(&[0; 32]);
+    input.timestamp = u64::from(u32::MAX) + 1;
+    let result = builder::build(
+        &input,
+        &mut FailingRng,
+        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+    );
+    assert!(matches!(
+        result,
+        Err(builder::Error::Archive(
+            orb_pcp::archive::Error::TimestampOutOfRange
+        ))
+    ));
+}
+
+#[test]
+fn randomness_failure_returns_no_package_or_signature() {
+    sodiumoxide::init().unwrap();
+    let (key, _) = box_::gen_keypair();
+    let result = builder::build(
+        &request(&key.0),
+        &mut FailingRng,
+        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+    );
+    assert!(matches!(
+        result,
+        Err(builder::Error::Metadata(metadata::Error::Randomness(_)))
+    ));
+}
+
+#[test]
+fn invalid_user_recipient_returns_no_package_or_signature() {
+    let result = builder::build(
+        &request(&[0; 32]),
+        &mut rand::rngs::OsRng,
+        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+    );
+    assert!(matches!(
+        result,
+        Err(builder::Error::Encryption(
+            orb_pcp::encryption::Error::InvalidRecipient
+        ))
+    ));
+}
+
+#[test]
+fn signer_failure_is_not_retried_or_returned_as_a_package() {
+    sodiumoxide::init().unwrap();
+    let (key, _) = box_::gen_keypair();
+    let mut calls = 0;
+    let result = builder::build(&request(&key.0), &mut rand::rngs::OsRng, |_| {
+        calls += 1;
+        Err::<Vec<u8>, _>(SignerError)
+    });
+    assert_eq!(calls, 1);
+    assert!(matches!(
+        result,
+        Err(builder::Error::Signing(
+            orb_pcp::manifest::SigningError::Signer(SignerError)
+        ))
+    ));
+}
