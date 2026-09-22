@@ -1,5 +1,9 @@
 //! In-memory synthetic package construction and round-trip checks, not an
 //! untrusted-package verifier or a production signer implementation.
+//!
+//! Run with `cargo run -p orb-pcp --example build_pcp`. Builds and verifies
+//! 2.7, 2.8, and 3.0 (with and without a device key), included and redacted.
+//! Everything stays in memory; only case labels and encrypted sizes are printed.
 
 use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
 
@@ -107,10 +111,13 @@ pub fn run() -> Result<()> {
         }),
     };
 
-    for version in [
-        pcp::PcpVersion::V2_7,
-        pcp::PcpVersion::V2_8,
-        pcp::PcpVersion::V3_0,
+    // Callers select the exact version and supply their actual metadata.
+    // Archive/encryption/manifest choices belong to the builder, not the caller.
+    for (version, device_public_key) in [
+        (pcp::PcpVersion::V2_7, None),
+        (pcp::PcpVersion::V2_8, Some("synthetic-device-key")),
+        (pcp::PcpVersion::V3_0, None),
+        (pcp::PcpVersion::V3_0, Some("synthetic-device-key")),
     ] {
         for redacted in [false, true] {
             let user = box_::gen_keypair();
@@ -134,8 +141,7 @@ pub fn run() -> Result<()> {
                     orb_country: "XX",
                     orb_public_key_certificate:
                         b"synthetic-placeholder-not-a-certificate",
-                    device_public_key: (version != pcp::PcpVersion::V2_7)
-                        .then_some("synthetic-device-key"),
+                    device_public_key,
                 },
                 user_public_key: &user.0 .0,
                 backend_keys: pcp::BackendKeys {
@@ -172,10 +178,18 @@ pub fn run() -> Result<()> {
                 Ok::<_, p256::ecdsa::Error>(signature.to_der().as_bytes().to_vec())
             })?;
             assert_eq!(calls, 1);
-            verify(&package, version, redacted, &user, &backends, &signer)?;
+            verify(
+                &package,
+                version,
+                device_public_key,
+                redacted,
+                &user,
+                &backends,
+                &signer,
+            )?;
             println!(
-                "{version:?} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
-                package.tier0.len(), package.tier1.len(), package.tier2.len()
+                "{version:?} device_key={} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
+                device_public_key.is_some(), package.tier0.len(), package.tier1.len(), package.tier2.len()
             );
         }
     }
@@ -245,6 +259,7 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
 fn verify(
     package: &pcp::Package,
     version: pcp::PcpVersion,
+    device_public_key: Option<&str>,
     redacted: bool,
     user: &KeyPair,
     backends: &[KeyPair; 4],
@@ -281,13 +296,10 @@ fn verify(
                 .insert(field.to_owned(), hash(format!("{value}{salt}").as_bytes()));
         }
     }
+    assert_eq!(expected.len(), 9 + usize::from(device_public_key.is_some()));
     assert_eq!(
-        expected.len(),
-        if version == pcp::PcpVersion::V2_7 {
-            9
-        } else {
-            10
-        }
+        expected.contains_key("device_public_key"),
+        device_public_key.is_some()
     );
     for name in [
         "signup_id",
@@ -338,8 +350,8 @@ fn verify(
     };
     expected.insert("version".to_owned(), wire_version.to_owned());
     assert_eq!(
-        info.get("device_public_key").is_some(),
-        version != pcp::PcpVersion::V2_7
+        info.get("device_public_key"),
+        device_public_key.map(serde_json::Value::from).as_ref()
     );
     if redacted {
         assert_eq!(tier0.len(), 4);

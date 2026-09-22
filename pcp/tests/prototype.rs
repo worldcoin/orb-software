@@ -3,6 +3,6 @@
 mod example;
 
 #[test]
-fn all_versions_round_trip_with_and_without_biometrics() {
+fn version_device_and_redaction_matrix_round_trips() {
     example::run().expect("synthetic PCP round-trip failed");
 }
