@@ -6,10 +6,33 @@ use futures::TryFutureExt;
 #[cfg(feature = "async")]
 use std::future;
 
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, derive_more::Display, derive_more::FromStr,
-)]
+/// An Arkenstone ID, formatted and serialized as `P` followed by eight uppercase hex digits.
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct OrbId(u32);
+
+impl std::fmt::Debug for OrbId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl std::fmt::Display for OrbId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P{:08X}", self.0)
+    }
+}
+
+impl std::str::FromStr for OrbId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Sysfs serial numbers and existing ORB_ID overrides are decimal.
+        match s.strip_prefix('P') {
+            Some(hex) => u32::from_str_radix(hex, 16).map(Self),
+            None => s.parse().map(Self),
+        }
+    }
+}
 
 // Serialize/deserialize as a string, matching orb_id_linux's `OrbId` and the
 // backend API, which expects `orbId` to be a string on every platform.
@@ -78,18 +101,45 @@ mod test {
 
     #[test]
     fn test_from_str_and_display() {
-        let id: OrbId = "1234".parse().unwrap();
-        assert_eq!(id.0, 1234);
-        assert_eq!(id.to_string(), "1234");
+        for (serial, expected) in [
+            (0, "P00000000"),
+            (1234, "P000004D2"),
+            (1428495495, "P55251C87"),
+            (u32::MAX, "PFFFFFFFF"),
+        ] {
+            let id: OrbId = serial.to_string().parse().unwrap();
+            assert_eq!(id.0, serial);
+            assert_eq!(id.to_string(), expected);
+            assert_eq!(format!("{id:?}"), expected);
+            assert_eq!(format!("{id:#?}"), expected);
+            assert_eq!(expected.parse::<OrbId>().unwrap(), id);
+        }
+        assert_eq!("P55251c87".parse::<OrbId>().unwrap().0, 1428495495);
+    }
+
+    #[test]
+    fn test_invalid_orb_id() {
+        for input in [
+            "",
+            "P",
+            "Pxyz",
+            "P100000000",
+            "4294967296",
+            "-1",
+            "Q55251C87",
+        ] {
+            assert!(input.parse::<OrbId>().is_err(), "accepted {input:?}");
+        }
     }
 
     #[test]
     #[serial_test::serial]
     fn test_sync_get_orb_id_from_env() {
-        std::env::set_var("ORB_ID", "1234");
-
-        let orb_id = OrbId::read_blocking().unwrap();
-        assert_eq!(orb_id.0, 1234);
+        for input in ["1428495495", "P55251C87"] {
+            std::env::set_var("ORB_ID", input);
+            let orb_id = OrbId::read_blocking().unwrap();
+            assert_eq!(orb_id.to_string(), "P55251C87");
+        }
 
         std::env::remove_var("ORB_ID");
     }
@@ -98,10 +148,11 @@ mod test {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_async_get_orb_id_from_env() {
-        std::env::set_var("ORB_ID", "1234");
-
-        let orb_id = OrbId::read().await.unwrap();
-        assert_eq!(orb_id.0, 1234);
+        for input in ["1428495495", "P55251C87"] {
+            std::env::set_var("ORB_ID", input);
+            let orb_id = OrbId::read().await.unwrap();
+            assert_eq!(orb_id.to_string(), "P55251C87");
+        }
 
         std::env::remove_var("ORB_ID");
     }
@@ -114,6 +165,9 @@ mod test {
 
         let orb_id = OrbId::read_blocking().unwrap();
         assert_eq!(orb_id.0, 5678);
+        assert_eq!(orb_id.to_string(), "P0000162E");
+        #[cfg(feature = "serde")]
+        assert_eq!(serde_json::to_value(&orb_id).unwrap(), "P0000162E");
 
         std::fs::remove_file(SOC_SERIAL_NUMBER_PATH).unwrap();
     }
@@ -129,6 +183,9 @@ mod test {
 
         let orb_id = OrbId::read().await.unwrap();
         assert_eq!(orb_id.0, 5678);
+        assert_eq!(orb_id.to_string(), "P0000162E");
+        #[cfg(feature = "serde")]
+        assert_eq!(serde_json::to_value(&orb_id).unwrap(), "P0000162E");
 
         tokio::fs::remove_file(SOC_SERIAL_NUMBER_PATH)
             .await
@@ -138,14 +195,18 @@ mod test {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_orb_id() {
-        let json = serde_json::json!("1234");
-        let id: OrbId = serde_json::from_value(json).unwrap();
-        assert_eq!(id.0, 1234);
-        assert_eq!(serde_json::to_value(id).unwrap(), serde_json::json!("1234"));
+        for input in ["1428495495", "P55251C87"] {
+            let id: OrbId = serde_json::from_value(serde_json::json!(input)).unwrap();
+            assert_eq!(id.0, 1428495495);
+            assert_eq!(
+                serde_json::to_value(id).unwrap(),
+                serde_json::json!("P55251C87")
+            );
+        }
     }
 
     /// Ensures request payloads embedding an `OrbId` send `orbId` as a JSON
-    /// string (e.g. `{"orbId":"1234"}`), matching the backend API contract,
+    /// string (e.g. `{"orbId":"P55251C87"}`), matching the backend API contract,
     /// instead of a bare number.
     #[cfg(feature = "serde")]
     #[test]
@@ -157,8 +218,11 @@ mod test {
         }
 
         let req = Request {
-            orb_id: "1234".parse().unwrap(),
+            orb_id: "1428495495".parse().unwrap(),
         };
-        assert_eq!(serde_json::to_string(&req).unwrap(), r#"{"orbId":"1234"}"#);
+        assert_eq!(
+            serde_json::to_string(&req).unwrap(),
+            r#"{"orbId":"P55251C87"}"#
+        );
     }
 }
