@@ -460,8 +460,28 @@ mod tier_layout {
     use crate::archive::{
         self, BiometricArchives, Envelope, PreparedBiometricFiles, Tier0Files,
     };
+    use crate::payload::{EncodedDaugman, EncodedDi};
 
-    fn biometrics(fraud: bool) -> PreparedBiometricFiles<'static> {
+    fn payloads() -> (EncodedDaugman, EncodedDi) {
+        (
+            EncodedDaugman {
+                codes: b"iris-json".to_vec(),
+                shares: [b"iris-share-0", b"iris-share-1", b"iris-share-2"]
+                    .map(|x| x.to_vec()),
+            },
+            EncodedDi {
+                embeddings: b"di-protobuf".to_vec(),
+                shares: [b"di-share-0", b"di-share-1", b"di-share-2"]
+                    .map(|x| x.to_vec()),
+            },
+        )
+    }
+
+    fn biometrics<'a>(
+        fraud: bool,
+        daugman: &'a EncodedDaugman,
+        di: &'a EncodedDi,
+    ) -> PreparedBiometricFiles<'a> {
         PreparedBiometricFiles {
             archives: BiometricArchives {
                 iris_sealed: b"iris-ciphertext",
@@ -471,10 +491,8 @@ mod tier_layout {
                 face_ir_and_thermal: b"modality-archive",
             },
             face_embeddings_json: b"face-json",
-            iris_codes_json: b"iris-json",
-            iris_code_shares_json: [b"iris-share-0", b"iris-share-1", b"iris-share-2"],
-            di_iris_embeddings_pb: b"di-protobuf",
-            di_iris_embeddings_shares_pb: [b"di-share-0", b"di-share-1", b"di-share-2"],
+            daugman,
+            di,
         }
     }
 
@@ -513,7 +531,8 @@ mod tier_layout {
     #[test]
     fn v2_places_all_archives_in_tier0_before_payloads() {
         for fraud in [false, true] {
-            let bio = biometrics(fraud);
+            let (daugman, di) = payloads();
+            let bio = biometrics(fraud, &daugman, &di);
             let auxiliary =
                 archive::auxiliary_tiers(Envelope::V2, 123, Some(&bio)).unwrap();
             assert_eq!(auxiliary.tier1, vec![0; 1024]);
@@ -537,7 +556,8 @@ mod tier_layout {
     #[test]
     fn v3_routes_archives_to_auxiliary_tiers_without_changing_bytes() {
         for fraud in [false, true] {
-            let bio = biometrics(fraud);
+            let (daugman, di) = payloads();
+            let bio = biometrics(fraud, &daugman, &di);
             let auxiliary =
                 archive::auxiliary_tiers(Envelope::V3, 123, Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
@@ -581,9 +601,12 @@ mod tier_layout {
     #[test]
     fn empty_di_and_share_payloads_are_present_not_omitted() {
         for format in [Envelope::V2, Envelope::V3] {
-            let mut bio = biometrics(false);
-            bio.di_iris_embeddings_pb = b"";
-            bio.di_iris_embeddings_shares_pb = [b""; 3];
+            let (daugman, _) = payloads();
+            let di = EncodedDi {
+                embeddings: Vec::new(),
+                shares: std::array::from_fn(|_| Vec::new()),
+            };
+            let bio = biometrics(false, &daugman, &di);
             let tier0 =
                 archive::tier0(format, 123, common_files(), Some(&bio)).unwrap();
             let entries = entries(&tier0);

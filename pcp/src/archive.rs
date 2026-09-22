@@ -8,7 +8,10 @@ use std::{
     io::Write,
 };
 
-use crate::crypto;
+use crate::{
+    crypto,
+    payload::{EncodedDaugman, EncodedDi},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
@@ -368,10 +371,8 @@ pub(crate) struct BiometricArchives<'a> {
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
     pub face_embeddings_json: &'a [u8],
-    pub iris_codes_json: &'a [u8],
-    pub iris_code_shares_json: [&'a [u8]; 3],
-    pub di_iris_embeddings_pb: &'a [u8],
-    pub di_iris_embeddings_shares_pb: [&'a [u8]; 3],
+    pub daugman: &'a EncodedDaugman,
+    pub di: &'a EncodedDi,
 }
 
 /// Pre-encoded files present in tier 0 whether or not biometric entries are included.
@@ -438,7 +439,7 @@ pub(crate) fn tier0(
     entries.push(("info.json", files.info_json));
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
-        entries.push(("iris_codes.json", biometrics.iris_codes_json));
+        entries.push(("iris_codes.json", biometrics.daugman.codes.as_slice()));
         entries.extend(
             [
                 "iris_code_shares_0.json",
@@ -446,9 +447,9 @@ pub(crate) fn tier0(
                 "iris_code_shares_2.json",
             ]
             .into_iter()
-            .zip(biometrics.iris_code_shares_json),
+            .zip(biometrics.daugman.shares.iter().map(Vec::as_slice)),
         );
-        entries.push(("di_iris_embeddings.pb", biometrics.di_iris_embeddings_pb));
+        entries.push(("di_iris_embeddings.pb", biometrics.di.embeddings.as_slice()));
         entries.extend(
             [
                 "di_iris_embeddings_shares_0.pb",
@@ -456,7 +457,7 @@ pub(crate) fn tier0(
                 "di_iris_embeddings_shares_2.pb",
             ]
             .into_iter()
-            .zip(biometrics.di_iris_embeddings_shares_pb),
+            .zip(biometrics.di.shares.iter().map(Vec::as_slice)),
         );
     }
     entries.extend([

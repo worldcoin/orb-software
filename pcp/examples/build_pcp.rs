@@ -72,16 +72,16 @@ pub fn run() -> Result<()> {
             right_depth_png: Some(&png),
         }),
     };
-    let iris = pcp::IrisData {
+    let daugman = pcp::DaugmanData {
         iris_version: Some("synthetic"),
         shares_version: "synthetic-sharing",
-        left: pcp::IrisEyeData {
+        left: pcp::DaugmanEyeData {
             iris_code: Some("synthetic-left-iris"),
             mask_code: Some("synthetic-left-mask"),
             iris_code_shares: ["left-iris-0", "left-iris-1", "left-iris-2"],
             mask_code_shares: ["left-mask-0", "left-mask-1", "left-mask-2"],
         },
-        right: pcp::IrisEyeData {
+        right: pcp::DaugmanEyeData {
             iris_code: Some("synthetic-right-iris"),
             mask_code: Some("synthetic-right-mask"),
             iris_code_shares: ["right-iris-0", "right-iris-1", "right-iris-2"],
@@ -164,7 +164,7 @@ pub fn run() -> Result<()> {
                             embedding_version: "example",
                             embedding_inference_backend: "none",
                         }],
-                        iris: &iris,
+                        daugman: &daugman,
                         di: Some(&di),
                     }
                 },

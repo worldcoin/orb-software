@@ -19,11 +19,12 @@ cargo test -p orb-pcp --test prototype
 ```
 
 The example builds all three versions with included and redacted biometrics,
-using exclusively synthetic data and freshly generated in-memory keys. It opens
+including 3.0 with and without a device key, using exclusively synthetic data
+and freshly generated in-memory keys. It opens
 the encrypted tiers with sodiumoxide, checks archive routing, verifies the
 example's P-256 prehash signature, and checks the complete manifest against
 decrypted payloads, salted metadata, and version-3 encrypted tier hashes. It only
-prints version, redaction state, encrypted lengths and success; it writes no
+prints version, device-key presence, redaction state, encrypted lengths and success; it writes no
 packages, keys or payloads to disk. The example is also an integration test.
 It includes extra captured IR images without normalized outputs, as supported
 by the existing format, and checks their files, metadata IDs and manifest hashes.
@@ -35,19 +36,24 @@ proof of biometric validity.
 ## API
 
 Use `orb_pcp::build` with a `BuildRequest` and explicit `PcpVersion`.
-`BiometricPolicy::Included { iris, di, face_embeddings, images, ... }` supplies
+`BiometricPolicy::Included { daugman, di, face_embeddings, images, ... }` supplies
 separate named biometric inputs;
 `BiometricPolicy::Redacted` omits them. Input types and errors are exported
 directly from `orb_pcp`; archive layout and intermediate encoders are private.
 See `examples/build_pcp.rs` for a complete caller using this API.
 
-`IrisData` groups common pipeline/sharing versions with left and right
-`IrisEyeData` values (codes, masks and their three recipients' shares).
+`DaugmanData` groups common pipeline/sharing versions with left and right
+`DaugmanEyeData` values (codes, masks and their three recipients' shares).
 `DiData` similarly groups common model/embedding/sharing versions and inference
 backend with optional left and right `DiEyeData` values (quantized/float
 embeddings, mirrored embeddings and shares). Shares at the same index belong
 to the same recipient throughout. These input groups do not change output
 filenames or wire formats.
+
+Daugman and DI each remain grouped through encoding and archive assembly.
+Versions belong to the input data and their serialized files, not duplicate
+metadata alongside the encoded buffers. Iris image/normalization inputs are
+separate from the Daugman code/share representation.
 
 Before constructing `DiData` from independently produced eyes, the consumer
 adapter must reject disagreements in model version, embedding version or

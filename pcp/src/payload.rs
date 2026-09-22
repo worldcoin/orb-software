@@ -27,18 +27,18 @@ pub struct FaceEmbedding<'a> {
 }
 
 /// Prepared iris codes and shares with common pipeline and sharing versions.
-pub struct IrisData<'a> {
+pub struct DaugmanData<'a> {
     /// Pipeline/library version, not a per-eye code version. Missing means JSON null.
     pub iris_version: Option<&'a str>,
     pub shares_version: &'a str,
-    pub left: IrisEyeData<'a>,
-    pub right: IrisEyeData<'a>,
+    pub left: DaugmanEyeData<'a>,
+    pub right: DaugmanEyeData<'a>,
 }
 
 /// Missing codes become JSON null; all three recipients' shares remain required.
 /// Same-index shares belong to the same recipient across eyes and code/mask.
 /// Encoding does not verify that shares reconstruct the supplied values.
-pub struct IrisEyeData<'a> {
+pub struct DaugmanEyeData<'a> {
     pub iris_code: Option<&'a str>,
     pub mask_code: Option<&'a str>,
     pub iris_code_shares: [&'a str; 3],
@@ -80,19 +80,22 @@ pub(crate) fn face_embeddings(
     serde_json::to_vec(&records)
 }
 
-pub(crate) fn iris_codes(data: &IrisData<'_>) -> Result<Vec<u8>, serde_json::Error> {
-    serde_json::to_vec(&BTreeMap::from([
+pub(crate) struct EncodedDaugman {
+    pub codes: Vec<u8>,
+    pub shares: [Vec<u8>; 3],
+}
+
+/// Encodes both eyes' codes/masks and three same-index recipient share files.
+pub(crate) fn encode_daugman(
+    data: &DaugmanData<'_>,
+) -> Result<EncodedDaugman, serde_json::Error> {
+    let codes = serde_json::to_vec(&BTreeMap::from([
         ("IRIS_version", data.iris_version),
         ("left_iris_code", data.left.iris_code),
         ("left_mask_code", data.left.mask_code),
         ("right_iris_code", data.right.iris_code),
         ("right_mask_code", data.right.mask_code),
-    ]))
-}
-
-pub(crate) fn iris_code_shares(
-    data: &IrisData<'_>,
-) -> Result<[Vec<u8>; 3], serde_json::Error> {
+    ]))?;
     let [first, second, third] = [0, 1, 2].map(|i| {
         serde_json::to_vec(&BTreeMap::from([
             ("IRIS_version", data.iris_version),
@@ -109,7 +112,10 @@ pub(crate) fn iris_code_shares(
             ),
         ]))
     });
-    Ok([first?, second?, third?])
+    Ok(EncodedDaugman {
+        codes,
+        shares: [first?, second?, third?],
+    })
 }
 
 /// Encodes all four roles with sorted keys at both object levels.

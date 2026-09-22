@@ -70,7 +70,7 @@ pub enum BiometricPolicy<'a> {
         left_iris_code_aggregate_image_ids: &'a [&'a str],
         right_iris_code_aggregate_image_ids: &'a [&'a str],
         face_embeddings: &'a [payload::FaceEmbedding<'a>],
-        iris: &'a payload::IrisData<'a>,
+        daugman: &'a payload::DaugmanData<'a>,
         /// Absent DI data or either missing eye produces four empty DI files.
         di: Option<&'a payload::DiData<'a>>,
     },
@@ -248,8 +248,7 @@ fn build_with_sealer<E>(
 struct Prepared {
     archives: archive::InnerArchives,
     face_embeddings: Vec<u8>,
-    iris_codes: Vec<u8>,
-    iris_shares: [Vec<u8>; 3],
+    daugman: payload::EncodedDaugman,
     di: payload::EncodedDi,
 }
 
@@ -264,18 +263,8 @@ impl Prepared {
                 face_ir_and_thermal: &self.archives.face_ir_and_thermal,
             },
             face_embeddings_json: &self.face_embeddings,
-            iris_codes_json: &self.iris_codes,
-            iris_code_shares_json: [
-                &self.iris_shares[0],
-                &self.iris_shares[1],
-                &self.iris_shares[2],
-            ],
-            di_iris_embeddings_pb: &self.di.embeddings,
-            di_iris_embeddings_shares_pb: [
-                &self.di.shares[0],
-                &self.di.shares[1],
-                &self.di.shares[2],
-            ],
+            daugman: &self.daugman,
+            di: &self.di,
         }
     }
 }
@@ -300,7 +289,7 @@ impl Envelope {
         let BiometricPolicy::Included {
             images,
             face_embeddings,
-            iris,
+            daugman,
             di,
             ..
         } = &request.biometrics
@@ -329,21 +318,20 @@ impl Envelope {
             Self::V3 => {}
         }
         let face_embeddings = payload::face_embeddings(face_embeddings)?;
-        let iris_codes = payload::iris_codes(iris)?;
-        let iris_shares = payload::iris_code_shares(iris)?;
+        let daugman = payload::encode_daugman(daugman)?;
         let di = payload::encode_di(*di);
         for (name, bytes) in [
             ("face_embeddings.json", face_embeddings.as_slice()),
-            ("iris_codes.json", iris_codes.as_slice()),
+            ("iris_codes.json", daugman.codes.as_slice()),
             ("di_iris_embeddings.pb", di.embeddings.as_slice()),
         ] {
             insert_hash(&mut archives.hashes, name.to_owned(), sha256(bytes))?;
         }
-        for (i, iris_share) in iris_shares.iter().enumerate() {
+        for (i, share) in daugman.shares.iter().enumerate() {
             insert_hash(
                 &mut archives.hashes,
                 format!("iris_code_shares_{i}.json"),
-                sha256(iris_share),
+                sha256(share),
             )?;
             insert_hash(
                 &mut archives.hashes,
@@ -354,8 +342,7 @@ impl Envelope {
         Ok(Some(Prepared {
             archives,
             face_embeddings,
-            iris_codes,
-            iris_shares,
+            daugman,
             di,
         }))
     }

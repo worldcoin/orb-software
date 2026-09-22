@@ -30,5 +30,6 @@ pub use crypto::{CommitmentError, SealingError};
 pub use manifest::{ManifestError, SigningError};
 pub use metadata::{MetadataError, PackageInfo};
 pub use payload::{
-    BackendKey, BackendKeys, DiData, DiEyeData, FaceEmbedding, IrisData, IrisEyeData,
+    BackendKey, BackendKeys, DaugmanData, DaugmanEyeData, DiData, DiEyeData,
+    FaceEmbedding,
 };

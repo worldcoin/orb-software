@@ -1,19 +1,19 @@
 mod json {
     use crate::payload::{
-        self, BackendKey, BackendKeys, FaceEmbedding, IrisData, IrisEyeData,
+        self, BackendKey, BackendKeys, DaugmanData, DaugmanEyeData, FaceEmbedding,
     };
 
-    fn iris() -> IrisData<'static> {
-        IrisData {
+    fn daugman() -> DaugmanData<'static> {
+        DaugmanData {
             iris_version: None,
             shares_version: "synthetic-sharing-v1",
-            left: IrisEyeData {
+            left: DaugmanEyeData {
                 iris_code: None,
                 mask_code: None,
                 iris_code_shares: ["li", "li1", "li2"],
                 mask_code_shares: ["lm", "lm1", "lm2"],
             },
-            right: IrisEyeData {
+            right: DaugmanEyeData {
                 iris_code: None,
                 mask_code: None,
                 iris_code_shares: ["ri", "ri1", "ri2"],
@@ -47,33 +47,33 @@ mod json {
 
     #[test]
     fn iris_codes_preserve_missing_and_empty_values() {
-        let mut codes = iris();
+        let mut codes = daugman();
         codes.iris_version = Some("synthetic-version");
         codes.left.iris_code = Some("left");
         codes.left.mask_code = Some("");
         codes.right.mask_code = Some("right-mask");
         assert_eq!(
-            payload::iris_codes(&codes).unwrap(),
+            payload::encode_daugman(&codes).unwrap().codes,
             br#"{"IRIS_version":"synthetic-version","left_iris_code":"left","left_mask_code":"","right_iris_code":null,"right_mask_code":"right-mask"}"#,
         );
-        let missing = iris();
+        let missing = daugman();
         assert_eq!(
-            payload::iris_codes(&missing).unwrap(),
+            payload::encode_daugman(&missing).unwrap().codes,
             br#"{"IRIS_version":null,"left_iris_code":null,"left_mask_code":null,"right_iris_code":null,"right_mask_code":null}"#,
         );
     }
 
     #[test]
     fn share_fields_and_versions_use_exact_wire_names() {
-        let mut data = iris();
+        let mut data = daugman();
         assert_eq!(
-            payload::iris_code_shares(&data).unwrap()[0],
+            payload::encode_daugman(&data).unwrap().shares[0],
             br#"{"IRIS_shares_version":"synthetic-sharing-v1","IRIS_version":null,"left_iris_code_shares":"li","left_mask_code_shares":"lm","right_iris_code_shares":"ri","right_mask_code_shares":"rm"}"#,
         );
         data.iris_version = Some("synthetic-iris-v1");
-        let codes: serde_json::Value =
-            serde_json::from_slice(&payload::iris_codes(&data).unwrap()).unwrap();
-        for (i, bytes) in payload::iris_code_shares(&data).unwrap().iter().enumerate() {
+        let encoded = payload::encode_daugman(&data).unwrap();
+        let codes: serde_json::Value = serde_json::from_slice(&encoded.codes).unwrap();
+        for (i, bytes) in encoded.shares.iter().enumerate() {
             let value: serde_json::Value = serde_json::from_slice(bytes).unwrap();
             assert_eq!(value["IRIS_version"], codes["IRIS_version"]);
             assert_eq!(value["IRIS_version"], "synthetic-iris-v1");
@@ -99,11 +99,11 @@ mod json {
 
     #[test]
     fn strings_are_json_escaped_without_interpreting_their_contents() {
-        let mut codes = iris();
+        let mut codes = daugman();
         codes.iris_version = Some("\"\\\n\t\0é");
         codes.left.iris_code = Some("not base64");
         assert_eq!(
-            payload::iris_codes(&codes).unwrap(),
+            payload::encode_daugman(&codes).unwrap().codes,
             "{\"IRIS_version\":\"\\\"\\\\\\n\\t\\u0000é\",\"left_iris_code\":\"not base64\",\"left_mask_code\":null,\"right_iris_code\":null,\"right_mask_code\":null}".as_bytes(),
         );
     }

@@ -337,13 +337,13 @@ mod diagnostics {
                 right_depth_png: None,
             }),
         };
-        let eye = || pcp::IrisEyeData {
+        let eye = || pcp::DaugmanEyeData {
             iris_code: None,
             mask_code: None,
             iris_code_shares: ["synthetic-share"; 3],
             mask_code_shares: ["synthetic-mask-share"; 3],
         };
-        let iris = pcp::IrisData {
+        let daugman = pcp::DaugmanData {
             iris_version: None,
             shares_version: "synthetic",
             left: eye(),
@@ -360,7 +360,7 @@ mod diagnostics {
                 left_iris_code_aggregate_image_ids: &[],
                 right_iris_code_aggregate_image_ids: &[],
                 face_embeddings: &[],
-                iris: &iris,
+                daugman: &daugman,
                 di: None,
             };
             let output = pcp::build_unencrypted_for_diagnostics(
