@@ -458,7 +458,7 @@ mod tier_layout {
     use std::io::Read;
 
     use crate::archive::{
-        self, BiometricArchives, PreparedBiometricFiles, Tier0Files, TierFormat,
+        self, BiometricArchives, Envelope, PreparedBiometricFiles, Tier0Files,
     };
 
     fn biometrics(fraud: bool) -> PreparedBiometricFiles<'static> {
@@ -515,11 +515,11 @@ mod tier_layout {
         for fraud in [false, true] {
             let bio = biometrics(fraud);
             let auxiliary =
-                archive::auxiliary_tiers(TierFormat::V2, 123, Some(&bio)).unwrap();
+                archive::auxiliary_tiers(Envelope::V2, 123, Some(&bio)).unwrap();
             assert_eq!(auxiliary.tier1, vec![0; 1024]);
             assert_eq!(auxiliary.tier2, vec![0; 1024]);
-            let bytes = archive::tier0(TierFormat::V2, 123, common_files(), Some(&bio))
-                .unwrap();
+            let bytes =
+                archive::tier0(Envelope::V2, 123, common_files(), Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
                 ("iris.tar", b"iris-ciphertext"),
                 ("normalized_iris.tar", b"normalized-ciphertext"),
@@ -539,7 +539,7 @@ mod tier_layout {
         for fraud in [false, true] {
             let bio = biometrics(fraud);
             let auxiliary =
-                archive::auxiliary_tiers(TierFormat::V3, 123, Some(&bio)).unwrap();
+                archive::auxiliary_tiers(Envelope::V3, 123, Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
                 ("iris.tar", b"iris-ciphertext"),
                 ("normalized_iris.tar", b"normalized-ciphertext"),
@@ -553,15 +553,15 @@ mod tier_layout {
                 &auxiliary.tier2,
                 &[("face_ir_and_thermal.tar", b"modality-archive")],
             );
-            let tier0 = archive::tier0(TierFormat::V3, 123, common_files(), Some(&bio))
-                .unwrap();
+            let tier0 =
+                archive::tier0(Envelope::V3, 123, common_files(), Some(&bio)).unwrap();
             assert_entries(&tier0, &full_tier0_remainder());
         }
     }
 
     #[test]
     fn omitted_biometrics_leave_only_four_tier0_files_and_empty_auxiliary_tiers() {
-        for format in [TierFormat::V2, TierFormat::V3] {
+        for format in [Envelope::V2, Envelope::V3] {
             let auxiliary = archive::auxiliary_tiers(format, 123, None).unwrap();
             assert_eq!(auxiliary.tier1, vec![0; 1024]);
             assert_eq!(auxiliary.tier2, vec![0; 1024]);
@@ -580,7 +580,7 @@ mod tier_layout {
 
     #[test]
     fn empty_di_and_share_payloads_are_present_not_omitted() {
-        for format in [TierFormat::V2, TierFormat::V3] {
+        for format in [Envelope::V2, Envelope::V3] {
             let mut bio = biometrics(false);
             bio.di_iris_embeddings_pb = b"";
             bio.di_iris_embeddings_shares_pb = [b""; 3];

@@ -4,13 +4,12 @@ use std::collections::BTreeMap;
 
 use data_encoding::HEXLOWER;
 
-/// The wire format to encode. Negotiation and device-key policy belong to the caller.
+/// Tier digests selected by the envelope, independently of the PCP version label.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ManifestFormat {
-    V2_7,
-    V2_8,
+pub(crate) enum TierEntries {
+    None,
     /// Tier digests must cover the final user-encrypted bytes, not plaintext archives.
-    V3_0 {
+    Present {
         tier_1: [u8; 32],
         tier_2: [u8; 32],
     },
@@ -49,11 +48,12 @@ pub enum SigningError<E> {
 /// Encoding failures do not invoke the signer. Signer failures return no signed
 /// result and retain the caller's error as [`SigningError::Signer`].
 pub(crate) fn encode_and_sign<'a, E>(
-    version: ManifestFormat,
+    version: &str,
+    tiers: TierEntries,
     hashes: impl IntoIterator<Item = (&'a str, [u8; 32])>,
     sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
 ) -> Result<SignedManifest, SigningError<E>> {
-    let hashes_json = encode(version, hashes)?;
+    let hashes_json = encode(version, tiers, hashes)?;
     let digest = ring::digest::digest(&ring::digest::SHA256, &hashes_json);
     let digest = digest
         .as_ref()
@@ -77,7 +77,8 @@ pub(crate) fn encode_and_sign<'a, E>(
 /// 32-byte digest to a prehash signer. Do not reformat or reserialize the JSON.
 ///
 pub(crate) fn encode<'a>(
-    version: ManifestFormat,
+    version: &str,
+    tiers: TierEntries,
     hashes: impl IntoIterator<Item = (&'a str, [u8; 32])>,
 ) -> Result<Vec<u8>, ManifestError> {
     let mut fields = BTreeMap::new();
@@ -92,19 +93,17 @@ pub(crate) fn encode<'a>(
             return Err(ManifestError::DuplicateEntry);
         }
     }
-    let wire_version = match version {
-        ManifestFormat::V2_7 => "2.7",
-        ManifestFormat::V2_8 => "2.8",
-        ManifestFormat::V3_0 { tier_1, tier_2 } => {
+    match tiers {
+        TierEntries::None => {}
+        TierEntries::Present { tier_1, tier_2 } => {
             fields.insert("tier_1", HEXLOWER.encode(&tier_1));
             fields.insert("tier_2", HEXLOWER.encode(&tier_2));
             for name in ["tier_3", "tier_4", "tier_5"] {
                 fields.insert(name, HEXLOWER.encode(&[0; 32]));
             }
-            "3.0"
         }
-    };
-    fields.insert("version", wire_version.to_owned());
+    }
+    fields.insert("version", version.to_owned());
     Ok(serde_json::to_vec(&fields)?)
 }
 

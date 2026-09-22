@@ -340,9 +340,9 @@ fn encode_archive<'a>(
     Ok(archive)
 }
 
-/// Routing is identical for manifest formats 2.7 and 2.8.
+/// Coupled archive placement, inner protection and manifest tier coverage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TierFormat {
+pub(crate) enum Envelope {
     V2,
     V3,
 }
@@ -393,14 +393,14 @@ pub(crate) struct AuxiliaryTiers {
 /// V2 always produces two empty tar archives. V3 places biometric archives in
 /// these tiers, or produces empty archives when `biometrics` is `None`.
 /// For V3, compress and user-encrypt these outputs before computing the tier
-/// digests supplied to [`crate::manifest::ManifestFormat::V3_0`].
+/// digests supplied to [`crate::manifest::TierEntries::Present`].
 pub(crate) fn auxiliary_tiers(
-    format: TierFormat,
+    format: Envelope,
     timestamp: u64,
     biometrics: Option<&PreparedBiometricFiles<'_>>,
 ) -> Result<AuxiliaryTiers, ArchiveError> {
     let (tier1, tier2) = match (format, biometrics) {
-        (TierFormat::V3, Some(biometrics)) => (
+        (Envelope::V3, Some(biometrics)) => (
             main_archives(&biometrics.archives),
             vec![(
                 "face_ir_and_thermal.tar",
@@ -422,13 +422,13 @@ pub(crate) fn auxiliary_tiers(
 /// JSON/protobuf entries only when `biometrics` is `Some`. The result still needs
 /// gzip compression and user encryption; it is not a deliverable PCP.
 pub(crate) fn tier0(
-    format: TierFormat,
+    format: Envelope,
     timestamp: u64,
     files: Tier0Files<'_>,
     biometrics: Option<&PreparedBiometricFiles<'_>>,
 ) -> Result<Vec<u8>, ArchiveError> {
     let mut entries = Vec::new();
-    if let (TierFormat::V2, Some(biometrics)) = (format, biometrics) {
+    if let (Envelope::V2, Some(biometrics)) = (format, biometrics) {
         entries.extend(main_archives(&biometrics.archives));
         entries.push((
             "face_ir_and_thermal.tar",

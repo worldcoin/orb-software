@@ -80,6 +80,98 @@ fn version_device_binding_mismatches_fail_before_signing() {
 }
 
 #[test]
+fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
+    use std::io::Read;
+
+    sodiumoxide::init().unwrap();
+    let (public, secret) = box_::gen_keypair();
+    for (version, label, device) in [
+        (PcpVersion::V2_7, "2.7", None),
+        (PcpVersion::V2_8, "2.8", Some("device")),
+        (PcpVersion::V2_8, "2.8", Some("")),
+        (PcpVersion::V3_0, "3.0", None),
+        (PcpVersion::V3_0, "3.0", Some("device")),
+        (PcpVersion::V3_0, "3.0", Some("")),
+    ] {
+        let mut input = request(&public.0);
+        input.version = version;
+        input.info.device_public_key = device;
+        let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
+            Ok::<_, SignerError>(b"synthetic-signature".to_vec())
+        })
+        .unwrap();
+        let gzip =
+            sodiumoxide::crypto::sealedbox::open(&output.tier0, &public, &secret)
+                .unwrap();
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(&gzip[..]));
+        let mut files = std::collections::BTreeMap::new();
+        for entry in archive.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            let name = entry.path().unwrap().into_owned();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            assert!(files.insert(name, bytes).is_none());
+        }
+        assert_eq!(files.len(), 4);
+        let json = |name: &str| -> serde_json::Value {
+            serde_json::from_slice(&files[std::path::Path::new(name)]).unwrap()
+        };
+        let info = json("info.json");
+        let manifest = json("hashes.json");
+        assert_eq!(manifest["version"], label);
+        assert_eq!(
+            info.get("device_public_key").and_then(|x| x.as_str()),
+            device
+        );
+        assert_eq!(
+            info.get("device_public_key_salt").is_some(),
+            device.is_some()
+        );
+        assert_eq!(
+            manifest.get("device_public_key").is_some(),
+            device.is_some()
+        );
+        for (name, bytes) in [("tier_1", &output.tier1), ("tier_2", &output.tier2)] {
+            if label == "3.0" {
+                let digest = ring::digest::digest(&ring::digest::SHA256, bytes);
+                assert_eq!(
+                    manifest[name],
+                    data_encoding::HEXLOWER.encode(digest.as_ref())
+                );
+            } else {
+                assert!(manifest.get(name).is_none());
+            }
+        }
+        for name in ["tier_3", "tier_4", "tier_5"] {
+            if label == "3.0" {
+                assert_eq!(manifest[name], "0".repeat(64));
+            } else {
+                assert!(manifest.get(name).is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn invalid_user_key_fails_before_metadata_randomness_for_every_version() {
+    for version in [PcpVersion::V2_7, PcpVersion::V2_8, PcpVersion::V3_0] {
+        let mut input = request(&[0; 32]);
+        input.version = version;
+        input.info.device_public_key =
+            (version != PcpVersion::V2_7).then_some("device");
+        let result = pcp::build(
+            &input,
+            &mut FailingRng,
+            |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+        );
+        assert!(matches!(
+            result,
+            Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
+        ));
+    }
+}
+
+#[test]
 fn oversized_archive_timestamp_fails_before_signing() {
     let mut input = request(&[0; 32]);
     input.timestamp = u64::from(u32::MAX) + 1;
