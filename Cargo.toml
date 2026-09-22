@@ -17,7 +17,6 @@ members = [
 	"endpoints",
 	"gst-jpeg",
 	"header-parsing",
-	"hil",
 	"io-utils",
 	"ipcp-hpke",
 	"jwk-util",
