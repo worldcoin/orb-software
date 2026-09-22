@@ -1,54 +1,55 @@
 mod sealed_boxes {
     use crate::crypto::{self, SealingError};
-    use sodiumoxide::crypto::{box_, sealedbox};
+    use alkali::{
+        asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox, AlkaliError,
+    };
 
-    fn keypair() -> (box_::PublicKey, box_::SecretKey) {
-        sodiumoxide::init().unwrap();
-        box_::gen_keypair()
+    fn open(
+        ciphertext: &[u8],
+        pair: &sealedbox::Keypair,
+    ) -> Result<Vec<u8>, AlkaliError> {
+        let mut plaintext =
+            vec![0; ciphertext.len().saturating_sub(sealedbox::OVERHEAD_LENGTH)];
+        sealedbox::decrypt(ciphertext, pair, &mut plaintext)?;
+        Ok(plaintext)
     }
 
     #[test]
-    fn encrypted_bytes_open_with_the_legacy_api() {
-        let (public, secret) = keypair();
+    fn encrypted_bytes_open_with_libsodium() {
+        let pair = sealedbox::Keypair::generate().unwrap();
         for size in [0, 1, 256, 4096] {
             let plaintext: Vec<_> = (0_u8..=255).cycle().take(size).collect();
-            let encrypted = crypto::seal(&plaintext, &public.0).unwrap();
+            let encrypted = crypto::seal(&plaintext, &pair.public_key).unwrap();
             assert_eq!(encrypted.len(), plaintext.len() + 48);
-            assert_eq!(
-                sealedbox::open(&encrypted, &public, &secret).unwrap(),
-                plaintext
-            );
+            assert_eq!(open(&encrypted, &pair).unwrap(), plaintext);
         }
     }
 
     #[test]
     fn repeated_encryption_uses_fresh_ephemeral_keys() {
-        let (public, secret) = keypair();
-        let first = crypto::seal(b"synthetic", &public.0).unwrap();
-        let second = crypto::seal(b"synthetic", &public.0).unwrap();
+        let pair = sealedbox::Keypair::generate().unwrap();
+        let first = crypto::seal(b"synthetic", &pair.public_key).unwrap();
+        let second = crypto::seal(b"synthetic", &pair.public_key).unwrap();
         assert_ne!(first, second);
         assert_ne!(&first[..32], &second[..32]);
         for ciphertext in [first, second] {
-            assert_eq!(
-                sealedbox::open(&ciphertext, &public, &secret).unwrap(),
-                b"synthetic"
-            );
+            assert_eq!(open(&ciphertext, &pair).unwrap(), b"synthetic");
         }
     }
 
     #[test]
     fn wrong_recipient_tampering_and_truncation_fail_to_open() {
-        let (public, secret) = keypair();
-        let (other_public, other_secret) = keypair();
-        let ciphertext = crypto::seal(b"synthetic", &public.0).unwrap();
-        assert!(sealedbox::open(&ciphertext, &other_public, &other_secret).is_err());
+        let pair = sealedbox::Keypair::generate().unwrap();
+        let other = sealedbox::Keypair::generate().unwrap();
+        let ciphertext = crypto::seal(b"synthetic", &pair.public_key).unwrap();
+        assert!(open(&ciphertext, &other).is_err());
         for i in 0..ciphertext.len() {
             let mut changed = ciphertext.clone();
             changed[i] ^= 1;
-            assert!(sealedbox::open(&changed, &public, &secret).is_err());
+            assert!(open(&changed, &pair).is_err());
         }
         for length in 0..ciphertext.len() {
-            assert!(sealedbox::open(&ciphertext[..length], &public, &secret).is_err());
+            assert!(open(&ciphertext[..length], &pair).is_err());
         }
     }
 
@@ -95,13 +96,10 @@ mod sealed_boxes {
 
     #[test]
     fn accepted_recipient_encoding_is_not_normalized() {
-        let (mut public, secret) = keypair();
-        public.0[31] |= 0x80;
-        let ciphertext = crypto::seal(b"synthetic", &public.0).unwrap();
-        assert_eq!(
-            sealedbox::open(&ciphertext, &public, &secret).unwrap(),
-            b"synthetic"
-        );
+        let mut pair = sealedbox::Keypair::generate().unwrap();
+        pair.public_key[31] |= 0x80;
+        let ciphertext = crypto::seal(b"synthetic", &pair.public_key).unwrap();
+        assert_eq!(open(&ciphertext, &pair).unwrap(), b"synthetic");
     }
 }
 

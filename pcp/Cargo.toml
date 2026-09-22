@@ -19,7 +19,7 @@ orb-pcp-defs = { path = "../pcp-defs/rust" }
 rand.workspace = true
 ring.workspace = true
 serde_json.workspace = true
-sodiumoxide.workspace = true
+alkali.workspace = true
 tar.workspace = true
 thiserror.workspace = true
 zeroize = "1"

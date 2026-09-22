@@ -54,16 +54,19 @@ pub(crate) fn encode_and_sign<'a, E>(
     sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
 ) -> Result<SignedManifest, SigningError<E>> {
     let hashes_json = encode(version, tiers, hashes)?;
-    let digest = ring::digest::digest(&ring::digest::SHA256, &hashes_json);
-    let digest = digest
-        .as_ref()
-        .try_into()
-        .expect("SHA-256 produces 32 bytes");
-    let hashes_signature = sign_digest(digest).map_err(SigningError::Signer)?;
+    let hashes_signature =
+        sign_digest(&sha256(&hashes_json)).map_err(SigningError::Signer)?;
     Ok(SignedManifest {
         hashes_json,
         hashes_signature,
     })
+}
+
+pub(crate) fn sha256(bytes: &[u8]) -> [u8; 32] {
+    ring::digest::digest(&ring::digest::SHA256, bytes)
+        .as_ref()
+        .try_into()
+        .expect("SHA-256 produces 32 bytes")
 }
 
 /// Encodes named SHA-256 digests as compact, lexicographically sorted JSON.

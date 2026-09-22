@@ -1,15 +1,15 @@
 //! In-memory tar and gzip encoding for PCP payloads and tiers.
 //!
-//! Returned buffers are not encrypted or automatically zeroized. Callers own
-//! their sensitive-data handling; compression does not protect confidentiality.
+//! Owned archive buffers are zeroized on drop. Compression does not protect
+//! confidentiality; caller-owned inputs and codec-internal copies are not wiped.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::Write,
-};
+use std::io::Write;
+
+use zeroize::Zeroizing;
 
 use crate::{
-    crypto,
+    builder::Envelope,
+    crypto, manifest,
     payload::{EncodedDaugman, EncodedDi},
 };
 
@@ -17,8 +17,6 @@ use crate::{
 pub enum ArchiveError {
     #[error("invalid archive filename")]
     InvalidName,
-    #[error("duplicate archive filename")]
-    DuplicateName,
     #[error("timestamp exceeds the gzip 32-bit seconds field")]
     TimestampOutOfRange,
     #[error("archive encoding failed")]
@@ -32,20 +30,17 @@ pub enum ArchiveError {
 /// are borrowed; the returned archive owns a copy of their bytes.
 ///
 /// Names must be nonempty single components, at most 100 UTF-8 bytes, without
-/// `/`, `\`, `:`, or control characters; `.` and `..` are rejected. Duplicate
-/// names are rejected. The package layer must choose the protocol filenames
-/// and entry order; this helper does not enforce a complete package layout.
+/// `/`, `\`, `:`, or control characters; `.` and `..` are rejected. The package
+/// manifest validates duplicate names. This helper only encodes the supplied
+/// order and does not enforce a complete package layout.
 pub(crate) fn encode_tar<'a>(
     timestamp: u64,
     entries: impl IntoIterator<Item = (&'a str, &'a [u8])>,
-) -> Result<Vec<u8>, ArchiveError> {
-    let mut archive = tar::Builder::new(Vec::new());
-    let mut names = BTreeSet::new();
+) -> Result<Zeroizing<Vec<u8>>, ArchiveError> {
+    let mut bytes = Zeroizing::new(Vec::new());
+    let mut archive = tar::Builder::new(&mut *bytes);
     for (name, data) in entries {
         validate_name(name)?;
-        if !names.insert(name) {
-            return Err(ArchiveError::DuplicateName);
-        }
         // Preserve the GNU header's NUL regular-file type for byte compatibility.
         let mut header = tar::Header::new_gnu();
         header.set_path(name)?;
@@ -59,7 +54,8 @@ pub(crate) fn encode_tar<'a>(
         header.set_cksum();
         archive.append(&header, data)?;
     }
-    Ok(archive.into_inner()?)
+    archive.into_inner()?;
+    Ok(bytes)
 }
 
 /// Gzip-encodes bytes at the best compression level with explicit header metadata.
@@ -73,16 +69,18 @@ pub(crate) fn compress(
     data: &[u8],
     timestamp: u64,
     filename: &str,
-) -> Result<Vec<u8>, ArchiveError> {
+) -> Result<Zeroizing<Vec<u8>>, ArchiveError> {
     validate_name(filename)?;
     let timestamp =
         u32::try_from(timestamp).map_err(|_| ArchiveError::TimestampOutOfRange)?;
+    let mut bytes = Zeroizing::new(Vec::new());
     let mut encoder = flate2::GzBuilder::new()
         .filename(filename)
         .mtime(timestamp)
-        .write(Vec::new(), flate2::Compression::best());
+        .write(&mut *bytes, flate2::Compression::best());
     encoder.write_all(data)?;
-    Ok(encoder.finish()?)
+    encoder.finish()?;
+    Ok(bytes)
 }
 
 fn validate_name(name: &str) -> Result<(), ArchiveError> {
@@ -146,12 +144,13 @@ pub struct PackageImages<'a> {
 }
 
 pub(crate) struct InnerArchives {
-    pub iris: Vec<u8>,
-    pub normalized_iris: Vec<u8>,
-    pub face: Vec<u8>,
-    pub fraud: Option<Vec<u8>>,
-    pub face_ir_and_thermal: Vec<u8>,
-    pub hashes: BTreeMap<String, [u8; 32]>,
+    pub iris: Zeroizing<Vec<u8>>,
+    pub normalized_iris: Zeroizing<Vec<u8>>,
+    pub face: Zeroizing<Vec<u8>>,
+    pub fraud: Option<Zeroizing<Vec<u8>>>,
+    pub face_ir_and_thermal: Zeroizing<Vec<u8>>,
+    // Keep repeated names until the manifest validates them; a map would lose them.
+    pub hashes: Vec<(String, [u8; 32])>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -164,8 +163,6 @@ pub enum InnerArchiveError {
     MissingLeftNormalization,
     #[error("right primary normalized data is required by the current package format")]
     MissingRightNormalization,
-    #[error("duplicate inner archive manifest name")]
-    DuplicateName,
     #[error("inner archive encoding failed")]
     Archive(#[from] ArchiveError),
     #[error("normalized iris commitment generation failed")]
@@ -200,7 +197,7 @@ pub(crate) fn encode_inner(
         .normalized
         .as_ref()
         .ok_or(InnerArchiveError::MissingRightNormalization)?;
-    let mut hashes = BTreeMap::new();
+    let mut hashes = Vec::new();
 
     let mut iris_files = vec![
         ("left_ir.png".to_owned(), left.primary.ir_png),
@@ -328,26 +325,14 @@ fn normalized_pair<'a>(
 fn encode_archive<'a>(
     timestamp: u64,
     files: impl IntoIterator<Item = (&'a str, &'a [u8])>,
-    hashes: &mut BTreeMap<String, [u8; 32]>,
-) -> Result<Vec<u8>, InnerArchiveError> {
+    hashes: &mut Vec<(String, [u8; 32])>,
+) -> Result<Zeroizing<Vec<u8>>, InnerArchiveError> {
     let files: Vec<_> = files.into_iter().collect();
     let archive = encode_tar(timestamp, files.iter().copied())?;
     for (name, data) in files {
-        let digest = ring::digest::digest(&ring::digest::SHA256, data);
-        let mut hash = [0; 32];
-        hash.copy_from_slice(digest.as_ref());
-        if hashes.insert(name.to_owned(), hash).is_some() {
-            return Err(InnerArchiveError::DuplicateName);
-        }
+        hashes.push((name.to_owned(), manifest::sha256(data)));
     }
     Ok(archive)
-}
-
-/// Coupled archive placement, inner protection and manifest tier coverage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Envelope {
-    V2,
-    V3,
 }
 
 /// Encoded inner archives in their required encryption state.
@@ -385,8 +370,8 @@ pub(crate) struct Tier0Files<'a> {
 }
 
 pub(crate) struct AuxiliaryTiers {
-    pub tier1: Vec<u8>,
-    pub tier2: Vec<u8>,
+    pub tier1: Zeroizing<Vec<u8>>,
+    pub tier2: Zeroizing<Vec<u8>>,
 }
 
 /// Encodes tiers 1 and 2 before their compression/encryption and manifest hashing.
@@ -427,7 +412,7 @@ pub(crate) fn tier0(
     timestamp: u64,
     files: Tier0Files<'_>,
     biometrics: Option<&PreparedBiometricFiles<'_>>,
-) -> Result<Vec<u8>, ArchiveError> {
+) -> Result<Zeroizing<Vec<u8>>, ArchiveError> {
     let mut entries = Vec::new();
     if let (Envelope::V2, Some(biometrics)) = (format, biometrics) {
         entries.extend(main_archives(&biometrics.archives));

@@ -21,7 +21,7 @@ cargo test -p orb-pcp --test prototype
 The example builds all three versions with included and redacted biometrics,
 including 3.0 with and without a device key, using exclusively synthetic data
 and freshly generated in-memory keys. It opens
-the encrypted tiers with sodiumoxide, checks archive routing, verifies the
+the encrypted tiers with alkali/libsodium, checks archive routing, verifies the
 example's P-256 prehash signature, and checks the complete manifest against
 decrypted payloads, salted metadata, and version-3 encrypted tier hashes. It only
 prints version, device-key presence, redaction state, encrypted lengths and success; it writes no
@@ -64,6 +64,26 @@ two present eyes with empty vectors still emit present protobuf records.
 Missing iris codes/masks/version serialize as JSON null, while iris shares
 remain required.
 
+Sealed-box encryption uses alkali's maintained binding to the same libsodium
+Curve25519/XSalsa20-Poly1305 construction. Native failures, including unacceptable
+recipient keys, are returned as errors. There is no sodiumoxide dependency or
+advisory exception in this workspace. The native libsodium/pkg-config requirement
+remains; this change does not replace the cryptographic implementation.
+
+### Memory cleanup
+
+Owned inner archives, tier archives, and compressed intermediate buffers use
+`Zeroizing<Vec<u8>>` from allocation, including error paths. Replacing a plaintext
+archive with its ciphertext drops and wipes the old buffer. Generated Hyrax
+blinding-factor buffers and the local seed are also wiped on normal drop.
+
+This is best-effort cleanup, not comprehensive secret-memory protection. The
+upstream Hyrax API takes its seed by value and does not wipe that copy or all
+internal state. Caller-owned inputs, serialized JSON/protobuf payload buffers,
+allocator reallocations, codec-internal copies, and returned plaintext diagnostic
+buffers are not all wiped. Process aborts can skip destructors. Do not interpret
+the use of `Zeroizing` as a guarantee that no plaintext remains in RAM.
+
 ## Unencrypted diagnostics
 
 For local diagnostics only, explicitly enable the `not-prod-diagnostics` feature
@@ -98,3 +118,21 @@ commitment behavior for inputs of 256 bytes or fewer. Checked import of existing
 commitments is not implemented. Production integration, complete private
 version/variant differential validation, and operational rollout remain separate
 work.
+
+### Hyrax dependency maintenance
+
+Hyrax is pinned to the full Git revision
+`ec5f1120e394643ad09990a34815dd11e9122366` to preserve existing commitment outputs.
+Its SHAKE256 generator derivation uses `sha3 0.8` / `digest 0.8`; replacing them
+requires deterministic output-parity tests, not just a successful build. These
+older versions are maintenance debt, not by themselves evidence of a vulnerability.
+
+The upstream manifest also declares `bincode 1.3.3`, although its source does not
+use it and commitment serialization does not use bincode. Bincode is
+[unmaintained (RUSTSEC-2025-0141)](https://rustsec.org/advisories/RUSTSEC-2025-0141.html).
+Removing this unused dependency and updating SHAKE256 belong in a reviewed
+upstream change; upgrading the pin alone does not resolve them as of September
+2026. No advisory exception is added here. The workspace's existing policy fails
+on unmaintained direct dependencies, not transitive ones; a passing check does
+not establish that every transitive dependency is maintained. CI separately
+rejects Git sources outside the explicit repository allowlist in `deny.toml`.

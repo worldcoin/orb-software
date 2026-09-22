@@ -1,11 +1,17 @@
 use std::time::UNIX_EPOCH;
 
+use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use orb_pcp::{
     self as pcp, BackendKey, BackendKeys, BiometricPolicy, BuildError, BuildRequest,
     MetadataError, PackageInfo, PcpVersion,
 };
 use rand::{CryptoRng, RngCore};
-use sodiumoxide::crypto::box_;
+
+fn open(ciphertext: &[u8], pair: &sealedbox::Keypair) -> Vec<u8> {
+    let mut plaintext = vec![0; ciphertext.len() - sealedbox::OVERHEAD_LENGTH];
+    sealedbox::decrypt(ciphertext, pair, &mut plaintext).unwrap();
+    plaintext
+}
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 #[error("synthetic signing failure")]
@@ -83,8 +89,7 @@ fn version_device_binding_mismatches_fail_before_signing() {
 fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
     use std::io::Read;
 
-    sodiumoxide::init().unwrap();
-    let (public, secret) = box_::gen_keypair();
+    let pair = sealedbox::Keypair::generate().unwrap();
     for (version, label, device) in [
         (PcpVersion::V2_7, "2.7", None),
         (PcpVersion::V2_8, "2.8", Some("device")),
@@ -93,16 +98,14 @@ fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
         (PcpVersion::V3_0, "3.0", Some("device")),
         (PcpVersion::V3_0, "3.0", Some("")),
     ] {
-        let mut input = request(&public.0);
+        let mut input = request(&pair.public_key);
         input.version = version;
         input.info.device_public_key = device;
         let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
             Ok::<_, SignerError>(b"synthetic-signature".to_vec())
         })
         .unwrap();
-        let gzip =
-            sodiumoxide::crypto::sealedbox::open(&output.tier0, &public, &secret)
-                .unwrap();
+        let gzip = open(&output.tier0, &pair);
         let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(&gzip[..]));
         let mut files = std::collections::BTreeMap::new();
         for entry in archive.entries().unwrap() {
@@ -188,10 +191,9 @@ fn oversized_archive_timestamp_fails_before_signing() {
 
 #[test]
 fn randomness_failure_returns_no_package_or_signature() {
-    sodiumoxide::init().unwrap();
-    let (key, _) = box_::gen_keypair();
+    let pair = sealedbox::Keypair::generate().unwrap();
     let result = pcp::build(
-        &request(&key.0),
+        &request(&pair.public_key),
         &mut FailingRng,
         |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
     );
@@ -216,10 +218,9 @@ fn invalid_user_recipient_returns_no_package_or_signature() {
 
 #[test]
 fn signer_failure_is_not_retried_or_returned_as_a_package() {
-    sodiumoxide::init().unwrap();
-    let (key, _) = box_::gen_keypair();
+    let pair = sealedbox::Keypair::generate().unwrap();
     let mut calls = 0;
-    let result = pcp::build(&request(&key.0), &mut rand::rngs::OsRng, |_| {
+    let result = pcp::build(&request(&pair.public_key), &mut rand::rngs::OsRng, |_| {
         calls += 1;
         Err::<Vec<u8>, _>(SignerError)
     });
@@ -396,16 +397,14 @@ mod diagnostics {
 
     #[test]
     fn normal_builder_remains_encrypted_with_diagnostics_enabled() {
-        sodiumoxide::init().unwrap();
-        let (public, secret) = box_::gen_keypair();
-        let output = pcp::build(&request(&public.0), &mut rand::rngs::OsRng, |_| {
-            Ok::<_, SignerError>(Vec::new())
-        })
-        .unwrap();
+        let pair = sealedbox::Keypair::generate().unwrap();
+        let output =
+            pcp::build(&request(&pair.public_key), &mut rand::rngs::OsRng, |_| {
+                Ok::<_, SignerError>(Vec::new())
+            })
+            .unwrap();
         for encrypted in [&output.tier0, &output.tier1, &output.tier2] {
-            let gzip =
-                sodiumoxide::crypto::sealedbox::open(encrypted, &public, &secret)
-                    .expect("normal output must still be encrypted");
+            let gzip = open(encrypted, &pair);
             tier(&gzip);
         }
     }

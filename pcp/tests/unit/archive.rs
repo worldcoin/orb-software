@@ -55,7 +55,7 @@ mod tar_gzip {
 
     #[test]
     fn empty_tar_is_two_zero_blocks() {
-        assert_eq!(archive::encode_tar(0, []).unwrap(), vec![0; 1024]);
+        assert_eq!(archive::encode_tar(0, []).unwrap().as_slice(), &[0; 1024]);
     }
 
     #[test]
@@ -98,12 +98,13 @@ mod tar_gzip {
     }
 
     #[test]
-    fn duplicate_filenames_are_rejected() {
+    fn tar_preserves_duplicate_entries_for_package_manifest_validation() {
         for second in [b"a".as_slice(), b"b".as_slice()] {
-            assert!(matches!(
-                archive::encode_tar(0, [("file", b"a".as_slice()), ("file", second)]),
-                Err(ArchiveError::DuplicateName)
-            ));
+            let bytes =
+                archive::encode_tar(0, [("file", b"a".as_slice()), ("file", second)])
+                    .unwrap();
+            let mut reader = tar::Archive::new(bytes.as_slice());
+            assert_eq!(reader.entries().unwrap().count(), 2);
         }
     }
 
@@ -122,7 +123,7 @@ mod tar_gzip {
             assert!(header.extra().is_none());
             let mut decoded = Vec::new();
             decoder.read_to_end(&mut decoded).unwrap();
-            assert_eq!(decoded, tar);
+            assert_eq!(decoded, tar.as_slice());
         }
     }
 
@@ -153,7 +154,7 @@ mod inner_archives {
 
     use crate::{
         archive::{self, IrisEye, IrisFrame, NormalizedIrisFrame, PackageImages},
-        crypto,
+        crypto, manifest,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use ring::digest::{digest, SHA256};
@@ -282,7 +283,10 @@ mod inner_archives {
                 assert!(hashes.insert(name, hash).is_none());
             }
         }
-        assert_eq!(encoded.hashes, hashes);
+        assert_eq!(
+            encoded.hashes.into_iter().collect::<BTreeMap<_, _>>(),
+            hashes
+        );
     }
 
     #[test]
@@ -308,7 +312,7 @@ mod inner_archives {
         assert_eq!(entries(&encoded.iris).len(), 4);
         assert_eq!(encoded.normalized_iris, primary.normalized_iris);
         assert_eq!(rng.next_u64(), primary_rng.next_u64());
-        let mut expected_hashes = primary.hashes;
+        let mut expected_hashes: BTreeMap<_, _> = primary.hashes.into_iter().collect();
         for id in ["extra-left", "extra-right"] {
             let name = format!("{id}.png");
             assert!(entries(&encoded.iris)
@@ -321,7 +325,10 @@ mod inner_archives {
                     .unwrap(),
             );
         }
-        assert_eq!(encoded.hashes, expected_hashes);
+        assert_eq!(
+            encoded.hashes.into_iter().collect::<BTreeMap<_, _>>(),
+            expected_hashes
+        );
     }
 
     #[test]
@@ -359,7 +366,7 @@ mod inner_archives {
             entries(&encoded.face),
             vec![("thumbnail.png".into(), vec![])]
         );
-        assert_eq!(encoded.face_ir_and_thermal, vec![0; 1024]);
+        assert_eq!(encoded.face_ir_and_thermal.as_slice(), &[0; 1024]);
         assert!(encoded.fraud.is_none());
     }
 
@@ -403,11 +410,9 @@ mod inner_archives {
                 ("thermal.png".into(), b"thermal".to_vec())
             ]
         );
+        let hashes: BTreeMap<_, _> = encoded.hashes.into_iter().collect();
         for (name, data) in fraud {
-            assert_eq!(
-                encoded.hashes[&name].as_slice(),
-                digest(&SHA256, &data).as_ref()
-            );
+            assert_eq!(hashes[&name].as_slice(), digest(&SHA256, &data).as_ref());
         }
     }
 
@@ -433,33 +438,67 @@ mod inner_archives {
     }
 
     #[test]
-    fn duplicate_and_unsafe_derived_names_are_rejected() {
-        for id in ["left_ir", "left", "thumbnail", "../escape"] {
+    fn duplicate_derived_names_are_rejected_by_manifest_before_signing() {
+        for id in ["left_ir", "left", "thumbnail", "face_ir"] {
             let extra = [frame(id)];
-            assert!(archive::encode_inner(
-                123,
-                &images(&extra, &[]),
-                &mut StdRng::seed_from_u64(0)
-            )
-            .is_err());
+            let mut input = images(&extra, &[]);
+            input.face_ir_png = Some(b"face ir");
+            let encoded =
+                archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(0))
+                    .unwrap();
+            assert_duplicate_manifest(&encoded);
         }
         let left = [frame("same")];
         let right = [frame("same")];
-        assert!(archive::encode_inner(
+        let encoded = archive::encode_inner(
             123,
             &images(&left, &right),
-            &mut StdRng::seed_from_u64(0)
+            &mut StdRng::seed_from_u64(0),
         )
-        .is_err());
+        .unwrap();
+        assert_duplicate_manifest(&encoded);
+    }
+
+    fn assert_duplicate_manifest(encoded: &archive::InnerArchives) {
+        assert!(matches!(
+            manifest::encode_and_sign(
+                "2.8",
+                manifest::TierEntries::None,
+                encoded
+                    .hashes
+                    .iter()
+                    .map(|(name, hash)| (name.as_str(), *hash)),
+                |_| -> Result<Vec<u8>, std::convert::Infallible> {
+                    panic!("duplicate names must not be signed")
+                },
+            ),
+            Err(manifest::SigningError::Manifest(
+                manifest::ManifestError::DuplicateEntry
+            ))
+        ));
+    }
+
+    #[test]
+    fn unsafe_derived_names_fail_archive_validation() {
+        let extra = [frame("../escape")];
+        assert!(matches!(
+            archive::encode_inner(
+                123,
+                &images(&extra, &[]),
+                &mut StdRng::seed_from_u64(0)
+            ),
+            Err(archive::InnerArchiveError::Archive(
+                archive::ArchiveError::InvalidName
+            ))
+        ));
     }
 }
 
 mod tier_layout {
     use std::io::Read;
 
-    use crate::archive::{
-        self, BiometricArchives, Envelope, PreparedBiometricFiles, Tier0Files,
-    };
+    use crate::archive::{self, BiometricArchives, PreparedBiometricFiles, Tier0Files};
+    use crate::builder::Envelope;
     use crate::payload::{EncodedDaugman, EncodedDi};
 
     fn payloads() -> (EncodedDaugman, EncodedDi) {
@@ -535,8 +574,8 @@ mod tier_layout {
             let bio = biometrics(fraud, &daugman, &di);
             let auxiliary =
                 archive::auxiliary_tiers(Envelope::V2, 123, Some(&bio)).unwrap();
-            assert_eq!(auxiliary.tier1, vec![0; 1024]);
-            assert_eq!(auxiliary.tier2, vec![0; 1024]);
+            assert_eq!(auxiliary.tier1.as_slice(), &[0; 1024]);
+            assert_eq!(auxiliary.tier2.as_slice(), &[0; 1024]);
             let bytes =
                 archive::tier0(Envelope::V2, 123, common_files(), Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
@@ -583,8 +622,8 @@ mod tier_layout {
     fn omitted_biometrics_leave_only_four_tier0_files_and_empty_auxiliary_tiers() {
         for format in [Envelope::V2, Envelope::V3] {
             let auxiliary = archive::auxiliary_tiers(format, 123, None).unwrap();
-            assert_eq!(auxiliary.tier1, vec![0; 1024]);
-            assert_eq!(auxiliary.tier2, vec![0; 1024]);
+            assert_eq!(auxiliary.tier1.as_slice(), &[0; 1024]);
+            assert_eq!(auxiliary.tier2.as_slice(), &[0; 1024]);
             let tier0 = archive::tier0(format, 123, common_files(), None).unwrap();
             assert_entries(
                 &tier0,

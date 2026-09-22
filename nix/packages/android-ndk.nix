@@ -35,7 +35,7 @@ in
   ranlib = "${llvmBin}/llvm-ranlib";
 
   # libsodium cross-built for Android via nixpkgs' own NDK cross stdenv, so
-  # crates that need it via pkg-config (e.g. sodiumoxide in `deps-tests`)
+  # crates that need it via pkg-config (e.g. alkali in `deps-tests` and `orb-pcp`)
   # can use the target library without a vendored libsodium build.
   libsodium = pkgs.pkgsCross.aarch64-android-prebuilt.libsodium;
 

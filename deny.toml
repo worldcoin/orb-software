@@ -32,7 +32,7 @@ ignore = [
 	# advisory's severity, so we accept it instead.
 	{ id = "RUSTSEC-2026-0258", reason = "aws-sdk-s3's legacy hyper 0.14 connector pulls unpatched h2 0.3.x; the fix (switching to the hyper-1.x connector) hardcodes a crypto backend that conflicts with several unrelated deps (quinn/iroh, wtransport, tokio-websockets, hyper-rustls, rcgen) that hardcode a different one, causing a runtime panic; low severity (DoS only), reconciling the backends is out of proportion" },
 ]
-unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
+unmaintained = "workspace" # fail for direct workspace dependencies, not transitive ones
 version = 2
 
 [bans]
@@ -40,6 +40,17 @@ skip = [{ name = "serialport", version = "4.7.0" }]
 
 [sources]
 unknown-registry = "deny"
+unknown-git = "deny"
+# Explicit repositories only: adding a new Git source requires policy review.
+allow-git = [
+	"https://github.com/google/minijail",
+	"https://github.com/TheButlah/teaclave-trustzone-sdk",
+	"https://github.com/worldcoin/hyrax-pcs-commit",
+	"https://github.com/worldcoin/orb-messages",
+	"https://github.com/worldcoin/orb-relay-messages",
+	"https://github.com/worldcoin/orb-rustzone",
+	"https://github.com/worldcoin/orb-software",
+]
 
 [licenses]
 version = 2

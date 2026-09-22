@@ -83,16 +83,33 @@ fn ring_test() {
 }
 
 #[test]
-fn sodiumoxide_test() {
-    use sodiumoxide::crypto::{box_, sealedbox};
+fn alkali_test() {
+    use alkali::asymmetric::seal;
 
-    sodiumoxide::init().unwrap();
+    println!("Running alkali/libsodium smoke test");
     const MESSAGE: &str = "Encrypt this message!";
-    let (public_key, secret_key) = box_::gen_keypair();
-    let ciphertext = sealedbox::seal(MESSAGE.as_bytes(), &public_key);
-    assert_eq!(ciphertext.len(), MESSAGE.len() + sealedbox::SEALBYTES);
-    let plaintext = sealedbox::open(&ciphertext, &public_key, &secret_key).unwrap();
-    assert_eq!(plaintext, MESSAGE.as_bytes());
+    let receiver_keypair = seal::Keypair::generate().unwrap();
+
+    // Sender side:
+    // Encrypting a message with this construction adds `OVERHEAD_LENGTH` bytes of overhead (the
+    // ephemeral public key + MAC).
+    let mut ciphertext = vec![0u8; MESSAGE.len() + seal::OVERHEAD_LENGTH];
+    // In this construction, the sender does not generate a keypair, they just use `encrypt` to
+    // encrypt the message. Once it is sent, they can't decrypt it, as the ephemeral private key is
+    // erased from memory.
+    seal::encrypt(
+        MESSAGE.as_bytes(),
+        &receiver_keypair.public_key,
+        &mut ciphertext,
+    )
+    .unwrap();
+
+    // Receiver side:
+    let mut plaintext = vec![0u8; ciphertext.len() - seal::OVERHEAD_LENGTH];
+    // The receiver does not to receive any other information from the sender besides the ciphertext
+    // in order to decrypt it.
+    seal::decrypt(&ciphertext, &receiver_keypair, &mut plaintext).unwrap();
+    assert_eq!(&plaintext, MESSAGE.as_bytes());
 }
 
 #[test]

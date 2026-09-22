@@ -6,12 +6,18 @@
 //! This prototype is not an untrusted-package verifier. Call from a blocking
 //! worker in async applications. Plaintext intermediates are not all zeroized.
 
-use std::collections::BTreeMap;
-
 use rand::{CryptoRng, RngCore};
+use zeroize::Zeroizing;
 
 use crate::{archive, crypto, manifest, metadata, payload};
-use archive::Envelope;
+use manifest::sha256;
+
+/// Coupled archive placement, inner protection and manifest tier coverage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Envelope {
+    V2,
+    V3,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PcpVersion {
@@ -120,8 +126,6 @@ type Sealer = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, crypto::SealingError>;
 pub enum BuildError<E> {
     #[error("device key presence does not match the requested PCP version")]
     DeviceKeyVersionMismatch,
-    #[error("duplicate package hash name")]
-    DuplicateHash,
     #[error("metadata construction failed")]
     Metadata(#[from] metadata::MetadataError),
     #[error("inner archive construction failed")]
@@ -198,13 +202,10 @@ fn build_with_sealer<E>(
     }
     let envelope = request.version.envelope();
     let backend_keys_json = payload::backend_keys(&request.backend_keys)?;
-    let mut hashes =
-        BTreeMap::from([("backend_keys.json".to_owned(), sha256(&backend_keys_json))]);
+    let mut hashes = vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
     let prepared = envelope.prepare_biometrics(request, rng, seal)?;
     if let Some(prepared) = &prepared {
-        for (name, hash) in &prepared.archives.hashes {
-            insert_hash(&mut hashes, name.clone(), *hash)?;
-        }
+        hashes.extend(prepared.archives.hashes.iter().cloned());
     }
     let biometric_files = prepared.as_ref().map(Prepared::layout);
     let auxiliary = archive::auxiliary_tiers(
@@ -219,7 +220,7 @@ fn build_with_sealer<E>(
 
     let info = encode_metadata(request, rng)?;
     for (name, hash) in info.hashes {
-        insert_hash(&mut hashes, name.to_owned(), hash)?;
+        hashes.push((name.to_owned(), hash));
     }
     let signed = manifest::encode_and_sign(
         request.version.label(),
@@ -259,7 +260,7 @@ impl Prepared {
                 iris_sealed: &self.archives.iris,
                 normalized_iris_sealed: &self.archives.normalized_iris,
                 face_sealed: &self.archives.face,
-                fraud_sealed: self.archives.fraud.as_deref(),
+                fraud_sealed: self.archives.fraud.as_ref().map(|tar| tar.as_slice()),
                 face_ir_and_thermal: &self.archives.face_ir_and_thermal,
             },
             face_embeddings_json: &self.face_embeddings,
@@ -297,23 +298,27 @@ impl Envelope {
             return Ok(None);
         };
         let mut archives = archive::encode_inner(request.timestamp, images, rng)?;
-        archives.iris = seal(&archives.iris, request.backend_keys.iris.public_key)?;
-        archives.normalized_iris = seal(
+        archives.iris =
+            Zeroizing::new(seal(&archives.iris, request.backend_keys.iris.public_key)?);
+        archives.normalized_iris = Zeroizing::new(seal(
             &archives.normalized_iris,
             request.backend_keys.normalized_iris.public_key,
-        )?;
-        archives.face = seal(&archives.face, request.backend_keys.face.public_key)?;
+        )?);
+        archives.face =
+            Zeroizing::new(seal(&archives.face, request.backend_keys.face.public_key)?);
         archives.fraud = archives
             .fraud
             .as_deref()
-            .map(|tar| seal(tar, request.backend_keys.face.public_key))
+            .map(|tar| {
+                seal(tar, request.backend_keys.face.public_key).map(Zeroizing::new)
+            })
             .transpose()?;
         match self {
             Self::V2 => {
-                archives.face_ir_and_thermal = seal(
+                archives.face_ir_and_thermal = Zeroizing::new(seal(
                     &archives.face_ir_and_thermal,
                     request.backend_keys.tier2.public_key,
-                )?;
+                )?);
             }
             Self::V3 => {}
         }
@@ -325,19 +330,16 @@ impl Envelope {
             ("iris_codes.json", daugman.codes.as_slice()),
             ("di_iris_embeddings.pb", di.embeddings.as_slice()),
         ] {
-            insert_hash(&mut archives.hashes, name.to_owned(), sha256(bytes))?;
+            archives.hashes.push((name.to_owned(), sha256(bytes)));
         }
         for (i, share) in daugman.shares.iter().enumerate() {
-            insert_hash(
-                &mut archives.hashes,
-                format!("iris_code_shares_{i}.json"),
-                sha256(share),
-            )?;
-            insert_hash(
-                &mut archives.hashes,
+            archives
+                .hashes
+                .push((format!("iris_code_shares_{i}.json"), sha256(share)));
+            archives.hashes.push((
                 format!("di_iris_embeddings_shares_{i}.pb"),
                 sha256(&di.shares[i]),
-            )?;
+            ));
         }
         Ok(Some(Prepared {
             archives,
@@ -393,17 +395,6 @@ fn encode_metadata(
     }
 }
 
-fn insert_hash<E>(
-    hashes: &mut BTreeMap<String, [u8; 32]>,
-    name: String,
-    hash: [u8; 32],
-) -> Result<(), BuildError<E>> {
-    if hashes.insert(name, hash).is_some() {
-        return Err(BuildError::DuplicateHash);
-    }
-    Ok(())
-}
-
 fn seal_tier<E>(
     tar: &[u8],
     request: &BuildRequest<'_>,
@@ -412,11 +403,4 @@ fn seal_tier<E>(
 ) -> Result<Vec<u8>, BuildError<E>> {
     let gzip = archive::compress(tar, request.timestamp, name)?;
     Ok(seal(&gzip, request.user_public_key)?)
-}
-
-fn sha256(bytes: &[u8]) -> [u8; 32] {
-    ring::digest::digest(&ring::digest::SHA256, bytes)
-        .as_ref()
-        .try_into()
-        .expect("SHA-256 produces 32 bytes")
 }

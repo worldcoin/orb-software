@@ -7,6 +7,7 @@
 
 use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
 
+use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use data_encoding::{BASE64, HEXLOWER};
 use flate2::read::GzDecoder;
 use orb_pcp as pcp;
@@ -20,10 +21,9 @@ use p256::ecdsa::{
 };
 use rand::rngs::OsRng;
 use ring::digest::{digest, SHA256};
-use sodiumoxide::crypto::{box_, sealedbox};
 
 type Files = BTreeMap<String, Vec<u8>>;
-type KeyPair = (box_::PublicKey, box_::SecretKey);
+type KeyPair = sealedbox::Keypair;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 const TIMESTAMP: u64 = 1_700_000_000;
@@ -36,7 +36,6 @@ fn main() -> Result<()> {
 
 /// Also exercised by the integration test without filesystem or service access.
 pub fn run() -> Result<()> {
-    sodiumoxide::init().map_err(|()| "libsodium initialization failed")?;
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
     let extra_left = [pcp::IrisFrame {
@@ -120,11 +119,26 @@ pub fn run() -> Result<()> {
         (pcp::PcpVersion::V3_0, Some("synthetic-device-key")),
     ] {
         for redacted in [false, true] {
-            let user = box_::gen_keypair();
-            let backends: [KeyPair; 4] = std::array::from_fn(|_| box_::gen_keypair());
-            let encrypted_keys: [String; 4] = std::array::from_fn(|index| {
-                BASE64.encode(&sealedbox::seal(backends[index].1.as_ref(), &user.0))
-            });
+            let user = KeyPair::generate()?;
+            let backends = [
+                KeyPair::generate()?,
+                KeyPair::generate()?,
+                KeyPair::generate()?,
+                KeyPair::generate()?,
+            ];
+            let encrypted_keys: Vec<String> = backends
+                .iter()
+                .map(|pair| {
+                    let mut ciphertext =
+                        [0; sealedbox::PRIVATE_KEY_LENGTH + sealedbox::OVERHEAD_LENGTH];
+                    sealedbox::encrypt(
+                        pair.private_key.as_ref(),
+                        &user.public_key,
+                        &mut ciphertext,
+                    )?;
+                    Ok(BASE64.encode(&ciphertext))
+                })
+                .collect::<Result<_>>()?;
             let request = pcp::BuildRequest {
                 version,
                 timestamp: TIMESTAMP,
@@ -143,7 +157,7 @@ pub fn run() -> Result<()> {
                         b"synthetic-placeholder-not-a-certificate",
                     device_public_key,
                 },
-                user_public_key: &user.0 .0,
+                user_public_key: &user.public_key,
                 backend_keys: pcp::BackendKeys {
                     iris: backend_key(&backends[0], &encrypted_keys[0]),
                     normalized_iris: backend_key(&backends[1], &encrypted_keys[1]),
@@ -211,7 +225,7 @@ fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> pcp::IrisFrame<'a> {
 
 fn backend_key<'a>(pair: &'a KeyPair, encrypted: &'a str) -> pcp::BackendKey<'a> {
     pcp::BackendKey {
-        public_key: &pair.0 .0,
+        public_key: &pair.public_key,
         encrypted_private_key: encrypted,
     }
 }
@@ -221,8 +235,10 @@ fn hash(bytes: &[u8]) -> String {
 }
 
 fn open(ciphertext: &[u8], pair: &KeyPair) -> Result<Vec<u8>> {
-    sealedbox::open(ciphertext, &pair.0, &pair.1)
-        .map_err(|()| "sealed-box round-trip failed".into())
+    let mut plaintext =
+        vec![0; ciphertext.len().saturating_sub(sealedbox::OVERHEAD_LENGTH)];
+    sealedbox::decrypt(ciphertext, pair, &mut plaintext)?;
+    Ok(plaintext)
 }
 
 fn files(bytes: &[u8]) -> Result<Files> {
@@ -247,8 +263,9 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
     let mut gzip = GzDecoder::new(plaintext.as_slice());
     let header = gzip.header().ok_or("missing gzip header")?;
     assert_eq!(header.mtime(), TIMESTAMP as u32);
-    assert!(
-        header.filename() == Some(name.as_bytes()),
+    assert_eq!(
+        header.filename(),
+        Some(name.as_bytes()),
         "gzip filename mismatch"
     );
     let mut tar = Vec::new();
@@ -270,8 +287,9 @@ fn verify(
         (&package.tier1, &package.tier1_checksum),
         (&package.tier2, &package.tier2_checksum),
     ] {
-        assert!(
-            digest(&SHA256, bytes).as_ref() == checksum,
+        assert_eq!(
+            digest(&SHA256, bytes).as_ref(),
+            checksum,
             "checksum mismatch"
         );
     }
@@ -322,15 +340,20 @@ fn verify(
         .into_iter()
         .zip(backends)
     {
-        assert!(
-            keys[role]["public_key"] == BASE64.encode(pair.0.as_ref()),
+        assert_eq!(
+            keys[role]["public_key"],
+            BASE64.encode(&pair.public_key),
             "backend public key mismatch"
         );
         let encrypted = keys[role]["encrypted_private_key"]
             .as_str()
             .ok_or("encrypted backend key is not a string")?;
         let recovered = open(&BASE64.decode(encrypted.as_bytes())?, user)?;
-        assert!(recovered == pair.1.as_ref(), "backend private key mismatch");
+        assert_eq!(
+            recovered,
+            pair.private_key.as_ref(),
+            "backend private key mismatch"
+        );
     }
     expected.insert(
         "backend_keys.json".to_owned(),
@@ -361,7 +384,7 @@ fn verify(
             "right_ir_image_id",
             "thumbnail_image_id",
         ] {
-            assert!(info[name] == "", "redacted image ID remains");
+            assert_eq!(info[name], "", "redacted image ID remains");
         }
         for name in [
             "left_ir_multiframe_image_ids",
@@ -422,9 +445,9 @@ fn verify(
             assert_eq!(shares.right_share, [30 + i]);
             assert_eq!(shares.right_mirror_share, [40 + i]);
         }
-        assert!(info["left_ir_image_id"] == "synthetic-left");
-        assert!(info["right_ir_image_id"] == "synthetic-right");
-        assert!(info["thumbnail_image_id"] == "synthetic-thumbnail");
+        assert_eq!(info["left_ir_image_id"], "synthetic-left");
+        assert_eq!(info["right_ir_image_id"], "synthetic-right");
+        assert_eq!(info["thumbnail_image_id"], "synthetic-thumbnail");
         assert_eq!(
             info["left_ir_multiframe_image_ids"],
             serde_json::json!(["synthetic-extra-left"])
@@ -453,7 +476,7 @@ fn verify(
             if name == "iris.tar" {
                 assert_eq!(inner.len(), 4);
                 for id in ["synthetic-extra-left", "synthetic-extra-right"] {
-                    assert!(inner[&format!("{id}.png")] == inner["left_ir.png"]);
+                    assert_eq!(inner[&format!("{id}.png")], inner["left_ir.png"]);
                 }
             }
             if name == "normalized_iris.tar" {
@@ -501,8 +524,8 @@ fn verify(
             expected.insert(name.to_owned(), hash(&tier0[name]));
         }
     }
-    assert!(
-        manifest == expected,
+    assert_eq!(
+        manifest, expected,
         "manifest does not exactly cover package contents"
     );
     Ok(())
