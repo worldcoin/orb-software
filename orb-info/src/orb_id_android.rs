@@ -1,18 +1,14 @@
 #[cfg(feature = "async")]
 use crate::from_file;
 use crate::from_file_blocking;
-#[cfg(feature = "async")]
-use futures::TryFutureExt;
-#[cfg(feature = "async")]
-use std::future;
 
-/// An Arkenstone ID, formatted and serialized as `P` followed by eight uppercase hex digits.
+/// An Arkenstone ID, displayed and serialized as `P` followed by eight uppercase hex digits.
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct OrbId(u32);
 
 impl std::fmt::Debug for OrbId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
+        write!(f, "Arkenstone id: {self} - {}", self.0)
     }
 }
 
@@ -22,15 +18,19 @@ impl std::fmt::Display for OrbId {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("expected 'P' followed by exactly eight hexadecimal digits")]
+pub struct ParseErr;
+
 impl std::str::FromStr for OrbId {
-    type Err = std::num::ParseIntError;
+    type Err = ParseErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // Sysfs serial numbers and existing ORB_ID overrides are decimal.
-        match s.strip_prefix('P') {
-            Some(hex) => u32::from_str_radix(hex, 16).map(Self),
-            None => s.parse().map(Self),
+        let hex = s.strip_prefix('P').ok_or(ParseErr)?;
+        if hex.len() != 8 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(ParseErr);
         }
+        u32::from_str_radix(hex, 16).map(Self).map_err(|_| ParseErr)
     }
 }
 
@@ -62,7 +62,9 @@ pub enum ReadErr {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
-    Parse(#[from] std::num::ParseIntError),
+    ParseSerial(#[from] std::num::ParseIntError),
+    #[error(transparent)]
+    ParseOrbId(#[from] ParseErr),
 }
 
 #[cfg(not(test))]
@@ -71,28 +73,31 @@ const SOC_SERIAL_NUMBER_PATH: &str = "/sys/devices/soc0/serial_number";
 const SOC_SERIAL_NUMBER_PATH: &str = "./test_soc_serial_number";
 
 impl OrbId {
+    fn from_soc_serial_number(s: &str) -> Result<Self, std::num::ParseIntError> {
+        s.parse().map(Self)
+    }
+
     #[cfg(feature = "async")]
     pub async fn read() -> Result<Self, ReadErr> {
-        let s = future::ready(std::env::var("ORB_ID"))
-            .map_ok(|s| s.to_string())
-            .or_else(|_| from_file(SOC_SERIAL_NUMBER_PATH))
-            .await?;
-
-        Ok(s.parse()?)
+        if let Ok(s) = std::env::var("ORB_ID") {
+            return Ok(s.parse()?);
+        }
+        let s = from_file(SOC_SERIAL_NUMBER_PATH).await?;
+        Ok(Self::from_soc_serial_number(&s)?)
     }
 
     pub fn read_blocking() -> Result<Self, ReadErr> {
-        let s = std::env::var("ORB_ID")
-            .map(|s| s.to_string())
-            .or_else(|_| from_file_blocking(SOC_SERIAL_NUMBER_PATH))?;
-
-        Ok(s.parse()?)
+        if let Ok(s) = std::env::var("ORB_ID") {
+            return Ok(s.parse()?);
+        }
+        let s = from_file_blocking(SOC_SERIAL_NUMBER_PATH)?;
+        Ok(Self::from_soc_serial_number(&s)?)
     }
 }
 
 #[cfg(any(test, feature = "testing"))]
 pub fn test_orb_id() -> OrbId {
-    "666666".parse().unwrap()
+    OrbId(666666)
 }
 
 #[cfg(test)]
@@ -100,21 +105,45 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_from_str_and_display() {
+    fn test_soc_serial_number() {
         for (serial, expected) in [
             (0, "P00000000"),
             (1234, "P000004D2"),
+            (876120561, "P343889F1"),
             (1428495495, "P55251C87"),
             (u32::MAX, "PFFFFFFFF"),
         ] {
-            let id: OrbId = serial.to_string().parse().unwrap();
+            let id = OrbId::from_soc_serial_number(&serial.to_string()).unwrap();
             assert_eq!(id.0, serial);
             assert_eq!(id.to_string(), expected);
-            assert_eq!(format!("{id:?}"), expected);
-            assert_eq!(format!("{id:#?}"), expected);
             assert_eq!(expected.parse::<OrbId>().unwrap(), id);
         }
-        assert_eq!("P55251c87".parse::<OrbId>().unwrap().0, 1428495495);
+        for input in ["", "P55251C87", "55251C87", "-1", "4294967296"] {
+            assert!(OrbId::from_soc_serial_number(input).is_err());
+        }
+    }
+
+    #[test]
+    fn test_from_str() {
+        for (input, serial, expected) in [
+            ("P00000000", 0, "P00000000"),
+            ("P00001234", 0x1234, "P00001234"),
+            ("P55251C87", 1428495495, "P55251C87"),
+            ("P55251c87", 1428495495, "P55251C87"),
+            ("Pffffffff", u32::MAX, "PFFFFFFFF"),
+        ] {
+            let id: OrbId = input.parse().unwrap();
+            assert_eq!(id.0, serial);
+            assert_eq!(id.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn test_debug() {
+        let id: OrbId = "P55251C87".parse().unwrap();
+        assert_eq!(format!("{id:?}"), "Arkenstone id: P55251C87 - 1428495495");
+        assert_eq!(format!("{id:#?}"), "Arkenstone id: P55251C87 - 1428495495");
+        assert!(format!("{id:?}").parse::<OrbId>().is_err());
     }
 
     #[test]
@@ -123,10 +152,20 @@ mod test {
             "",
             "P",
             "Pxyz",
+            "P1234",
+            "P+1234",
+            "P+0001234",
+            "P-0001234",
+            "P0000000G",
             "P100000000",
+            "1428495495",
             "4294967296",
             "-1",
             "Q55251C87",
+            "p55251C87",
+            " P55251C87",
+            "P55251C87\n",
+            "P５５２５１Ｃ８７",
         ] {
             assert!(input.parse::<OrbId>().is_err(), "accepted {input:?}");
         }
@@ -135,11 +174,16 @@ mod test {
     #[test]
     #[serial_test::serial]
     fn test_sync_get_orb_id_from_env() {
-        for input in ["1428495495", "P55251C87"] {
+        for input in ["P55251c87", "P55251C87"] {
             std::env::set_var("ORB_ID", input);
             let orb_id = OrbId::read_blocking().unwrap();
             assert_eq!(orb_id.to_string(), "P55251C87");
         }
+        std::env::set_var("ORB_ID", "1428495495");
+        assert!(matches!(
+            OrbId::read_blocking(),
+            Err(ReadErr::ParseOrbId(_))
+        ));
 
         std::env::remove_var("ORB_ID");
     }
@@ -148,11 +192,13 @@ mod test {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_async_get_orb_id_from_env() {
-        for input in ["1428495495", "P55251C87"] {
+        for input in ["P55251c87", "P55251C87"] {
             std::env::set_var("ORB_ID", input);
             let orb_id = OrbId::read().await.unwrap();
             assert_eq!(orb_id.to_string(), "P55251C87");
         }
+        std::env::set_var("ORB_ID", "1428495495");
+        assert!(matches!(OrbId::read().await, Err(ReadErr::ParseOrbId(_))));
 
         std::env::remove_var("ORB_ID");
     }
@@ -195,13 +241,16 @@ mod test {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_orb_id() {
-        for input in ["1428495495", "P55251C87"] {
+        for input in ["P55251c87", "P55251C87"] {
             let id: OrbId = serde_json::from_value(serde_json::json!(input)).unwrap();
             assert_eq!(id.0, 1428495495);
             assert_eq!(
                 serde_json::to_value(id).unwrap(),
                 serde_json::json!("P55251C87")
             );
+        }
+        for input in ["1428495495", "P+1234", "Ark55251c87"] {
+            assert!(serde_json::from_value::<OrbId>(serde_json::json!(input)).is_err());
         }
     }
 
@@ -218,7 +267,7 @@ mod test {
         }
 
         let req = Request {
-            orb_id: "1428495495".parse().unwrap(),
+            orb_id: "P55251C87".parse().unwrap(),
         };
         assert_eq!(
             serde_json::to_string(&req).unwrap(),
