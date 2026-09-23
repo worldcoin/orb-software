@@ -25,9 +25,9 @@ let
   };
   rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
 
-  # Only wired up on Linux hosts for now (untested on Darwin), matching the
-  # other cross-compilation toolchains in this file (e.g. OP-TEE below).
-  androidNdk = import ../packages/android-ndk.nix { pkgs = p.native; };
+  # The Android NDK package only supports an x86_64 Linux build host.
+  androidNdk =
+    if system == "x86_64-linux" then import ../packages/android-ndk.nix { pkgs = p.native; } else null;
 
   macFrameworks = p.native.apple-sdk_15;
 
@@ -206,6 +206,13 @@ in
           export OPTEE_CLIENT_EXPORT_x86_64_unknown_linux_gnu="${optee-client-pkg-x86}";
           export TEEC_STATIC=1;
           export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
+        ''
+      else
+        ""
+    )
+    + (
+      if system == "x86_64-linux" then
+        ''
 
           # Android NDK toolchain, used by `cargo build --target
           # aarch64-linux-android`
