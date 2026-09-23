@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput};
@@ -35,8 +33,7 @@ pub fn contract(args: TokenStream, item: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     quote! {
-        #[derive(::orb_contract_schema::__private::schemars::JsonSchema)]
-        #[schemars(crate = "orb_contract_schema::__private::schemars")]
+        #[derive(::schemars::JsonSchema)]
         #input
 
         ::orb_contract_schema::__private::inventory::submit! {
@@ -47,7 +44,7 @@ pub fn contract(args: TokenStream, item: TokenStream) -> TokenStream {
                     ::core::stringify!(#name),
                 ),
                 schema: || {
-                    ::orb_contract_schema::__private::schemars::schema_for!(#name)
+                    ::schemars::schema_for!(#name)
                 },
             }
         }

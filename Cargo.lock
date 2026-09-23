@@ -6775,6 +6775,8 @@ checksum = "4df8e8352f73465f015867c7ab24d2c46511bb8148e7177fe823e88f4f1f9765"
 name = "oes"
 version = "0.1.0"
 dependencies = [
+ "orb-contract-schema",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "zenorb",

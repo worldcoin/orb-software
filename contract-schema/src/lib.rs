@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 /// Marks a struct or enum as a registered JSON Schema contract.
 ///
 /// Generic types are not supported because they do not identify a concrete
@@ -30,5 +28,4 @@ pub fn gen_schemas() -> impl Iterator<Item = &'static Contract> {
 #[doc(hidden)]
 pub mod __private {
     pub use inventory;
-    pub use schemars;
 }

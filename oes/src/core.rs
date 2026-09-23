@@ -1,11 +1,15 @@
+use orb_contract_schema::contract;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Service started event published to `oes/service_started`.
-#[derive(Serialize, Deserialize)]
+#[contract]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct ServiceStartedEvent {}
 
 /// A QR scan event, recording the current phase and outcome.
-#[derive(Serialize, Deserialize)]
+#[contract]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 #[allow(clippy::must_use_candidate)]
 pub struct QrScanEvt {
@@ -16,7 +20,7 @@ pub struct QrScanEvt {
 }
 
 /// Outcome of a QR scan attempt.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum QrScanState {
     /// Still scanning for a QR code.
@@ -51,7 +55,7 @@ pub enum QrScanState {
 }
 
 /// Which QR scanning mode the orb is in.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum QrScanPhase {
     /// Scanning for an operator QR code.
@@ -63,7 +67,7 @@ pub enum QrScanPhase {
 }
 
 /// What type of QR code was actually scanned.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum QrScanType {
     /// A normal user QR code.
@@ -83,7 +87,7 @@ pub enum QrScanType {
 }
 
 /// Category of a QR scan or validation failure.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum QrScanValidationFailure {
     /// No location data was available for validation.
@@ -114,6 +118,7 @@ pub enum QrScanValidationFailure {
 ///
 /// Add new fields here to expose them to backend-status and other services.
 /// All fields are optional so only explicitly set values are published.
+#[contract]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PublishableConfig {
     /// Whether the thermal camera is required for signup.

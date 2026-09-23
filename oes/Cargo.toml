@@ -10,6 +10,8 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+orb-contract-schema.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zenorb.workspace = true
