@@ -10,7 +10,9 @@ use color_eyre::{
     Result,
 };
 use orb_s3_helpers::S3Uri;
-use testcontainers::{runners::AsyncRunner as _, ContainerAsync, ImageExt};
+use testcontainers::{
+    core::WaitFor, runners::AsyncRunner as _, ContainerAsync, ImageExt,
+};
 use testcontainers_modules::rustfs::RustFS;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _},
@@ -27,7 +29,10 @@ pub struct TestCtx {
 
 impl TestCtx {
     pub async fn new() -> Result<Self> {
-        let rustfs = RustFS::default().with_tag("1.0.0-rc.6");
+        // The pinned image writes server logs to /logs, but the module waits on stdout.
+        let rustfs = RustFS::default()
+            .with_tag("1.0.0-rc.6")
+            .with_ready_conditions(vec![WaitFor::Nothing]);
         let container = rustfs.start().await?;
 
         let host_port = container.get_host_port_ipv4(9000).await?;
@@ -55,7 +60,7 @@ impl TestCtx {
 
         // avoids race condition where the tcp connection might be
         // refused
-        wait_for_tcp(Duration::from_millis(1000), addr)
+        wait_for_tcp(Duration::from_secs(60), addr)
             .await
             .wrap_err("timed out waiting for tcp")?;
 
