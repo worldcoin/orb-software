@@ -11,7 +11,7 @@ use color_eyre::{
 };
 use orb_s3_helpers::S3Uri;
 use testcontainers::{runners::AsyncRunner as _, ContainerAsync, ImageExt};
-use testcontainers_modules::minio::MinIO;
+use testcontainers_modules::rustfs::RustFS;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _},
     net::ToSocketAddrs,
@@ -22,20 +22,20 @@ use tokio::{
 #[derive(Debug)]
 pub struct TestCtx {
     client: s3::Client,
-    _minio: ContainerAsync<MinIO>,
+    _rustfs: ContainerAsync<RustFS>,
 }
 
 impl TestCtx {
     pub async fn new() -> Result<Self> {
-        let minio = MinIO::default().with_name("quay.io/minio/minio");
-        let container = minio.start().await?;
+        let rustfs = RustFS::default().with_tag("1.0.0-rc.6");
+        let container = rustfs.start().await?;
 
         let host_port = container.get_host_port_ipv4(9000).await?;
         let host_ip = container.get_host().await?;
 
         let addr = format!("{host_ip}:{host_port}");
         let endpoint_url = format!("http://{addr}");
-        let creds = Credentials::new("minioadmin", "minioadmin", None, None, "test");
+        let creds = Credentials::new("rustfsadmin", "rustfsadmin", None, None, "test");
 
         let config = s3::config::Builder::default()
             .retry_config(RetryConfig::standard())
@@ -60,12 +60,12 @@ impl TestCtx {
             .wrap_err("timed out waiting for tcp")?;
 
         client.list_buckets().max_buckets(1).send().await.wrap_err(
-            "failed to list buckets as sanity check that localstack is running",
+            "failed to list buckets as sanity check that RustFS is running",
         )?;
 
         Ok(Self {
             client,
-            _minio: container,
+            _rustfs: container,
         })
     }
 
