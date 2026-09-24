@@ -55,9 +55,7 @@ impl Animation for Blink {
                     time_acc += time;
                     if *phase < time_acc {
                         let color = if i % 2 == 0 { self.color } else { Argb::OFF };
-                        for led in frame {
-                            *led = color;
-                        }
+                        frame.fill(color);
                         break;
                     }
                 }

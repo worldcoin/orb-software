@@ -49,9 +49,7 @@ impl<const N: usize> Animation for Idle<N> {
         idle: bool,
     ) -> AnimationState {
         if !idle {
-            for led in frame {
-                *led = self.color;
-            }
+            frame.fill(self.color);
             if let Some(max_time) = self.max_time {
                 if max_time <= 0.0 {
                     return AnimationState::Finished;

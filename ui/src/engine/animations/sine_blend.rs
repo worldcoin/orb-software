@@ -74,9 +74,7 @@ impl<const N: usize> SineBlend<N> {
                     *led = Argb(None, r, g, b);
                 }
             } else {
-                for led in &mut *frame {
-                    *led = color;
-                }
+                frame.fill(color);
             }
         }
     }
