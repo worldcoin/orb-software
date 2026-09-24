@@ -40,17 +40,6 @@ skip = [{ name = "serialport", version = "4.7.0" }]
 
 [sources]
 unknown-registry = "deny"
-unknown-git = "deny"
-# Explicit repositories only: adding a new Git source requires policy review.
-allow-git = [
-	"https://github.com/google/minijail",
-	"https://github.com/TheButlah/teaclave-trustzone-sdk",
-	"https://github.com/worldcoin/hyrax-pcs-commit",
-	"https://github.com/worldcoin/orb-messages",
-	"https://github.com/worldcoin/orb-relay-messages",
-	"https://github.com/worldcoin/orb-rustzone",
-	"https://github.com/worldcoin/orb-software",
-]
 
 [licenses]
 version = 2

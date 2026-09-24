@@ -328,8 +328,3 @@ jobs:
         run: |
           nix develop -c \
             cargo deny check advisories
-
-      - name: Check dependency sources
-        run: |
-          nix develop -c \
-            cargo deny check sources

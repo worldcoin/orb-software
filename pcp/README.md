@@ -134,5 +134,4 @@ Removing this unused dependency and updating SHAKE256 belong in a reviewed
 upstream change; upgrading the pin alone does not resolve them as of September
 2026. No advisory exception is added here. The workspace's existing policy fails
 on unmaintained direct dependencies, not transitive ones; a passing check does
-not establish that every transitive dependency is maintained. CI separately
-rejects Git sources outside the explicit repository allowlist in `deny.toml`.
+not establish that every transitive dependency is maintained.
