@@ -140,7 +140,7 @@ in
         cargo-expand # Useful for inspecting macros
         cargo-nextest # Fast test runner
         cargo-watch # Useful for repeatedly running tests
-        cargo-zigbuild # Used to cross compile rust
+        (cargo-zigbuild.override { zig = zig_0_14; }) # Zig 0.16 fails to link pinned ALSA
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
         mdbook # Generates site for docs
@@ -154,7 +154,7 @@ in
         taplo # toml autoformatter
         unstable.cargo-deny # Checks licenses and security advisories
         zbus-xmlgen # Used by `orb-zbus-proxies`
-        zig # Needed for cargo zigbuild
+        zig_0_14 # Needed for cargo zigbuild
 
         # Used by various rust build scripts to find system libs
         # Note that this is the unwrapped version of pkg-config. By default,
