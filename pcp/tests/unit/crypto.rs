@@ -1,7 +1,8 @@
 mod sealed_boxes {
     use crate::crypto::{self, SealingError};
     use alkali::{
-        asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox, AlkaliError,
+        asymmetric::seal::{curve25519xsalsa20poly1305 as sealedbox, SealError},
+        AlkaliError,
     };
 
     fn open(
@@ -17,12 +18,33 @@ mod sealed_boxes {
     #[test]
     fn encrypted_bytes_open_with_libsodium() {
         let pair = sealedbox::Keypair::generate().unwrap();
-        for size in [0, 1, 256, 4096] {
+        for size in [0, 1, 31, 32, 256, 4096, 1_048_576] {
             let plaintext: Vec<_> = (0_u8..=255).cycle().take(size).collect();
             let encrypted = crypto::seal(&plaintext, &pair.public_key).unwrap();
             assert_eq!(encrypted.len(), plaintext.len() + 48);
             assert_eq!(open(&encrypted, &pair).unwrap(), plaintext);
         }
+    }
+
+    #[test]
+    fn opens_existing_sodiumoxide_ciphertext() {
+        // Sodiumoxide 0.2.7: seed 0..31 and plaintext 0..31, all synthetic.
+        let seed = sealedbox::Seed::try_from((0_u8..32).collect::<Vec<_>>().as_slice())
+            .unwrap();
+        let pair = sealedbox::Keypair::from_seed(&seed).unwrap();
+        let ciphertext = data_encoding::BASE64
+            .decode(
+                concat!(
+                    "U57uboy6kYrZq1DtEa/bfQY4yxTbVqOrOKyiXbTf8njlDZy8qzshCjcOOGBiI1Zp",
+                    "erZQuPYr0U60rYExgUPckKw3sXSUs1da1ieH59laqD0=",
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        assert_eq!(
+            open(&ciphertext, &pair).unwrap(),
+            (0_u8..32).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -42,14 +64,15 @@ mod sealed_boxes {
         let pair = sealedbox::Keypair::generate().unwrap();
         let other = sealedbox::Keypair::generate().unwrap();
         let ciphertext = crypto::seal(b"synthetic", &pair.public_key).unwrap();
-        assert!(open(&ciphertext, &other).is_err());
+        let error = AlkaliError::SealError(SealError::DecryptionFailed);
+        assert_eq!(open(&ciphertext, &other), Err(error));
         for i in 0..ciphertext.len() {
             let mut changed = ciphertext.clone();
             changed[i] ^= 1;
-            assert!(open(&changed, &pair).is_err());
+            assert_eq!(open(&changed, &pair), Err(error));
         }
         for length in 0..ciphertext.len() {
-            assert!(open(&ciphertext[..length], &pair).is_err());
+            assert_eq!(open(&ciphertext[..length], &pair), Err(error));
         }
     }
 

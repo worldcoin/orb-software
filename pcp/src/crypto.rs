@@ -4,6 +4,7 @@
 //! authorize the recipient. The caller owns and is responsible for clearing
 //! plaintext inputs. There is no plaintext-output or encryption-disable mode.
 
+// Explicit module pins the PCP wire algorithm, independent of default re-exports.
 use alkali::{
     asymmetric::seal::{curve25519xsalsa20poly1305 as sealedbox, SealError},
     AlkaliError,
