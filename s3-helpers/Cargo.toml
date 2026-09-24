@@ -20,7 +20,7 @@ color-eyre.workspace = true
 futures.workspace = true
 tempfile.workspace = true
 testcontainers.workspace = true
-testcontainers-modules = { workspace = true, features = ["minio"] }
+testcontainers-modules = { workspace = true, features = ["rustfs"] }
 tokio = { workspace = true, features = ["full"] } # TODO: narrow this
 tracing.workspace = true
 
