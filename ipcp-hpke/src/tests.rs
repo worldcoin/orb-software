@@ -34,9 +34,10 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let pairing_key = PairingKey::default();
     let other_pairing_key = PairingKey::default();
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
+    let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
+        PairingKey::encrypt(&recipient_pk, ipcp_image.clone()).unwrap();
     assert_eq!(
         pairing_key
             .decrypt(&encrypted_ipcp_image_payload)
@@ -59,10 +60,36 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
 }
 
 #[test]
+fn recipient_public_key_roundtrips_and_encrypts() {
+    let pairing_key = pairing_key_from_fixture(&ipcp_image_fixture());
+    let encoded = pairing_key.pk.to_bytes();
+    let recipient_pk = RecipientPublicKey::try_from(encoded.as_slice()).unwrap();
+    assert_eq!(recipient_pk.to_bytes().as_slice(), encoded.as_slice());
+
+    let plaintext = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
+    let encrypted = PairingKey::encrypt(&recipient_pk, plaintext.clone()).unwrap();
+    assert_eq!(pairing_key.decrypt(&encrypted).unwrap(), plaintext);
+}
+
+#[test]
+fn recipient_public_key_rejects_invalid_lengths() {
+    for length in (0..KEY_LEN).chain([KEY_LEN + 1, KEY_LEN * 2]) {
+        assert!(
+            matches!(
+                RecipientPublicKey::try_from(vec![0; length].as_slice()),
+                Err(Error::InvalidKey)
+            ),
+            "public key length {length}"
+        );
+    }
+}
+
+#[test]
 fn empty_plaintext_roundtrips() {
     let pairing_key = PairingKey::new();
+    let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let encrypted_payload =
-        PairingKey::encrypt(&pairing_key.pk, Zeroizing::new(Vec::new())).unwrap();
+        PairingKey::encrypt(&recipient_pk, Zeroizing::new(Vec::new())).unwrap();
     assert_eq!(encrypted_payload.ciphertext.len(), TAG_LEN);
     let plaintext: Zeroizing<Vec<u8>> =
         pairing_key.decrypt(&encrypted_payload).unwrap();
@@ -72,9 +99,10 @@ fn empty_plaintext_roundtrips() {
 #[test]
 fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let pairing_key = PairingKey::new();
+    let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&pairing_key.pk, ipcp_image.clone()).unwrap();
+        PairingKey::encrypt(&recipient_pk, ipcp_image.clone()).unwrap();
     let announcement = AnnounceAppId {
         encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
         ..Default::default()

@@ -12,6 +12,7 @@ pub mod read_gimbal;
 pub mod reboot;
 pub mod reset_gimbal;
 pub mod reset_rgb_focus_calibration;
+pub mod se050_list_keys;
 pub mod sec_mcu_reboot;
 pub mod service;
 pub(crate) mod service_control;
