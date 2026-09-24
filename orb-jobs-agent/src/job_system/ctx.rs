@@ -260,8 +260,6 @@ impl JobExecutionUpdateExt for JobExecutionUpdate {
 
 /// Max length of a zoci command, in bytes.
 const ZOCI_CMD_MAX_LEN: usize = 64;
-const OPERATOR_QR_REFRESH_COMMAND: &str = "operator_qr_refresh";
-const OPERATOR_QR_REFRESH_SUCCESS: &str = "Operator QR code refreshed successfully";
 
 fn get_zoci_command(full_cmd: &str) -> Option<String> {
     let cmd = full_cmd
@@ -328,11 +326,7 @@ fn zoci_handler() -> Handler {
                 let stdout = String::from_utf8_lossy(&payload);
 
                 if stdout == "null" {
-                    if ctx.cmd == OPERATOR_QR_REFRESH_COMMAND {
-                        ctx.success().stdout(OPERATOR_QR_REFRESH_SUCCESS)
-                    } else {
-                        ctx.success()
-                    }
+                    ctx.success()
                 } else {
                     ctx.success().stdout(stdout.to_string())
                 }

@@ -11,10 +11,9 @@ const SENSITIVE_KEYS: &[&str] = &[
     "key",
     "psk",
     "credential",
-    "qr_code",
 ];
 
-const COMMANDS_TO_SANITIZE: &[&str] = &["operator_qr_refresh", "wifi_add"];
+const COMMANDS_TO_SANITIZE: &[&str] = &["wifi_add"];
 
 pub fn should_sanitize(cmd: &str) -> bool {
     COMMANDS_TO_SANITIZE.contains(&cmd)
@@ -89,15 +88,6 @@ mod tests {
         assert!(sanitized.contains("foo"));
         assert!(sanitized.contains(HIDDEN));
         assert!(!sanitized.contains("val1"));
-    }
-
-    #[test]
-    fn test_redacts_operator_qr_refresh_payload() {
-        let doc = r#"operator_qr_refresh {"qr_code":"userid:operator-id:0"}"#;
-        let sanitized = redact_job_document(doc);
-
-        assert!(sanitized.contains(HIDDEN));
-        assert!(!sanitized.contains("operator-id"));
     }
 
     #[test]

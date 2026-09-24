@@ -123,40 +123,6 @@ async fn routes_unknown_job_to_zoci_queryable_and_forwards_args() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn reports_operator_qr_refresh_success() {
-    // Arrange
-    let fx = JobAgentFixture::with_namespace("operator_qr_refresh_success").await;
-    let _program = fx.program().shell(Host).spawn().await;
-
-    let zoci = fx.zenorb_service("echo").await;
-    let queryable = zoci
-        .declare_queryable("job/operator_qr_refresh")
-        .await
-        .unwrap();
-
-    task::spawn(async move {
-        let query = queryable.recv_async().await.unwrap();
-        query.res_ok(()).await.unwrap();
-    });
-
-    time::sleep(Duration::from_millis(300)).await;
-
-    // Act
-    fx.enqueue_job(
-        r#"operator_qr_refresh {"qr_code":"userid:00000000-0000-0000-0000-000000000000:0"}"#,
-    )
-    .await
-    .wait_for_completion()
-    .await;
-
-    // Assert
-    let result = fx.execution_updates.read().await;
-
-    assert_eq!(result[0].status, JobExecutionStatus::Succeeded as i32);
-    assert_eq!(result[0].std_out, "Operator QR code refreshed successfully");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn failed_unsupported_job_does_not_break_later_zoci_handler() {
     // Arrange
     let fx = JobAgentFixture::with_namespace("zoci_fallback_recovery").await;

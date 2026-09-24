@@ -36,10 +36,10 @@ a signup is already in progress.
 operator_qr_refresh {"qr_code":"userid:00000000-0000-0000-0000-000000000000:0"}
 ```
 
-**Response:** Success with `Operator QR code refreshed successfully` after Orb
-Core validates and applies the operator data. Invalid or temporarily
-unverifiable QR data fails the job. The QR payload is redacted from jobs-agent
-logs.
+**Response:** Orb Core returns `"Operator QR code refreshed successfully"` after
+validating and publishing the operator data. Invalid or temporarily
+unverifiable QR data fails the job. Jobs-agent forwards Orb Core's response
+without command-specific handling.
 
 ## wifi_add
 
