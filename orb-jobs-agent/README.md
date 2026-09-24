@@ -1,33 +1,17 @@
-# Orb Jobs Agent (orb-jobs-agent)
+# Orb Jobs Agent
 
-The Orb Jobs Agent is a process to provide remote execution of prescribed commands. Commands are invoked by incoming requests and the
-functionality of the command is provided completely by the Orb implementation.
+`orb-jobs-agent` provides infrastructure for remote job execution on an Orb. It receives jobs, manages execution and cancellation, and reports progress and results.
 
-### Taxonomy
+## Ownership boundary
 
-- `orb-jobs-agent`: A systemd service that runs on the orb, executing a `JobExecution`(s) sent by `fleet-cmdr`
-- `fleet-cmdr`: A backend service owned by the Fleet Management team that sends `JobExecution`(s) to the orb. 
-- `JobNotify`: A notification sent from `fleet-cmdr` to the `orb-jobs-agent` that new jobs are pending.
-- `JobRequestNext`: A request from the `orb-jobs-agent` to the `fleet-cmdr` to send the next `JobExecution`.
-- `JobExecution`: A specific command to execute by the current Orb
-- `JobExecutionUpdate`: A result from the `orb-jobs-agent` describing the outcome or progress of a command execution
-- `JobCancel`: A cancellation request to stop a running job in `orb-jobs-agent`.
+This crate must remain infrastructure-only. Do not add new job handlers directly to `orb-jobs-agent`.
 
-### fleet-cmdr's role from the orb-jobs-agent perspective
-- `fleet-cmdr` provides an interface for users to enqueue new jobs to its internal queue
-- when a new job is enqueued in `fleet-cmdr`, it sends a `JobNotify` to `orb-jobs-agent`
-- when `fleet-cmdr` receives a `JobRequestNext` from `orb-jobs-agent`, it sends the first job (that is not already 
-in progress) from its queue with `JobExecution`
-- when `fleet-cmdr` receives a `JobExecutionUpdate` from `orb-jobs-agent`, it removes that job from its internal queue
+Implement new remote operations as ZOCI handlers in the service that owns the underlying functionality. Jobs without a local handler are routed to the owning service through `**/job/<command>`.
 
-### orb-jobs-agent role
-- on startup, `orb-jobs-agent` requests `fleet-cmdr` for a new job with `JobRequestNext`
-- when `orb-jobs-agent` receives a `JobNotify` from `fleet-cmdr` it requests a new job with a `JobRequestNext`
-- when `orb-jobs-agent` receives a `JobExecution` from `fleet-cmdr` it executes a job
-- on completion of a job, `orb-jobs-agent` reports back to `fleet-cmdr` with a `JobExecutionUpdate`
-- on completion of a job, `orb-jobs-agent` requests `fleet-cmdr` for a new job with a `JobRequestNext`
+See the [ZOCI documentation](../zenorb/README.md#4-zoci---zenoh-orb-command-interface) for the handler convention and examples.
 
-### notes
-- jobs can be cancelled
-- some jobs can be run in parallel, other jobs not
+## Legacy handlers
 
+All handlers currently defined in `src/handlers` and registered in `src/program.rs` are technical debt. They remain for compatibility and must not serve as precedent for new jobs.
+
+Maintain these handlers only while they are still needed. When practical, migrate each handler to the service that owns its functionality and remove its local implementation from `orb-jobs-agent`.
