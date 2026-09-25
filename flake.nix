@@ -2,7 +2,7 @@
   description = "orb-software flake";
   inputs = {
     # Different versions of nixpkgs
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     nixpkgs-23_11.url = "github:NixOS/nixpkgs/nixos-23.11";
     # Provides eachDefaultSystem and other utility functions
