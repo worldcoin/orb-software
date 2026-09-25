@@ -323,6 +323,12 @@ impl JobAgentFixture {
 
         let ticket = self.job_queue.enqueue(request).await;
 
+        self.send_notify().await;
+
+        ticket
+    }
+
+    pub async fn send_notify(&self) {
         let payload = Any::from_msg(&JobNotify::default())
             .unwrap()
             .encode_to_vec();
@@ -338,8 +344,6 @@ impl JobAgentFixture {
             )
             .await
             .unwrap();
-
-        ticket
     }
 
     pub async fn cancel_job(&self, job_execution_id: impl Into<String>) {
