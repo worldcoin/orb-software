@@ -55,3 +55,5 @@ __pycache__
 *.p12
 *.pfx
 /.devcontainer/postCreateCommand.user.sh
+
+node_modules
