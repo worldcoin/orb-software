@@ -107,9 +107,7 @@ impl Animation for Pulse {
                 // solid
                 self.color
             };
-            for led in frame {
-                *led = color;
-            }
+            frame.fill(color);
         }
         AnimationState::Running
     }

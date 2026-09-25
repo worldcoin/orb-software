@@ -7376,7 +7376,7 @@ dependencies = [
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=2ce6edcb3cb40fb54378631701e1c31b4d3bdc42)",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.17",
@@ -7567,7 +7567,7 @@ name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=9bc83771b15cbf22796e93a7276040db4d63a64d)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=2ce6edcb3cb40fb54378631701e1c31b4d3bdc42)",
  "thiserror 1.0.69",
  "uuid 1.19.0",
 ]
@@ -7596,7 +7596,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=6d43cf5f05874b5e12dfc1272ceafa238e9a6e27#6d43cf5f05874b5e12dfc1272ceafa238e9a6e27"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=2ce6edcb3cb40fb54378631701e1c31b4d3bdc42#2ce6edcb3cb40fb54378631701e1c31b4d3bdc42"
 dependencies = [
  "blake3",
  "prost 0.14.1",
@@ -7604,21 +7604,8 @@ dependencies = [
  "prost-types 0.14.1",
  "schemars 0.8.22",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
- "tonic 0.14.2",
- "tonic-prost",
- "tonic-prost-build",
-]
-
-[[package]]
-name = "orb-relay-messages"
-version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=9bc83771b15cbf22796e93a7276040db4d63a64d#9bc83771b15cbf22796e93a7276040db4d63a64d"
-dependencies = [
- "blake3",
- "prost 0.14.1",
- "prost-build 0.14.1",
- "prost-types 0.14.1",
  "tonic 0.14.2",
  "tonic-prost",
  "tonic-prost-build",
@@ -12062,7 +12049,6 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "rustls-native-certs 0.8.2",
  "socket2 0.6.1",
  "sync_wrapper 1.0.2",
  "tokio",
