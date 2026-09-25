@@ -21,13 +21,13 @@ let
   # you can still `cargo zigbuild`.
   rustToolchain = fenix.packages.${system}.fromToolchainFile {
     file = ../../rust-toolchain.toml;
-    sha256 = "sha256-A1abGIbOtcBSdrUMhDGrER3pRM1hQP4fp9gh3Y4PKc8=";
+    sha256 = "sha256-p8h3Sl/YRByZfZTAKXdsvF6xEenXKrXSVvpphmZENH4=";
   };
   rustPlatform = p.native.makeRustPlatform { inherit (rustToolchain) cargo rustc; };
 
-  # Only wired up on Linux hosts for now (untested on Darwin), matching the
-  # other cross-compilation toolchains in this file (e.g. OP-TEE below).
-  androidNdk = import ../packages/android-ndk.nix { pkgs = p.native; };
+  # The Android NDK package only supports an x86_64 Linux build host.
+  androidNdk =
+    if system == "x86_64-linux" then import ../packages/android-ndk.nix { pkgs = p.native; } else null;
 
   macFrameworks = p.native.apple-sdk_15;
 
@@ -48,6 +48,7 @@ let
       ]
       ++ p.lib.lists.optionals p.stdenv.isLinux [
         "${p.nixpkgs-23_11.alsaLib.dev}/lib/pkgconfig"
+        "${p.dbus.dev}/lib/pkgconfig" # for libdbus-sys (via bluer)
         "${p.nixpkgs-23_11.libcap.dev}/lib/pkgconfig" # for minijail-sys
         "${p.nixpkgs-23_11.minijail}/lib/pkgconfig" # for minijail-sys (libminijail)
         "${p.nixpkgs-23_11.udev.dev}/lib/pkgconfig"
@@ -139,7 +140,7 @@ in
         cargo-expand # Useful for inspecting macros
         cargo-nextest # Fast test runner
         cargo-watch # Useful for repeatedly running tests
-        cargo-zigbuild # Used to cross compile rust
+        (cargo-zigbuild.override { zig = zig_0_14; }) # Zig 0.16 fails to link pinned ALSA
         dpkg # Used to test outputs of cargo-deb
         git-cliff # Conventional commit based release notes
         mdbook # Generates site for docs
@@ -153,7 +154,7 @@ in
         taplo # toml autoformatter
         unstable.cargo-deny # Checks licenses and security advisories
         zbus-xmlgen # Used by `orb-zbus-proxies`
-        zig # Needed for cargo zigbuild
+        zig_0_14 # Needed for cargo zigbuild
 
         # Used by various rust build scripts to find system libs
         # Note that this is the unwrapped version of pkg-config. By default,
@@ -205,6 +206,13 @@ in
           export OPTEE_CLIENT_EXPORT_x86_64_unknown_linux_gnu="${optee-client-pkg-x86}";
           export TEEC_STATIC=1;
           export TA_DEV_KIT_DIR="${optee-os-devkit-pkg}";
+        ''
+      else
+        ""
+    )
+    + (
+      if system == "x86_64-linux" then
+        ''
 
           # Android NDK toolchain, used by `cargo build --target
           # aarch64-linux-android`

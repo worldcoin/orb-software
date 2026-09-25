@@ -1,7 +1,7 @@
 [package]
 name = "orb-ipcp-hpke"
 version = "0.1.0"
-description = "Shared iPCP HPKE encryption and decryption"
+description = "Shared HPKE encryption and decryption"
 publish = false
 edition.workspace = true
 license.workspace = true
@@ -10,16 +10,23 @@ rust-version.workspace = true
 
 [dependencies]
 aes-gcm = { version = "0.11.1", default-features = false, features = ["zeroize"] }
-getrandom = "0.4"
 hmac = { version = "0.13", default-features = false, features = ["zeroize"] }
-hpke = { version = "=0.14.1", default-features = false, features = ["x25519", "aes"] }
-rand_core = "0.10.1"
-sha2 = "0.10.8"
+hpke = { version = "=0.14.1", default-features = false, features = [
+	"x25519",
+	"aes",
+	"getrandom",
+	"alloc",
+] }
 sha2-hpke = { package = "sha2", version = "0.11", default-features = false, features = [
 	"zeroize",
 ] }
 thiserror = "2.0.17"
 zeroize = "1.8.2"
+
+[dependencies.orb-relay-messages]
+features = ["client"]
+git = "https://github.com/worldcoin/orb-relay-messages.git"
+rev = "2e3ad215593913664d9528feea4be49ce34e49c3"
 
 [dev-dependencies]
 hex = "0.4.3"

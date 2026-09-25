@@ -20,6 +20,7 @@ pub async fn spawn(
     zsender: zenorb::Sender,
     sysfs: PathBuf,
     procfs: PathBuf,
+    bluetooth_capable: bool,
 ) -> Result<()> {
     info!("starting reporter tasks");
 
@@ -53,6 +54,7 @@ pub async fn spawn(
             nm: nm.clone(),
             session_bus,
             report_interval: Duration::from_secs(30),
+            bluetooth_capable,
         })
         .on_err(static_backoff(15))
         .spawn(connd_report::report)?;

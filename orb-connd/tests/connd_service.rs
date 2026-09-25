@@ -1,6 +1,5 @@
 #![cfg(feature = "testing")]
 use fixture::Fixture;
-use orb_connd::OrbCapabilities;
 use orb_connd_dbus::ConnectionState;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use std::time::Duration;
@@ -12,7 +11,7 @@ mod fixture;
 async fn it_does_not_change_netconfig_if_no_cellular() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::WifiOnly)
+        .cellular(false)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -38,7 +37,7 @@ async fn it_does_not_change_netconfig_if_no_cellular() {
 async fn it_sets_and_gets_netconfig() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -71,7 +70,7 @@ async fn it_sets_and_gets_netconfig() {
 async fn it_returns_connected_connection_state() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -90,7 +89,7 @@ async fn it_returns_connected_connection_state() {
 async fn it_returns_partial_connection_state() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
