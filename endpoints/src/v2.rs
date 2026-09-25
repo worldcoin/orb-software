@@ -14,8 +14,6 @@ impl Endpoints {
         let subdomain = match backend {
             Backend::Prod => "orb",
             Backend::Staging => "stage.orb",
-            // legacy analysis.ml.worldcoin.org domain is no longer used.
-            Backend::Analysis => "stage.orb",
             Backend::Local => todo!(),
         };
 
@@ -53,17 +51,6 @@ mod test {
         assert_eq!(
             prod.keys_proof.as_str(),
             "https://fleet.orb.worldcoin.org/api/v2/orbs/ea2ea744/keys/proof"
-        );
-    }
-
-    #[test]
-    fn test_analysis_backend_resolves_to_stage() {
-        let orb_id = "ea2ea744".parse().unwrap();
-        let analysis = Endpoints::new(Backend::Analysis, &orb_id);
-
-        assert_eq!(
-            analysis.status.as_str(),
-            "https://fleet.stage.orb.worldcoin.org/api/v2/orbs/ea2ea744/status"
         );
     }
 
