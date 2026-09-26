@@ -1,0 +1,16 @@
+[package]
+name = "orb-contract-schema-macros"
+version = "0.1.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = { version = "2", features = ["full"] }
