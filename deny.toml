@@ -32,7 +32,7 @@ ignore = [
 	# advisory's severity, so we accept it instead.
 	{ id = "RUSTSEC-2026-0258", reason = "aws-sdk-s3's legacy hyper 0.14 connector pulls unpatched h2 0.3.x; the fix (switching to the hyper-1.x connector) hardcodes a crypto backend that conflicts with several unrelated deps (quinn/iroh, wtransport, tokio-websockets, hyper-rustls, rcgen) that hardcode a different one, causing a runtime panic; low severity (DoS only), reconciling the backends is out of proportion" },
 ]
-unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
+unmaintained = "workspace" # fail for direct workspace dependencies, not transitive ones
 version = 2
 
 [bans]
