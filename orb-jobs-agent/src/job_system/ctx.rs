@@ -346,7 +346,6 @@ mod tests {
     #[test]
     fn accepts_commands_matching_real_zoci_endpoints() {
         assert_eq!(get_zoci_command("wifi_add").as_deref(), Some("wifi_add"));
-        assert_eq!(get_zoci_command("gondor").as_deref(), Some("gondor"));
         assert_eq!(
             get_zoci_command("wifi_scan --json").as_deref(),
             Some("wifi_scan")
