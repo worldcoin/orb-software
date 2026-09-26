@@ -13,7 +13,7 @@ pub async fn handler(ctx: Ctx) -> Result<JobExecutionUpdate> {
         .unwrap_or(OrbJabilId("NO_JABIL_ID".to_string()));
 
     let details = serde_json::json!({
-        "orb_name": orb_name,
+        "orb_name": orb_name.to_string(),
         "jabil_id": jabil_id.to_string(),
     });
 

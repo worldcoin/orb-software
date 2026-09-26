@@ -15,7 +15,7 @@ async = ["dep:tokio", "dep:tokio-util", "dep:futures"]
 default = ["orb-id", "orb-jabil-id", "orb-name", "orb-token", "orb-os-release", "async"]
 orb-id = ["dep:hex"]
 orb-jabil-id = ["dep:hex"]
-orb-name = ["dep:hex"]
+orb-name = ["dep:hex", "orb-id"]
 orb-os-release = []
 orb-token = [
 	"dep:orb-attest-dbus",

@@ -1,5 +1,4 @@
 use crate::orb_id::{self, OrbId};
-use bip39;
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -112,7 +111,7 @@ impl<'de> serde::Deserialize<'de> for OrbName {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = String::deserialize(deserializer)?;
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
         s.parse().map_err(serde::de::Error::custom)
     }
 }
