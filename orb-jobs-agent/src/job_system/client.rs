@@ -8,11 +8,53 @@ use orb_relay_messages::{
     jobs::v1::{
         JobCancel, JobExecution, JobExecutionUpdate, JobNotify, JobRequestNext,
     },
-    prost::{Message, Name},
+    prost::{DecodeError, Message, Name},
     prost_types::Any,
-    relay::entity::EntityType,
+    relay::{entity::EntityType, Entity},
+};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 use tracing::{error, info, warn};
+
+#[derive(Debug, Default)]
+struct UnexpectedSenders {
+    count: AtomicU64,
+}
+
+impl UnexpectedSenders {
+    const LOG_BURST: u64 = 10;
+    const LOG_EVERY: u64 = 100;
+    const MAX_LOGGED_LABEL_CHARS: usize = 128;
+
+    fn record(&self, from: &Entity) {
+        let unexpected_total = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+
+        if !Self::should_log(unexpected_total) {
+            return;
+        }
+
+        warn!(
+            // `?` so control characters in the attacker-chosen labels are escaped
+            sender_id = ?Self::truncate_label(&from.id),
+            sender_namespace = ?Self::truncate_label(&from.namespace),
+            sender_entity_type = ?EntityType::try_from(from.entity_type),
+            unexpected_total,
+            "rejected relay message from unexpected sender"
+        );
+    }
+
+    fn should_log(count: u64) -> bool {
+        count <= Self::LOG_BURST || count.is_multiple_of(Self::LOG_EVERY)
+    }
+
+    /// Truncates by chars: byte slicing would panic mid-codepoint and let a sender
+    /// take down the recv loop.
+    fn truncate_label(label: &str) -> String {
+        label.chars().take(Self::MAX_LOGGED_LABEL_CHARS).collect()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct JobClient {
@@ -21,6 +63,7 @@ pub struct JobClient {
     relay_namespace: String,
     job_registry: JobRegistry,
     job_config: JobConfig,
+    unexpected_senders: Arc<UnexpectedSenders>,
 }
 
 impl JobClient {
@@ -37,80 +80,77 @@ impl JobClient {
             relay_namespace: relay_namespace.to_string(),
             job_registry,
             job_config,
+            unexpected_senders: Arc::new(UnexpectedSenders::default()),
         }
     }
 
     pub async fn listen_for_job(&self) -> Result<JobExecution, orb_relay_client::Err> {
         loop {
-            match self.relay_client.recv().await {
-                Ok(msg) => {
-                    let any = match Any::decode(msg.payload.as_slice()) {
-                        Ok(any) => any,
-                        Err(e) => {
-                            error!("error decoding message: {:?}", e);
-                            continue;
-                        }
-                    };
-                    if any.type_url == JobNotify::type_url() {
-                        match JobNotify::decode(any.value.as_slice()) {
-                            Ok(job_notify) => {
-                                info!("received JobNotify: {:?}", job_notify);
-                                let _ = self.request_next_job().await;
-                            }
-                            Err(e) => {
-                                error!("error decoding JobNotify: {:?}", e);
-                            }
-                        }
-                    } else if any.type_url == JobExecution::type_url() {
-                        match JobExecution::decode(any.value.as_slice()) {
-                            Ok(job) => {
-                                info!(
-                                    job_id = %job.job_id,
-                                    job_execution_id = %job.job_execution_id,
-                                    job_document = %redact_job_document(&job.job_document),
-                                    should_cancel = job.should_cancel,
-                                    "received JobExecution"
-                                );
-                                return Ok(job);
-                            }
-                            Err(e) => {
-                                error!("error decoding JobExecution: {:?}", e);
-                            }
-                        }
-                    } else if any.type_url == JobCancel::type_url() {
-                        match JobCancel::decode(any.value.as_slice()) {
-                            Ok(job_cancel) => {
-                                info!(
-                                    job_execution_id = %job_cancel.job_execution_id,
-                                    "received JobCancel"
-                                );
-                                let cancelled = self
-                                    .job_registry
-                                    .cancel_job(&job_cancel.job_execution_id)
-                                    .await;
-                                if cancelled {
-                                    info!(
-                                        job_execution_id = %job_cancel.job_execution_id,
-                                        "Successfully cancelled job"
-                                    );
-                                } else {
-                                    warn!(
-                                        job_execution_id = %job_cancel.job_execution_id,
-                                        "Attempted to cancel non-existent or already completed job"
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                error!("error decoding JobCancel: {:?}", e);
-                            }
-                        }
-                    } else {
-                        error!("received unexpected message type: {:?}", any.type_url);
-                    }
-                }
+            let msg = match self.relay_client.recv().await {
+                Ok(msg) => msg,
                 Err(e) => {
                     error!("error receiving from relay: {:?}", e);
                     return Err(e);
+                }
+            };
+
+            // Only the configured job server may drive job execution, cancellation,
+            // or request-next; messages from any other sender are dropped before
+            // their payload is decoded.
+            if !is_authorized_sender(
+                &msg.from,
+                &self.target_service_id,
+                &self.relay_namespace,
+            ) {
+                self.unexpected_senders.record(&msg.from);
+                continue;
+            }
+
+            match InboundDecision::from(msg.payload.as_slice()) {
+                InboundDecision::Notify(job_notify) => {
+                    info!("received JobNotify: {:?}", job_notify);
+                    let _ = self.request_next_job().await;
+                }
+
+                InboundDecision::Execution(job) => {
+                    info!(
+                        job_id = %job.job_id,
+                        job_execution_id = %job.job_execution_id,
+                        job_document = %redact_job_document(&job.job_document),
+                        should_cancel = job.should_cancel,
+                        "received JobExecution"
+                    );
+                    return Ok(job);
+                }
+
+                InboundDecision::Cancel(job_cancel) => {
+                    info!(
+                        job_execution_id = %job_cancel.job_execution_id,
+                        "received JobCancel"
+                    );
+                    let cancelled = self
+                        .job_registry
+                        .cancel_job(&job_cancel.job_execution_id)
+                        .await;
+                    if cancelled {
+                        info!(
+                            job_execution_id = %job_cancel.job_execution_id,
+                            "Successfully cancelled job"
+                        );
+                    } else {
+                        warn!(
+                            job_execution_id = %job_cancel.job_execution_id,
+                            "Attempted to cancel non-existent or already completed job"
+                        );
+                    }
+                }
+
+                InboundDecision::Undecodable { msg_name, err } => {
+                    error!("error decoding {}: {:?}", msg_name, err);
+                }
+
+                InboundDecision::UnknownType(type_url) => {
+                    error!("received unexpected message type: {:?}", type_url);
                 }
             }
         }
@@ -218,6 +258,80 @@ impl JobClient {
     }
 }
 
+/// What the inbound step decided about a single relay message.
+#[derive(Debug)]
+enum InboundDecision {
+    Notify(JobNotify),
+    Execution(JobExecution),
+    Cancel(JobCancel),
+    Undecodable {
+        msg_name: &'static str,
+        err: DecodeError,
+    },
+    UnknownType(String),
+}
+
+/// Whether `from` matches the configured job server.
+///
+/// `from` is a sender-supplied label rather than verified identity (authenticity
+/// is enforced by the relay server), so this is defense-in-depth against any
+/// entity other than the configured job server reaching the decoders and the
+/// side effects behind them (job execution, cancellation, request-next).
+fn is_authorized_sender(
+    from: &Entity,
+    target_service_id: &str,
+    relay_namespace: &str,
+) -> bool {
+    // prost exposes `entity_type` as a raw i32; compare the same way the relay
+    // client itself does.
+    EntityType::try_from(from.entity_type) == Ok(EntityType::Service)
+        && from.id == target_service_id
+        && from.namespace == relay_namespace
+}
+
+impl From<&[u8]> for InboundDecision {
+    /// Decodes an inbound relay message and classifies it by payload type.
+    fn from(payload: &[u8]) -> Self {
+        let any = match Any::decode(payload) {
+            Ok(any) => any,
+            Err(err) => {
+                return Self::Undecodable {
+                    msg_name: "message",
+                    err,
+                }
+            }
+        };
+
+        if any.type_url == JobNotify::type_url() {
+            match JobNotify::decode(any.value.as_slice()) {
+                Ok(job_notify) => Self::Notify(job_notify),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobNotify",
+                    err,
+                },
+            }
+        } else if any.type_url == JobExecution::type_url() {
+            match JobExecution::decode(any.value.as_slice()) {
+                Ok(job) => Self::Execution(job),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobExecution",
+                    err,
+                },
+            }
+        } else if any.type_url == JobCancel::type_url() {
+            match JobCancel::decode(any.value.as_slice()) {
+                Ok(job_cancel) => Self::Cancel(job_cancel),
+                Err(err) => Self::Undecodable {
+                    msg_name: "JobCancel",
+                    err,
+                },
+            }
+        } else {
+            Self::UnknownType(any.type_url)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,5 +422,160 @@ mod tests {
         // Test that default JobRequestNext has empty ignore_job_execution_ids
         let default_request = JobRequestNext::default();
         assert!(default_request.ignore_job_execution_ids.is_empty());
+    }
+
+    const TARGET_SERVICE_ID: &str = "fleet-cmdr";
+    const RELAY_NAMESPACE: &str = "test-namespace";
+
+    fn job_server() -> Entity {
+        Entity {
+            id: TARGET_SERVICE_ID.to_string(),
+            entity_type: EntityType::Service as i32,
+            namespace: RELAY_NAMESPACE.to_string(),
+        }
+    }
+
+    fn execution_payload() -> Vec<u8> {
+        Any::from_msg(&JobExecution {
+            job_id: "job".to_string(),
+            job_execution_id: "exec".to_string(),
+            job_document: "orb_details".to_string(),
+            should_cancel: false,
+        })
+        .unwrap()
+        .encode_to_vec()
+    }
+
+    fn authorized(from: &Entity) -> bool {
+        is_authorized_sender(from, TARGET_SERVICE_ID, RELAY_NAMESPACE)
+    }
+
+    #[test]
+    fn job_server_execution_is_accepted() {
+        let decision = InboundDecision::from(execution_payload().as_slice());
+
+        let InboundDecision::Execution(job) = decision else {
+            panic!("expected Execution, got {decision:?}");
+        };
+        assert_eq!(job.job_execution_id, "exec");
+    }
+
+    #[test]
+    fn job_server_notify_is_accepted() {
+        let payload = Any::from_msg(&JobNotify::default())
+            .unwrap()
+            .encode_to_vec();
+
+        assert!(matches!(
+            InboundDecision::from(payload.as_slice()),
+            InboundDecision::Notify(_)
+        ));
+    }
+
+    #[test]
+    fn job_server_cancel_is_accepted() {
+        let payload = Any::from_msg(&JobCancel {
+            job_execution_id: "exec".to_string(),
+        })
+        .unwrap()
+        .encode_to_vec();
+
+        let decision = InboundDecision::from(payload.as_slice());
+
+        let InboundDecision::Cancel(cancel) = decision else {
+            panic!("expected Cancel, got {decision:?}");
+        };
+        assert_eq!(cancel.job_execution_id, "exec");
+    }
+
+    #[test]
+    fn job_server_garbage_payload_is_undecodable() {
+        assert!(matches!(
+            InboundDecision::from([0xff, 0xff, 0xff, 0xff].as_slice()),
+            InboundDecision::Undecodable { .. }
+        ));
+    }
+
+    /// Unauthorized senders are rejected by `listen_for_job` before their
+    /// payload is decoded.
+    #[test]
+    fn unexpected_senders_are_rejected() {
+        let unexpected = [
+            (
+                "wrong id",
+                Entity {
+                    id: "unexpected-service".to_string(),
+                    ..job_server()
+                },
+            ),
+            (
+                "wrong namespace",
+                Entity {
+                    namespace: "other-namespace".to_string(),
+                    ..job_server()
+                },
+            ),
+            (
+                "app",
+                Entity {
+                    entity_type: EntityType::App as i32,
+                    ..job_server()
+                },
+            ),
+            (
+                "orb",
+                Entity {
+                    entity_type: EntityType::Orb as i32,
+                    ..job_server()
+                },
+            ),
+            (
+                "unspecified",
+                Entity {
+                    entity_type: EntityType::Unspecified as i32,
+                    ..job_server()
+                },
+            ),
+            (
+                "out of range entity type",
+                Entity {
+                    entity_type: 42,
+                    ..job_server()
+                },
+            ),
+        ];
+
+        assert!(authorized(&job_server()), "the job server itself must pass");
+        for (case, from) in unexpected {
+            assert!(
+                !authorized(&from),
+                "{case}: expected the sender to be flagged as unauthorized"
+            );
+        }
+    }
+
+    #[test]
+    fn logged_sender_labels_are_truncated_char_safely() {
+        // multi-byte chars: byte slicing at 128 would panic mid-codepoint
+        let label = "é".repeat(200);
+        let truncated = UnexpectedSenders::truncate_label(&label);
+
+        assert_eq!(
+            truncated.chars().count(),
+            UnexpectedSenders::MAX_LOGGED_LABEL_CHARS
+        );
+    }
+
+    #[test]
+    fn unexpected_sender_log_throttle() {
+        assert!(UnexpectedSenders::should_log(1));
+        assert!(UnexpectedSenders::should_log(UnexpectedSenders::LOG_BURST));
+        assert!(!UnexpectedSenders::should_log(
+            UnexpectedSenders::LOG_BURST + 1
+        ));
+        assert!(UnexpectedSenders::should_log(UnexpectedSenders::LOG_EVERY));
+        assert!(!UnexpectedSenders::should_log(
+            UnexpectedSenders::LOG_EVERY + 1
+        ));
     }
 }
