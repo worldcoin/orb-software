@@ -3,9 +3,7 @@ use crate::from_file;
 use crate::from_file_blocking;
 
 /// An Arkenstone ID, displayed and serialized as `P` followed by eight uppercase hex digits.
-#[derive(
-    Clone, Eq, PartialEq, Hash
-)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct OrbId(pub(crate) u32);
 
 pub(crate) const UNKNOWN: OrbId = OrbId(2402075646);
