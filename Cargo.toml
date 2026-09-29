@@ -81,7 +81,7 @@ resolver = "2"
 edition = "2024"
 license = "MIT OR (Apache-2.0 WITH LLVM-exception)"
 repository = "https://github.com/worldcoin/orb-software"
-rust-version = "1.97.1" # See rust-toolchain.toml
+rust-version = "1.98.1" # See rust-toolchain.toml
 
 # We centralize feature flags here, because it improves build caches and helps
 # prevent edge cases where CI doesn't catch build errors due to more features
@@ -97,6 +97,7 @@ axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
 bindgen = "0.72.0"
+bip39 = "2.2.2"
 bipatch = "1.0.0"
 bluer = "0.17.4"
 bon = { version = "3.5.1", features = ["implied-bounds"] }

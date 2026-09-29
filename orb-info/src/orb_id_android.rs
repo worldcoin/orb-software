@@ -3,8 +3,12 @@ use crate::from_file;
 use crate::from_file_blocking;
 
 /// An Arkenstone ID, displayed and serialized as `P` followed by eight uppercase hex digits.
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct OrbId(u32);
+#[derive(
+    Debug, Clone, Eq, PartialEq, Hash, derive_more::Display, derive_more::FromStr,
+)]
+pub struct OrbId(pub(crate) u32);
+
+pub(crate) const UNKNOWN: OrbId = OrbId(2402075646);
 
 impl std::fmt::Debug for OrbId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -92,6 +96,17 @@ impl OrbId {
         }
         let s = from_file_blocking(SOC_SERIAL_NUMBER_PATH)?;
         Ok(Self::from_soc_serial_number(&s)?)
+    }
+
+    /// Read the orb-id, if fail return UNKNOWN
+    #[cfg(feature = "async")]
+    pub async fn read_unfallable() -> Self {
+        Self::read().await.unwrap_or(UNKNOWN)
+    }
+
+    /// Read the orb-id, if fail return UNKNOWN
+    pub fn read_blocking_unfallable() -> Self {
+        Self::read_blocking().unwrap_or(UNKNOWN)
     }
 }
 

@@ -3,6 +3,7 @@ use color_eyre::Result;
 use dbus_launch::BusType;
 use oes::{ActiveConnections, NetworkInterface};
 use orb_dogd::DogstatsdClient;
+use orb_info::orb_name::test_orb_name;
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
 use std::{env, path::PathBuf, str::FromStr, time::Duration};
@@ -134,7 +135,7 @@ impl Fixture {
             endpoint,
             orb_os_version: "6.6.6".into(),
             orb_id,
-            orb_name: OrbName("ota-hilly".into()),
+            orb_name: test_orb_name(),
             orb_jabil_id: OrbJabilId("straighttojail".into()),
             procfs,
             mock_server,
