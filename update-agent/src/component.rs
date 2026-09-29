@@ -259,9 +259,30 @@ impl Component {
         )
     }
 
+    /// Checks the on-disk blob against the signed manifest's size and hash.
+    ///
+    /// Uncompressed components are installed exactly as downloaded, and [`fetch`] only
+    /// compared them against the claim's unsigned `source.hash`, so this is the only
+    /// place that ties the bytes about to be installed to the signed manifest.
+    fn octet_stream_matches_manifest(&self) -> eyre::Result<()> {
+        check_existing_component(
+            &self.on_disk,
+            self.manifest_component.size,
+            self.manifest_component.hash(),
+        )
+        .wrap_err_with(|| {
+            format!(
+                "failed verifying component `{}` at `{}` against the size and hash \
+                 recorded in the signed manifest",
+                self.manifest_component.name(),
+                self.on_disk.display(),
+            )
+        })
+    }
+
     pub fn process(&mut self, dst: &Path, current_slot: Slot) -> eyre::Result<()> {
         match self.source.mime_type {
-            MimeType::OctetStream => Ok(()),
+            MimeType::OctetStream => self.octet_stream_matches_manifest(),
             MimeType::XZ => self.process_compressed(dst),
             MimeType::ZstdBidiff => self.process_bidiff(dst, current_slot),
         }
@@ -765,4 +786,112 @@ pub fn fetch<P: AsRef<Path>>(
         source: source.clone(),
         on_disk: path,
     })
+}
+#[cfg(test)]
+mod tests {
+    use std::io::Write as _;
+
+    use orb_update_agent_core::{components::Capsule, manifest::InstallationPhase};
+    use sha2::{Digest as _, Sha256};
+
+    use super::*;
+
+    const PAYLOAD: &[u8] = b"the blob we actually downloaded";
+    const OTHER_PAYLOAD: &[u8] = b"the blob the signed manifest describes";
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        hex::encode(Sha256::digest(bytes))
+    }
+
+    /// Builds an octet-stream component whose on-disk blob holds [`PAYLOAD`], while its
+    /// manifest entry claims `manifest_size`/`manifest_hash`.
+    fn octet_stream_component(
+        on_disk: PathBuf,
+        manifest_size: u64,
+        manifest_hash: &str,
+    ) -> Component {
+        Component {
+            manifest_component: ManifestComponent {
+                name: String::from("rootfs"),
+                version_assert: String::from("1.0.0"),
+                version_upgrade: String::from("1.0.1"),
+                size: manifest_size,
+                hash: manifest_hash.to_string(),
+                installation_phase: InstallationPhase::Normal,
+            },
+            source: Source {
+                hash: sha256_hex(PAYLOAD),
+                mime_type: MimeType::OctetStream,
+                name: String::from("rootfs"),
+                size: PAYLOAD.len() as u64,
+                url: LocalOrRemote::Local(on_disk.clone()),
+            },
+            // The octet-stream path never touches the system component; a capsule is
+            // used because it holds no device path.
+            system_component: components::Component::Capsule(Capsule {}),
+            on_disk,
+        }
+    }
+
+    fn write_payload() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("failed creating temp dir");
+        let path = dir.path().join("rootfs-blob");
+        let mut file = File::create(&path).expect("failed creating blob");
+        file.write_all(PAYLOAD).expect("failed writing blob");
+        file.sync_all().expect("failed syncing blob");
+        (dir, path)
+    }
+
+    #[test]
+    fn octet_stream_matching_signed_manifest_passes_the_check() {
+        let (_dir, path) = write_payload();
+        let component =
+            octet_stream_component(path, PAYLOAD.len() as u64, &sha256_hex(PAYLOAD));
+        component
+            .octet_stream_matches_manifest()
+            .expect("blob matching the signed manifest should pass");
+    }
+
+    #[test]
+    fn octet_stream_diverging_from_signed_manifest_hash_fails_the_check() {
+        let (_dir, path) = write_payload();
+        // The manifest size still matches, so only the hash check can catch this.
+        let component = octet_stream_component(
+            path,
+            PAYLOAD.len() as u64,
+            &sha256_hex(OTHER_PAYLOAD),
+        );
+        assert!(
+            component.octet_stream_matches_manifest().is_err(),
+            "blob not matching the signed manifest hash must fail the check"
+        );
+    }
+
+    #[test]
+    fn octet_stream_diverging_from_signed_manifest_size_fails_the_check() {
+        let (_dir, path) = write_payload();
+        let component = octet_stream_component(
+            path,
+            PAYLOAD.len() as u64 + 1,
+            &sha256_hex(PAYLOAD),
+        );
+        assert!(
+            component.octet_stream_matches_manifest().is_err(),
+            "blob not matching the signed manifest size must fail the check"
+        );
+    }
+
+    #[test]
+    fn octet_stream_mismatch_fails_the_update() {
+        let (dir, path) = write_payload();
+        let mut component = octet_stream_component(
+            path,
+            PAYLOAD.len() as u64,
+            &sha256_hex(OTHER_PAYLOAD),
+        );
+        assert!(
+            component.process(dir.path(), Slot::A).is_err(),
+            "a blob not matching the signed manifest must fail the update"
+        );
+    }
 }
