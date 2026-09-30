@@ -7892,11 +7892,7 @@ dependencies = [
  "listenfd",
  "once_cell",
  "orb-build-info",
- "orb-info",
  "orb-telemetry",
- "portpicker",
- "serde",
- "serde_json",
  "tap",
  "tempfile",
  "thiserror 2.0.17",
@@ -7905,7 +7901,6 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
- "zenorb",
 ]
 
 [[package]]
