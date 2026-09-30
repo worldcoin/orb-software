@@ -6,7 +6,7 @@ use orb_backend_status_dbus::{
     types::{ConndReport, WifiNetwork, WifiProfile},
     BackendStatusProxy,
 };
-use orb_dogd::{DogstatsdClient, MetricEmitter};
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use speare::mini;
 use std::time::Duration;
 use tokio::time;
@@ -16,6 +16,7 @@ pub struct Args {
     pub nm: NetworkManager,
     pub session_bus: zbus::Connection,
     pub report_interval: Duration,
+    pub bluetooth_capable: bool,
 }
 
 const IFACES: &[&str] = &["eth0", "wwan0", "wlan0"];
@@ -36,6 +37,12 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 Ok(_) = active_conns_rx.recv_async() => {}
                 _ = interval.tick() => {}
             };
+
+            let _ = metrics.gauge(
+                "orb.platform.connd.bluetooth_capable",
+                u8::from(ctx.bluetooth_capable) as f64,
+                NO_TAGS,
+            );
 
             let be_status = BackendStatusProxy::new(&ctx.session_bus)
                 .await
