@@ -7,6 +7,7 @@ use orb_connd::{
     modem::ModemConfig,
     modem_manager::ModemManager,
     network_manager::NetworkManager,
+    reporters::conn_quality::{self, SpeedTest},
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
@@ -102,16 +103,22 @@ fn connectivity_daemon() -> Result<()> {
             }
         };
 
+        let orb_id = OrbId::read().await?;
+
         let zenoh = Zenorb::from_cfg(zenorb::default_cfg())
-            .orb_id(OrbId::read().await?)
+            .orb_id(orb_id.clone())
             .with_name("connd")
             .await?;
+
+        let session_bus = zbus::Connection::session().await?;
 
         let registry = crabwire::Registry::new()
             .insert(systemd)
             .insert(McuUtil)
             .insert(ModemManager)
             .insert(ModemConfig::default())
+            .insert(SpeedTest::new(orb_id, session_bus.clone()))
+            .insert(conn_quality::Config::default())
             .insert(DogstatsdClient::default());
 
         crabwire::register!(registry);
@@ -122,7 +129,7 @@ fn connectivity_daemon() -> Result<()> {
             .usr_persistent("/usr/persistent")
             .network_manager(nm)
             .resolved(resolved)
-            .session_bus(zbus::Connection::session().await?)
+            .session_bus(session_bus)
             .os_release(os_release)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)

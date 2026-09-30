@@ -6,6 +6,7 @@ use tracing::info;
 
 pub mod active_connections;
 pub mod cellular_status;
+pub mod conn_quality;
 pub mod connd_report;
 pub mod data_usage;
 pub mod datadog;
@@ -22,6 +23,15 @@ pub async fn spawn(
     procfs: PathBuf,
 ) -> Result<()> {
     info!("starting reporter tasks");
+
+    speare
+        .task_with()
+        .args(conn_quality::Args {
+            dbus: session_bus.clone(),
+            zsender: zsender.clone(),
+        })
+        .on_err(static_backoff(15))
+        .spawn(conn_quality::report)?;
 
     speare
         .task_with()

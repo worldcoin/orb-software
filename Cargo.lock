@@ -7661,6 +7661,7 @@ dependencies = [
  "orb-info",
  "orb-secure-storage-ca",
  "orb-security-utils 0.0.0",
+ "orb-speed-test",
  "orb-telemetry",
  "p256 0.13.2",
  "portpicker",

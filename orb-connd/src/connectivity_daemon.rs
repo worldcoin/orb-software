@@ -40,6 +40,9 @@ pub async fn program(
 
     let zsender = zenoh
         .sender()
+        .publisher_with("oes/connection_quality", |p| {
+            p.encoding(Encoding::APPLICATION_JSON)
+        })
         .publisher_with("oes/active_connections", |p| {
             p.encoding(Encoding::APPLICATION_JSON)
         })

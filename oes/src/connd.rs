@@ -1,4 +1,38 @@
+//! Events published by orb-connd.
+
 use serde::{Deserialize, Serialize};
+
+/// Recent connection-quality measurements and their throughput averages.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConnectionQualityReport {
+    pub pcp_upload: Vec<Traffic>,
+    pub speed_test_upload: Vec<Traffic>,
+    pub speed_test_download: Vec<Traffic>,
+    pub quality: Quality,
+    pub average_pcp_upload_mbps: f64,
+    pub average_speed_test_upload_mbps: f64,
+    pub average_speed_test_download_mbps: f64,
+}
+
+/// Overall throughput classification, from fastest to slowest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Quality {
+    Excellent,
+    Good,
+    Typical,
+    Poor,
+    Worst,
+}
+
+/// One completed transfer measurement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Traffic {
+    pub measured_at: i64,
+    pub duration_ms: u64,
+    pub bytes: u64,
+    pub mbps: f64,
+}
 
 /// A snapshot of all currently active network connections on the orb.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
