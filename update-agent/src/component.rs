@@ -4,7 +4,7 @@
 //! defined here also includes its source and location on disk.
 use std::{
     fs::{metadata, remove_file, File},
-    io::{self, Seek, SeekFrom},
+    io::{self, Read, Seek, SeekFrom},
     num::ParseIntError,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -23,7 +23,7 @@ use orb_update_agent_dbus::{
     ComponentState, ComponentStatus, UpdateAgentManager, UpdateAgentState,
 };
 use reqwest::{
-    header::{ToStrError, CONTENT_LENGTH, RANGE},
+    header::{ToStrError, CONTENT_LENGTH, CONTENT_RANGE, RANGE},
     Url,
 };
 use tracing::{debug, info, warn};
@@ -62,11 +62,16 @@ pub enum Error {
     #[error("failed sending the initial request to estimate component length: `{0}`")]
     InitialLengthRequest(Url, #[source] reqwest::Error),
     #[error(
-        "request for range `{0}` {0:#} returned status code `{1}`, expected range 200-299: {2}"
+        "request for range `{0}` {0:#} returned status code `{1}`, expected 206 Partial Content: {2}"
     )]
     ResponseStatus(util::Range, reqwest::StatusCode, Url),
-    #[error("failed retrieving the response body for range `{0}` {0:#} as bytes: {1}")]
-    GetBytes(util::Range, Url, #[source] reqwest::Error),
+    #[error("invalid response for range `{range}`: {reason}")]
+    InvalidRangeResponse {
+        range: util::Range,
+        reason: &'static str,
+    },
+    #[error("failed reading response body for range `{0}`: {1}")]
+    GetBytes(util::Range, #[source] io::Error),
     #[error("failed copying retrieved chunk `{0}` {0:#} to target `{target}`: {2}", target = .1.display())]
     MergeChunk(util::Range, PathBuf, Url, #[source] io::Error),
     #[error("failed verifying source component `{name}` against claim")]
@@ -562,6 +567,8 @@ pub fn download<P: AsRef<Path>>(
         ));
     }
 
+    drop(response);
+
     let mut open_options = File::options();
     open_options.write(true).create(true);
 
@@ -624,12 +631,13 @@ pub fn download<P: AsRef<Path>>(
     let mut current_delay = download_delay;
     let mut allowed_before = true;
 
-    for (i, range) in
-        util::HttpRangeIter::try_new(start_bytes, component_remote_len - 1, CHUNK_SIZE)?
-            .enumerate()
-    {
-        let progress_percent =
-            (start_bytes + (i as u64 * CHUNK_SIZE as u64)) * 100 / component_remote_len;
+    let mut ranges = util::HttpRangeIter::try_new(
+        start_bytes,
+        component_remote_len - 1,
+        CHUNK_SIZE,
+    )?;
+    while let Some(range) = ranges.next() {
+        let progress_percent = range.start * 100 / component_remote_len;
 
         info!("downloading component `{name}`: {progress_percent}%");
         if let Some(iface) = update_iface
@@ -675,23 +683,20 @@ pub fn download<P: AsRef<Path>>(
             }
         }
 
-        let response = client
-            .get(url.clone())
-            .header(RANGE, range.to_string())
-            .send()
-            .map_err(|e| Error::RangeRequest(range, url.clone(), e))?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(Error::ResponseStatus(range, status, url.clone()));
+        let mut batch = vec![range];
+        if current_delay.is_zero()
+            && let Some(next_range) = ranges.next()
+        {
+            batch.push(next_range);
         }
-
-        let response = response
-            .bytes()
-            .map_err(|e| Error::GetBytes(range, url.clone(), e))?;
-        io::copy(&mut response.as_ref(), &mut &dst).map_err(|e| {
-            Error::MergeChunk(range, component_path.clone(), url.clone(), e)
-        })?;
+        download_range_batch(
+            client,
+            url,
+            &batch,
+            component_remote_len,
+            &dst,
+            &component_path,
+        )?;
 
         std::thread::sleep(current_delay);
     }
@@ -705,6 +710,85 @@ pub fn download<P: AsRef<Path>>(
         .map_err(|e| Error::DiskSync(component_path.clone(), e))?;
 
     Ok(component_path)
+}
+
+#[expect(clippy::result_large_err)]
+fn download_range(
+    client: &reqwest::blocking::Client,
+    url: &Url,
+    range: util::Range,
+    total_size: u64,
+) -> Result<Vec<u8>, Error> {
+    let response = client
+        .get(url.clone())
+        .header(RANGE, range.to_string())
+        .send()
+        .map_err(|e| Error::RangeRequest(range, url.clone(), e))?;
+    if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        return Err(Error::ResponseStatus(range, response.status(), url.clone()));
+    }
+    let expected_header = format!("bytes {}-{}/{total_size}", range.start, range.end);
+    if response
+        .headers()
+        .get(CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        != Some(expected_header.as_str())
+    {
+        return Err(Error::InvalidRangeResponse {
+            range,
+            reason:
+                "Content-Range does not match the requested range and component size",
+        });
+    }
+    let expected_len = range.end - range.start + 1;
+    let mut body = Vec::with_capacity(expected_len as usize + 1);
+    response
+        .take(expected_len + 1)
+        .read_to_end(&mut body)
+        .map_err(|e| Error::GetBytes(range, e))?;
+    if body.len() as u64 != expected_len {
+        return Err(Error::InvalidRangeResponse {
+            range,
+            reason: "body length does not match the requested range",
+        });
+    }
+    Ok(body)
+}
+
+#[expect(clippy::result_large_err)]
+fn download_range_batch(
+    client: &reqwest::blocking::Client,
+    url: &Url,
+    ranges: &[util::Range],
+    total_size: u64,
+    mut dst: &File,
+    component_path: &Path,
+) -> Result<(), Error> {
+    assert!(!ranges.is_empty() && ranges.len() <= 2);
+    let bodies = std::thread::scope(|scope| {
+        let handles: Vec<_> = ranges
+            .iter()
+            .map(|&range| {
+                scope.spawn(move || download_range(client, url, range, total_size))
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+            })
+            .collect::<Result<Vec<_>, Error>>()
+    })?;
+
+    // Commit only complete, validated batches in order so file length remains a resume offset.
+    for (&range, body) in ranges.iter().zip(bodies) {
+        io::copy(&mut body.as_slice(), &mut dst).map_err(|e| {
+            Error::MergeChunk(range, component_path.to_path_buf(), url.clone(), e)
+        })?;
+    }
+    Ok(())
 }
 
 // Fetches a component by finding it on disk or downloading it from remote.
@@ -765,4 +849,211 @@ pub fn fetch<P: AsRef<Path>>(
         source: source.clone(),
         on_disk: path,
     })
+}
+
+#[cfg(test)]
+mod download_tests {
+    use std::{
+        io::{BufRead, BufReader, Write},
+        net::TcpListener,
+        sync::{mpsc, Arc, Mutex},
+        thread,
+        time::Instant,
+    };
+
+    use super::*;
+
+    fn serve_ranges(
+        responses: Vec<(String, String, Vec<u8>)>,
+    ) -> (Url, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = Url::parse(&format!(
+            "http://{}/component",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let server = thread::spawn(move || {
+            let responses = Arc::new(responses);
+            let (finished_tx, finished_rx) = mpsc::channel();
+            let finished_rx = Arc::new(Mutex::new(finished_rx));
+            let mut workers = Vec::new();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while workers.len() < responses.len() {
+                let (mut stream, _) = match listener.accept() {
+                    Ok(connection) => connection,
+                    Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "missing range request");
+                        thread::sleep(Duration::from_millis(5));
+                        continue;
+                    }
+                    Err(e) => panic!("accept failed: {e}"),
+                };
+                let responses = Arc::clone(&responses);
+                let finished_tx = finished_tx.clone();
+                let finished_rx = Arc::clone(&finished_rx);
+                workers.push(thread::spawn(move || {
+                    stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                    stream.set_write_timeout(Some(Duration::from_secs(2))).unwrap();
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut requested_range = String::new();
+                    loop {
+                        let mut line = String::new();
+                        assert!(reader.read_line(&mut line).unwrap() > 0);
+                        if line == "\r\n" { break; }
+                        if let Some(value) = line.to_ascii_lowercase().strip_prefix("range: ") {
+                            requested_range = value.trim().to_string();
+                        }
+                    }
+                    let index = responses.iter().position(|(range, _, _)| range == &requested_range).unwrap();
+                    // The first request cannot finish until the later range has responded.
+                    if index == 0 && responses.len() == 2 {
+                        finished_rx.lock().unwrap().recv_timeout(Duration::from_secs(2)).unwrap();
+                    }
+                    let (_, headers, body) = &responses[index];
+                    write!(stream, "HTTP/1.1 {headers}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
+                    stream.write_all(body).unwrap();
+                    if index == 1 { finished_tx.send(()).unwrap(); }
+                }));
+            }
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        (url, server)
+    }
+
+    // HTTP is restricted to the loopback test server. Production uses client::normal().
+    #[allow(clippy::disallowed_methods)]
+    fn client() -> reqwest::blocking::Client {
+        reqwest::blocking::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn parallel_ranges_preserve_order_and_resume_prefix() {
+        let ranges: Vec<_> = util::HttpRangeIter::try_new(4, 12, 4).unwrap().collect();
+        let (url, server) = serve_ranges(vec![
+            (
+                ranges[0].to_string(),
+                "206 Partial Content\r\nContent-Range: bytes 4-7/13".into(),
+                b"efgh".to_vec(),
+            ),
+            (
+                ranges[1].to_string(),
+                "206 Partial Content\r\nContent-Range: bytes 8-11/13".into(),
+                b"ijkl".to_vec(),
+            ),
+        ]);
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(b"abcd").unwrap();
+        download_range_batch(
+            &client(),
+            &url,
+            &ranges[..2],
+            13,
+            file.as_file(),
+            file.path(),
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert_eq!(std::fs::read(file.path()).unwrap(), b"abcdefghijkl");
+
+        let (url, server) = serve_ranges(vec![(
+            ranges[2].to_string(),
+            "206 Partial Content\r\nContent-Range: bytes 12-12/13".into(),
+            b"m".to_vec(),
+        )]);
+        download_range_batch(
+            &client(),
+            &url,
+            &ranges[2..],
+            13,
+            file.as_file(),
+            file.path(),
+        )
+        .unwrap();
+        server.join().unwrap();
+        assert_eq!(std::fs::read(file.path()).unwrap(), b"abcdefghijklm");
+    }
+
+    #[test]
+    fn first_range_failure_waits_for_other_worker_without_writing() {
+        let ranges: Vec<_> = util::HttpRangeIter::try_new(4, 11, 4).unwrap().collect();
+        let (url, server) = serve_ranges(vec![
+            (
+                ranges[0].to_string(),
+                "503 Service Unavailable".into(),
+                Vec::new(),
+            ),
+            (
+                ranges[1].to_string(),
+                "206 Partial Content\r\nContent-Range: bytes 8-11/12".into(),
+                b"ijkl".to_vec(),
+            ),
+        ]);
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(b"abcd").unwrap();
+        assert!(download_range_batch(
+            &client(),
+            &url,
+            &ranges,
+            12,
+            file.as_file(),
+            file.path()
+        )
+        .is_err());
+        server.join().unwrap();
+        assert_eq!(std::fs::read(file.path()).unwrap(), b"abcd");
+    }
+
+    #[test]
+    fn invalid_second_range_does_not_extend_resume_prefix() {
+        let ranges: Vec<_> = util::HttpRangeIter::try_new(4, 11, 4).unwrap().collect();
+        for (headers, body) in [
+            ("200 OK", b"ijkl".as_slice()),
+            ("206 Partial Content", b"ijkl".as_slice()),
+            (
+                "206 Partial Content\r\nContent-Range: bytes 4-7/12",
+                b"ijkl".as_slice(),
+            ),
+            (
+                "206 Partial Content\r\nContent-Range: bytes 8-11/99",
+                b"ijkl".as_slice(),
+            ),
+            (
+                "206 Partial Content\r\nContent-Range: bytes 8-11/12",
+                b"ijk".as_slice(),
+            ),
+            (
+                "206 Partial Content\r\nContent-Range: bytes 8-11/12",
+                b"ijklm".as_slice(),
+            ),
+        ] {
+            let (url, server) = serve_ranges(vec![
+                (
+                    ranges[0].to_string(),
+                    "206 Partial Content\r\nContent-Range: bytes 4-7/12".into(),
+                    b"efgh".to_vec(),
+                ),
+                (ranges[1].to_string(), headers.into(), body.to_vec()),
+            ]);
+            let mut file = tempfile::NamedTempFile::new().unwrap();
+            file.write_all(b"abcd").unwrap();
+            assert!(download_range_batch(
+                &client(),
+                &url,
+                &ranges,
+                12,
+                file.as_file(),
+                file.path()
+            )
+            .is_err());
+            server.join().unwrap();
+            assert_eq!(std::fs::read(file.path()).unwrap(), b"abcd");
+        }
+    }
 }
