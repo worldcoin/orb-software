@@ -13,7 +13,8 @@ renumbering a field, or changing its type.
 Adding a field is not a new package version. New fields are `optional` or
 `repeated`, and consumers (oxide, backends) must treat an absent field as not
 set and ignore fields they don't know. That is how a single `pcp.v1` covers
-both 2.7 and 2.8, where 2.8 only adds `device_public_key`.
+both 2.7 and 2.8, where 2.8 only adds
+`device_public_key` and `device_public_key_salt`.
 
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded `Hashes`.
