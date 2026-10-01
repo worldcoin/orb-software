@@ -2,15 +2,9 @@ syntax = "proto3";
 
 package pcp.v1;
 
-// hashes.json. Values are lowercase hex sha256, except `version`.
-// hashes.sign covers the original hashes.json bytes: never verify a re-encoded message.
-// Each extra IR frame also adds `{image_id}.png` and `{image_id}_normalized_*.bin` keys,
-// with ids from Info.*_multiframe_image_ids; proto3 JSON cannot model them.
 message Hashes {
-  // "2.7", or "2.8" for device-bound packages.
   string version = 1;
 
-  // sha256(value || salt) of the matching Info field.
   string signup_id = 2 [json_name = "signup_id"];
   string signup_reason = 3 [json_name = "signup_reason"];
   string orb_id = 4 [json_name = "orb_id"];
