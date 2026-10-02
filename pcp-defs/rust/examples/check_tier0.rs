@@ -121,10 +121,10 @@ fn check_package(files: &Files) -> Result<bool> {
     Ok(all_ok)
 }
 
-/// Replaces values with their type, and strings with their length too.
+/// Replaces values with their type; lengths vary per signup, so they are dropped.
 fn shape(value: Value) -> Value {
     match value {
-        Value::String(s) => format!("string({})", s.len()).into(),
+        Value::String(_) => "string".into(),
         Value::Number(_) => "number".into(),
         Value::Bool(_) => "bool".into(),
         Value::Array(a) => a.into_iter().map(shape).collect(),
