@@ -2,31 +2,14 @@ syntax = "proto3";
 
 package pcp.v1;
 
-// migration.json in a migrated PCP. Absent for an ordinary Orb capture.
-// Schema presence does not validate lineage, attestation or pipeline success.
 message Migration {
-  optional string migration_id = 1 [json_name = "migration_id"];
-  // Immediate predecessor; distinct from the original root on later migrations.
-  optional string tee_generated_from_old_signup_id = 2 [json_name = "tee_generated_from_old_signup_id"];
-  optional string orb_signup_id = 3 [json_name = "orb_signup_id"];
+  optional string tee_version = 1 [json_name = "tee_version"];
+  optional string src_signup_id = 2 [json_name = "src_signup_id"];
+  reserved 3;
   optional string source_pcp_version = 4 [json_name = "source_pcp_version"];
-  // Lowercase hex SHA-256 of the exact source hashes.json bytes, not re-encoded JSON.
+  // SHA-256 of the original hashes.json bytes.
   optional string source_hashes_sha256 = 5 [json_name = "source_hashes_sha256"];
-  // Decimal Unix seconds, separate from the original capture's info.timestamp.
-  optional string migrated_at = 6 [json_name = "migrated_at"];
-  // Measurement identifier only; this field is not an attestation proof.
+  optional uint64 migrated_ts = 6 [json_name = "migrated_ts"];
   optional string enclave_measurement = 7 [json_name = "enclave_measurement"];
-  MigrationPipeline pipeline = 8;
-}
-
-// Allowlisted execution metadata; debug reports and biometric payloads live elsewhere.
-message MigrationPipeline {
-  optional string pipeline_version = 1 [json_name = "pipeline_version"];
-  optional string di_model_version = 2 [json_name = "di_model_version"];
-  optional string iris_version = 3 [json_name = "iris_version"];
-  optional string face_model_version = 4 [json_name = "face_model_version"];
-  optional string di_inference_backend = 5 [json_name = "di_inference_backend"];
-  optional string face_inference_backend = 6 [json_name = "face_inference_backend"];
-  // Standard ProtoJSON encodes uint64 as a decimal string.
-  optional uint64 duration_ms = 7 [json_name = "duration_ms"];
+  optional string biometric_pipeline_version = 8 [json_name = "biometric_pipeline_version"];
 }

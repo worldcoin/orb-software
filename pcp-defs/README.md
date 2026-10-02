@@ -29,13 +29,8 @@ migration adds two optional tier-0 artifacts:
 | `migration.json` | `pcp.v1.Migration`, serialized as JSON | `Hashes.migration_json`, JSON key `migration.json` |
 | `legacy.tar` | Opaque tar containing original source artifact bytes | `Hashes.legacy_tar`, JSON key `legacy.tar` |
 
-`migration.json` is the name for the `tee.json` artifact in the initial migration
-proposal. It describes the migration event, keeping original Orb capture fields
-in `info.json`. No `tee.json` alias or duplicate artifact is introduced.
-The existing lineage field names are retained, including
-`tee_generated_from_old_signup_id` for the immediate predecessor and
-`orb_signup_id` for the original root. They can differ on later migrations;
-never recover the root by splitting a signup-ID suffix.
+`migration.json` records the migration execution. Original Orb capture fields
+remain in `info.json`. `src_signup_id` identifies the source package's signup.
 
 Both artifacts are absent for ordinary Orb captures. For a successful TEE
 migration, the proposed builder profile requires both, together with their
@@ -44,22 +39,25 @@ they do not enforce this artifact-level rule or validate successful inference.
 
 ### Migration metadata
 
-`Migration` contains the migration job ID, root/predecessor signup IDs, source
-PCP version, SHA-256 of the exact source `hashes.json` bytes, migration time,
-optional enclave measurement, and a `MigrationPipeline` message. The latter
-records pipeline, DI, iris and face model versions, separate DI/face inference
-backends, and optional duration. It excludes debug reports and biometric data.
+| Field | Meaning |
+| --- | --- |
+| `tee_version` | Release version of the executing `di-migration-tee` software, analogous to `Info.software_version` |
+| `src_signup_id` | Source package's `Info.signup_id` |
+| `source_pcp_version` | Source PCP version |
+| `source_hashes_sha256` | SHA-256 of the original `hashes.json` bytes |
+| `migrated_ts` | Migration timestamp in Unix seconds (`uint64`) |
+| `enclave_measurement` | Optional enclave measurement |
+| `biometric_pipeline_version` | Release version of the executed biometric pipeline |
 
-All scalars use explicit presence, following the existing capture schemas.
-`pipeline` has message presence: absent is distinct from an empty message.
-`migrated_at` is decimal Unix seconds as a string, matching the capture timestamp
-representation; `duration_ms` is an optional uint64, encoded as a decimal string
-by standard ProtoJSON. Snake-case JSON field names are explicit in the schema.
+All fields use explicit presence, following the existing capture schemas, and
+snake-case JSON names. Standard ProtoJSON writes `migrated_ts` as a decimal
+string and accepts both string and numeric input. `Info.timestamp` remains the
+original capture time. Individual model versions and inference backends remain
+in their biometric artifacts; no nested pipeline metadata is added here.
 
-The producer must validate lineage, model-version consistency, timestamps and
-64-character lowercase SHA-256 hex digests. The schema itself does not do that.
-An enclave measurement identifier is not an attestation proof. No capture
-metadata is backfilled from execution settings.
+The producer must validate source identity, execution versions, timestamps and
+64-character lowercase SHA-256 hex digests. No capture metadata is backfilled
+from execution settings.
 
 ### Preserved originals
 

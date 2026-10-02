@@ -1,6 +1,6 @@
 use orb_pcp_defs::{
     prost::Message,
-    v1::{Hashes, Migration, MigrationPipeline},
+    v1::{Hashes, Migration},
 };
 use serde_json::json;
 
@@ -10,11 +10,16 @@ const MIGRATION_JSON: &str = include_str!("fixtures/v2_9/migration.json");
 fn migration_round_trips_with_exact_json_field_names() {
     let migration: Migration = serde_json::from_str(MIGRATION_JSON).unwrap();
     assert_eq!(migration.source_pcp_version.as_deref(), Some("2.7"));
-    assert_ne!(
-        migration.orb_signup_id,
-        migration.tee_generated_from_old_signup_id
+    assert_eq!(
+        migration.src_signup_id.as_deref(),
+        Some("test-previous-signup")
     );
-    assert_eq!(migration.pipeline.as_ref().unwrap().duration_ms, Some(123));
+    assert_eq!(migration.tee_version.as_deref(), Some("0.1.0-test"));
+    assert_eq!(migration.migrated_ts, Some(1800000000));
+    assert_eq!(
+        migration.biometric_pipeline_version.as_deref(),
+        Some("1.2.3-test")
+    );
 
     let decoded = Migration::decode(migration.encode_to_vec().as_slice()).unwrap();
     assert_eq!(decoded, migration);
@@ -26,17 +31,18 @@ fn migration_round_trips_with_exact_json_field_names() {
 
 #[test]
 fn absent_null_and_present_empty_values_keep_presence() {
-    for raw in ["{}", r#"{"migration_id":null,"pipeline":null}"#] {
+    for raw in [
+        "{}",
+        r#"{"tee_version":null,"migrated_ts":null,"biometric_pipeline_version":null}"#,
+    ] {
         let migration: Migration = serde_json::from_str(raw).unwrap();
         assert_eq!(migration, Migration::default());
         assert_eq!(serde_json::to_value(migration).unwrap(), json!({}));
     }
     let migration = Migration {
-        migration_id: Some(String::new()),
-        pipeline: Some(MigrationPipeline {
-            duration_ms: Some(0),
-            ..Default::default()
-        }),
+        tee_version: Some(String::new()),
+        biometric_pipeline_version: Some(String::new()),
+        migrated_ts: Some(0),
         ..Default::default()
     };
     assert_eq!(
@@ -45,42 +51,43 @@ fn absent_null_and_present_empty_values_keep_presence() {
     );
     assert_eq!(
         serde_json::to_value(&migration).unwrap(),
-        json!({"migration_id":"", "pipeline":{"duration_ms":"0"}})
+        json!({"tee_version":"", "migrated_ts":"0", "biometric_pipeline_version":""})
     );
-    let empty_pipeline: Migration = serde_json::from_str(r#"{"pipeline":{}}"#).unwrap();
-    assert_eq!(empty_pipeline.pipeline, Some(MigrationPipeline::default()));
 }
 
 #[test]
-fn duration_is_exact_at_uint64_limit_and_rejects_invalid_values() {
-    let pipeline = MigrationPipeline {
-        duration_ms: Some(u64::MAX),
+fn timestamp_is_exact_at_uint64_limit_and_rejects_invalid_values() {
+    let migration = Migration {
+        migrated_ts: Some(u64::MAX),
         ..Default::default()
     };
-    let json = serde_json::to_string(&pipeline).unwrap();
-    assert_eq!(json, r#"{"duration_ms":"18446744073709551615"}"#);
+    let json = serde_json::to_string(&migration).unwrap();
+    assert_eq!(json, r#"{"migrated_ts":"18446744073709551615"}"#);
+    assert_eq!(serde_json::from_str::<Migration>(&json).unwrap(), migration);
     assert_eq!(
-        serde_json::from_str::<MigrationPipeline>(&json).unwrap(),
-        pipeline
+        serde_json::from_str::<Migration>(r#"{"migrated_ts":1800000000}"#)
+            .unwrap()
+            .migrated_ts,
+        Some(1800000000)
     );
     for raw in [
-        r#"{"duration_ms":"18446744073709551616"}"#,
-        r#"{"duration_ms":-1}"#,
-        r#"{"duration_ms":1.5}"#,
+        r#"{"migrated_ts":"18446744073709551616"}"#,
+        r#"{"migrated_ts":-1}"#,
+        r#"{"migrated_ts":1.5}"#,
     ] {
-        assert!(serde_json::from_str::<MigrationPipeline>(raw).is_err());
+        assert!(serde_json::from_str::<Migration>(raw).is_err());
     }
 }
 
 #[test]
 fn migration_ignores_future_fields_using_shared_reader_policy() {
     let migration: Migration = serde_json::from_str(
-        r#"{"future_field":true,"pipeline":{"future_model":{},"iris_version":"v1"}}"#,
+        r#"{"future_field":true,"biometric_pipeline_version":"1.2.3"}"#,
     )
     .unwrap();
     assert_eq!(
-        migration.pipeline.unwrap().iris_version.as_deref(),
-        Some("v1")
+        migration.biometric_pipeline_version.as_deref(),
+        Some("1.2.3")
     );
 }
 
