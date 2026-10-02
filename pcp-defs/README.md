@@ -35,3 +35,17 @@ Changes that need a new package because they change the signed bytes:
 - Carry binary payloads as `bytes`, not base64 or hex strings.
 - Model each salted value as one `{value, salt}` type, not two sibling
   entries.
+
+## Checking a real package
+
+`cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz>`
+checks an unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
+`not-prod-pcp-no-encrypt`):
+
+- every JSON and `.pb` file decodes into its `v1` type and re-encodes to the
+  same bytes. Decoding ignores unknown fields, so this is what catches a key
+  the orb writes but the protos lack.
+- `hashes.json` has a matching digest for every file, and for every salted
+  `info.json` field.
+
+The packages hold raw biometrics, so keep them out of git.
