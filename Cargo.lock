@@ -7588,12 +7588,14 @@ dependencies = [
 name = "orb-pcp-defs"
 version = "0.0.0"
 dependencies = [
+ "flate2",
  "pbjson",
  "pbjson-build",
  "prost 0.14.1",
  "prost-build 0.14.1",
  "serde",
  "serde_json",
+ "tar",
 ]
 
 [[package]]

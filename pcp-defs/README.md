@@ -45,3 +45,8 @@ unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
 file's keys and value types, which shows whether two orb-core builds write
 the same layout. Needs `jq`. The packages hold raw biometrics, so keep them
 out of git.
+
+`cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz>` decodes
+every JSON and `.pb` file except `hashes.json` into its `v1` type and checks
+it re-encodes to the same bytes. Decoding ignores unknown fields, so this is
+what catches a key the orb writes but the protos lack.
