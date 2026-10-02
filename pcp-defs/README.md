@@ -38,7 +38,7 @@ Changes that need a new package because they change the signed bytes:
 
 ## Checking a real package
 
-`cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz> [other]`
+`cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz>`
 checks an unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
 `not-prod-pcp-no-encrypt`):
 
@@ -47,7 +47,5 @@ checks an unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
   the orb writes but the protos lack.
 - `hashes.json` has a matching digest for every file, and for every salted
   `info.json` field.
-- given a second package, each JSON file has the same keys and value types,
-  which shows whether two orb-core builds write the same layout.
 
 The packages hold raw biometrics, so keep them out of git.

@@ -3,9 +3,8 @@
 //! - every JSON and `.pb` file decodes into its `v1` type and re-encodes to the same
 //!   bytes, so a key the protos lack cannot hide behind `ignore_unknown_fields`
 //! - `hashes.json` is sorted and compact, and has a matching digest for every file
-//! - given a second package, each JSON file has the same keys and value types
 //!
-//! Usage: `cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz> [other]`
+//! Usage: `cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz>`
 
 use orb_pcp_defs::{
     prost::Message,
@@ -121,57 +120,12 @@ fn check_package(files: &Files) -> Result<bool> {
     Ok(all_ok)
 }
 
-/// Replaces values with their type; lengths vary per signup, so they are dropped.
-fn shape(value: Value) -> Value {
-    match value {
-        Value::String(_) => "string".into(),
-        Value::Number(_) => "number".into(),
-        Value::Bool(_) => "bool".into(),
-        Value::Array(a) => a.into_iter().map(shape).collect(),
-        Value::Object(o) => o.into_iter().map(|(k, v)| (k, shape(v))).collect(),
-        Value::Null => Value::Null,
-    }
-}
-
-fn compare_shapes(a: &Files, b: &Files) -> Result<bool> {
-    let mut all_ok = true;
-    let names = a.keys().chain(b.keys()).filter(|n| n.ends_with(".json"));
-    for name in names.collect::<std::collections::BTreeSet<_>>() {
-        let same = match (a.get(name), b.get(name)) {
-            (Some(x), Some(y)) => {
-                shape(serde_json::from_slice(x)?) == shape(serde_json::from_slice(y)?)
-            }
-            _ => false,
-        };
-        all_ok &= report(same, "same shape", name);
-    }
-    Ok(all_ok)
-}
-
-fn run(paths: &[String]) -> Result<bool> {
-    let packages = paths
-        .iter()
-        .map(|p| read_tier0(p))
-        .collect::<Result<Vec<_>>>()?;
-    let mut all_ok = true;
-    for (path, files) in paths.iter().zip(&packages) {
-        println!("== {path}");
-        all_ok &= check_package(files)?;
-    }
-    if let [a, b] = packages.as_slice() {
-        println!("== shape diff");
-        all_ok &= compare_shapes(a, b)?;
-    }
-    Ok(all_ok)
-}
-
 fn main() -> ExitCode {
-    let paths: Vec<String> = std::env::args().skip(1).collect();
-    if !(1..=2).contains(&paths.len()) {
-        eprintln!("usage: check_tier0 <tier0.tar.gz> [other-tier0.tar.gz]");
+    let Some(path) = std::env::args().nth(1) else {
+        eprintln!("usage: check_tier0 <tier0.tar.gz>");
         return ExitCode::from(2);
-    }
-    match run(&paths) {
+    };
+    match read_tier0(&path).and_then(|files| check_package(&files)) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(e) => {
