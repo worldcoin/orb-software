@@ -1,0 +1,18 @@
+{
+  "migration_id": "test-migration-job",
+  "tee_generated_from_old_signup_id": "test-previous-signup",
+  "orb_signup_id": "test-original-orb-signup",
+  "source_pcp_version": "2.7",
+  "source_hashes_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "migrated_at": "1800000000",
+  "enclave_measurement": "test-measurement",
+  "pipeline": {
+    "pipeline_version": "pipeline-test-1",
+    "di_model_version": "di-test-2",
+    "iris_version": "iris-test-3",
+    "face_model_version": "face-test-4",
+    "di_inference_backend": "test-di-runtime",
+    "face_inference_backend": "test-face-runtime",
+    "duration_ms": "123"
+  }
+}
