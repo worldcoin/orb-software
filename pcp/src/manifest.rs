@@ -1,0 +1,115 @@
+//! Encoding of the signed `hashes.json` manifest.
+
+use std::collections::BTreeMap;
+
+use data_encoding::HEXLOWER;
+
+/// Tier digests selected by the envelope, independently of the PCP version label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TierEntries {
+    None,
+    /// Tier digests must cover the final user-encrypted bytes, not plaintext archives.
+    Present {
+        tier_1: [u8; 32],
+        tier_2: [u8; 32],
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ManifestError {
+    #[error("duplicate manifest entry")]
+    DuplicateEntry,
+    #[error("reserved manifest entry")]
+    ReservedEntry,
+    #[error("could not serialize hash manifest")]
+    Serialization(#[from] serde_json::Error),
+}
+
+/// Exact manifest and signer output bytes, ready for archive assembly.
+pub(crate) struct SignedManifest {
+    pub hashes_json: Vec<u8>,
+    pub hashes_signature: Vec<u8>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SigningError<E> {
+    #[error("could not encode the manifest for signing")]
+    Manifest(#[from] ManifestError),
+    #[error("manifest signer failed")]
+    Signer(#[source] E),
+}
+
+/// Encodes the manifest and calls `sign_digest` once with its raw SHA-256 digest.
+///
+/// The callback must sign this precomputed 32-byte digest without hashing it
+/// again. Its returned bytes become `hashes.sign` unchanged. This function does
+/// not inspect their signature format or verify the signer/identity. The caller
+/// owns key access, retry policy and deadlines; no retries occur here.
+/// Encoding failures do not invoke the signer. Signer failures return no signed
+/// result and retain the caller's error as [`SigningError::Signer`].
+pub(crate) fn encode_and_sign<'a, E>(
+    version: &str,
+    tiers: TierEntries,
+    hashes: impl IntoIterator<Item = (&'a str, [u8; 32])>,
+    sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+) -> Result<SignedManifest, SigningError<E>> {
+    let hashes_json = encode(version, tiers, hashes)?;
+    let hashes_signature =
+        sign_digest(&sha256(&hashes_json)).map_err(SigningError::Signer)?;
+    Ok(SignedManifest {
+        hashes_json,
+        hashes_signature,
+    })
+}
+
+pub(crate) fn sha256(bytes: &[u8]) -> [u8; 32] {
+    ring::digest::digest(&ring::digest::SHA256, bytes)
+        .as_ref()
+        .try_into()
+        .expect("SHA-256 produces 32 bytes")
+}
+
+/// Encodes named SHA-256 digests as compact, lexicographically sorted JSON.
+///
+/// Names can represent payloads or salted metadata. Their digests are supplied
+/// by the caller; this function does not verify their meaning or completeness.
+/// Duplicate names and `version`, `tier_1` through `tier_5` are rejected in every
+/// format. These reserved fields are owned by the encoder.
+///
+/// Signing must hash these exact returned bytes with SHA-256 and pass that raw
+/// 32-byte digest to a prehash signer. Do not reformat or reserialize the JSON.
+///
+pub(crate) fn encode<'a>(
+    version: &str,
+    tiers: TierEntries,
+    hashes: impl IntoIterator<Item = (&'a str, [u8; 32])>,
+) -> Result<Vec<u8>, ManifestError> {
+    let mut fields = BTreeMap::new();
+    for (name, digest) in hashes {
+        if matches!(
+            name,
+            "version" | "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5"
+        ) {
+            return Err(ManifestError::ReservedEntry);
+        }
+        if fields.insert(name, HEXLOWER.encode(&digest)).is_some() {
+            return Err(ManifestError::DuplicateEntry);
+        }
+    }
+    match tiers {
+        TierEntries::None => {}
+        TierEntries::Present { tier_1, tier_2 } => {
+            fields.insert("tier_1", HEXLOWER.encode(&tier_1));
+            fields.insert("tier_2", HEXLOWER.encode(&tier_2));
+            for name in ["tier_3", "tier_4", "tier_5"] {
+                fields.insert(name, HEXLOWER.encode(&[0; 32]));
+            }
+        }
+    }
+    fields.insert("version", version.to_owned());
+    Ok(serde_json::to_vec(&fields)?)
+}
+
+#[cfg(test)]
+#[path = "../tests/unit/manifest.rs"]
+mod tests;

@@ -40,6 +40,7 @@ members = [
 	"orb-monitoring-auth",
 	"orbd",
 	"ota-backend",
+	"pcp",
 	"pcp-defs/rust",
 	"prelude",
 	"qr-link",
@@ -87,6 +88,7 @@ rust-version = "1.98.1" # See rust-toolchain.toml
 # prevent edge cases where CI doesn't catch build errors due to more features
 # being present in a --all vs -p build.
 [workspace.dependencies]
+alkali = { version = "0.3", features = ["use-pkg-config"] }
 async-stream = "0.3.6"
 async-tempfile = "0.7.0"
 async-trait = "0.1.88"
