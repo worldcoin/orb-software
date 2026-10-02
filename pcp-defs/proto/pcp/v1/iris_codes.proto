@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message IrisCodes {
+  optional string iris_version = 1 [json_name = "IRIS_version"];
+  optional string left_iris_code = 2 [json_name = "left_iris_code"];
+  optional string left_mask_code = 3 [json_name = "left_mask_code"];
+  optional string right_iris_code = 4 [json_name = "right_iris_code"];
+  optional string right_mask_code = 5 [json_name = "right_mask_code"];
+}

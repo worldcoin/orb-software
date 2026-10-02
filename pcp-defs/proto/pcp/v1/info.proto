@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message Info {
+  optional string signup_id = 1 [json_name = "signup_id"];
+  optional string signup_id_salt = 2 [json_name = "signup_id_salt"];
+  optional string signup_reason = 3 [json_name = "signup_reason"];
+  optional string signup_reason_salt = 4 [json_name = "signup_reason_salt"];
+  optional string orb_id = 5 [json_name = "orb_id"];
+  optional string orb_id_salt = 6 [json_name = "orb_id_salt"];
+  optional string operator_id = 7 [json_name = "operator_id"];
+  optional string operator_id_salt = 8 [json_name = "operator_id_salt"];
+  optional string timestamp = 9;
+  optional string timestamp_salt = 10 [json_name = "timestamp_salt"];
+  optional string qr_code = 11 [json_name = "qr_code"];
+  optional string qr_code_salt = 12 [json_name = "qr_code_salt"];
+  optional string orb_public_key_certificate = 13 [json_name = "orb_public_key_certificate"];
+  optional string left_ir_image_id = 14 [json_name = "left_ir_image_id"];
+  repeated string left_ir_multiframe_image_ids = 15 [json_name = "left_ir_multiframe_image_ids"];
+  repeated string left_iris_code_aggregate_image_ids = 16 [json_name = "left_iris_code_aggregate_image_ids"];
+  optional string right_ir_image_id = 17 [json_name = "right_ir_image_id"];
+  repeated string right_ir_multiframe_image_ids = 18 [json_name = "right_ir_multiframe_image_ids"];
+  repeated string right_iris_code_aggregate_image_ids = 19 [json_name = "right_iris_code_aggregate_image_ids"];
+  optional string thumbnail_image_id = 20 [json_name = "thumbnail_image_id"];
+  optional string software_version = 21 [json_name = "software_version"];
+  optional string software_version_salt = 22 [json_name = "software_version_salt"];
+  optional string orb_country = 23 [json_name = "orb_country"];
+  optional string orb_country_salt = 24 [json_name = "orb_country_salt"];
+  optional string id_commitment = 25 [json_name = "id_commitment"];
+  optional string id_commitment_salt = 26 [json_name = "id_commitment_salt"];
+  optional string device_public_key = 27 [json_name = "device_public_key"];
+  optional string device_public_key_salt = 28 [json_name = "device_public_key_salt"];
+}
