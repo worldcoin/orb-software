@@ -10,6 +10,6 @@ message BackendKeys {
 }
 
 message BackendKey {
-  string public_key = 1 [json_name = "public_key"];
-  string encrypted_private_key = 2 [json_name = "encrypted_private_key"];
+  optional string public_key = 1 [json_name = "public_key"];
+  optional string encrypted_private_key = 2 [json_name = "encrypted_private_key"];
 }

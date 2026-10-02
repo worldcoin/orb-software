@@ -4,9 +4,9 @@ package pcp.v1;
 
 message IrisCodeShares {
   optional string iris_version = 1 [json_name = "IRIS_version"];
-  string iris_shares_version = 2 [json_name = "IRIS_shares_version"];
-  string left_iris_code_shares = 3 [json_name = "left_iris_code_shares"];
-  string left_mask_code_shares = 4 [json_name = "left_mask_code_shares"];
-  string right_iris_code_shares = 5 [json_name = "right_iris_code_shares"];
-  string right_mask_code_shares = 6 [json_name = "right_mask_code_shares"];
+  optional string iris_shares_version = 2 [json_name = "IRIS_shares_version"];
+  optional string left_iris_code_shares = 3 [json_name = "left_iris_code_shares"];
+  optional string left_mask_code_shares = 4 [json_name = "left_mask_code_shares"];
+  optional string right_iris_code_shares = 5 [json_name = "right_iris_code_shares"];
+  optional string right_mask_code_shares = 6 [json_name = "right_mask_code_shares"];
 }

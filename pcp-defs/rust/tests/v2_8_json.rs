@@ -14,11 +14,11 @@ fn decode<T: DeserializeOwned>(name: &str) -> T {
 #[test]
 fn decodes_v2_8_files() {
     let hashes: Hashes = decode("hashes.json");
-    assert_eq!(hashes.version, "2.8");
+    assert_eq!(hashes.version.as_deref(), Some("2.8"));
     assert!(hashes.right_depth_png.is_some());
 
     let redacted: Hashes = decode("hashes_redacted_v2_7.json");
-    assert_eq!(redacted.version, "2.7");
+    assert_eq!(redacted.version.as_deref(), Some("2.7"));
     assert!(redacted.device_public_key.is_none());
 
     let info: Info = decode("info.json");
@@ -28,10 +28,10 @@ fn decodes_v2_8_files() {
     assert!(codes.right_iris_code.is_none());
 
     let shares: IrisCodeShares = decode("iris_code_shares_0.json");
-    assert_eq!(shares.iris_shares_version, "c2d631d");
+    assert_eq!(shares.iris_shares_version.as_deref(), Some("c2d631d"));
 
     let keys: BackendKeys = decode("backend_keys.json");
-    assert_eq!(keys.tier2.unwrap().public_key, "p4");
+    assert_eq!(keys.tier2.unwrap().public_key.as_deref(), Some("p4"));
 
     let embeddings: Vec<FaceEmbedding> = decode("face_embeddings.json");
     assert_eq!(embeddings.len(), 1);
@@ -44,5 +44,5 @@ fn hashes_ignores_multiframe_keys() {
 
     let hashes: Hashes = serde_json::from_str(json).unwrap();
 
-    assert_eq!(hashes.version, "2.8");
+    assert_eq!(hashes.version.as_deref(), Some("2.8"));
 }

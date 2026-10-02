@@ -3,20 +3,20 @@ syntax = "proto3";
 package pcp.v1;
 
 message Hashes {
-  string version = 1;
+  optional string version = 1;
 
-  string signup_id = 2 [json_name = "signup_id"];
-  string signup_reason = 3 [json_name = "signup_reason"];
-  string orb_id = 4 [json_name = "orb_id"];
-  string operator_id = 5 [json_name = "operator_id"];
-  string timestamp = 6;
-  string qr_code = 7 [json_name = "qr_code"];
-  string id_commitment = 8 [json_name = "id_commitment"];
-  string software_version = 9 [json_name = "software_version"];
-  string orb_country = 10 [json_name = "orb_country"];
+  optional string signup_id = 2 [json_name = "signup_id"];
+  optional string signup_reason = 3 [json_name = "signup_reason"];
+  optional string orb_id = 4 [json_name = "orb_id"];
+  optional string operator_id = 5 [json_name = "operator_id"];
+  optional string timestamp = 6;
+  optional string qr_code = 7 [json_name = "qr_code"];
+  optional string id_commitment = 8 [json_name = "id_commitment"];
+  optional string software_version = 9 [json_name = "software_version"];
+  optional string orb_country = 10 [json_name = "orb_country"];
   optional string device_public_key = 11 [json_name = "device_public_key"];
 
-  string backend_keys_json = 12 [json_name = "backend_keys.json"];
+  optional string backend_keys_json = 12 [json_name = "backend_keys.json"];
   optional string face_embeddings_json = 13 [json_name = "face_embeddings.json"];
   optional string iris_codes_json = 14 [json_name = "iris_codes.json"];
   optional string iris_code_shares_0_json = 15 [json_name = "iris_code_shares_0.json"];
