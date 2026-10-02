@@ -28,7 +28,6 @@ fn main() -> Result<()> {
 
     pbjson_build::Builder::new()
         .register_descriptors(&std::fs::read(&descriptor_path)?)?
-        .emit_fields()
         // hashes.json carries per-frame keys that no proto field can name.
         .ignore_unknown_fields()
         .build(&[".pcp"])?;
