@@ -7406,7 +7406,7 @@ dependencies = [
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae)",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.17",
@@ -7588,8 +7588,12 @@ dependencies = [
 name = "orb-pcp-defs"
 version = "0.0.0"
 dependencies = [
+ "pbjson",
+ "pbjson-build",
  "prost 0.14.1",
  "prost-build 0.14.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7597,7 +7601,7 @@ name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae)",
  "thiserror 1.0.69",
  "uuid 1.19.0",
 ]
@@ -7626,7 +7630,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41#4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae#50301bd41e9ece98c4c0f73a274207d5683793ae"
 dependencies = [
  "blake3",
  "prost 0.14.1",
@@ -8396,6 +8400,28 @@ name = "pastey"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57d6c094ee800037dff99e02cab0eaf3142826586742a270ab3d7a62656bd27a"
+
+[[package]]
+name = "pbjson"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8edd1efdd8ab23ba9cb9ace3d9987a72663d5d7c9f74fa00b51d6213645cf6c"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
+name = "pbjson-build"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ed4d5c6ae95e08ac768883c8401cf0e8deb4e6e1d6a4e1fd3d2ec4f0ec63200"
+dependencies = [
+ "heck 0.5.0",
+ "itertools 0.14.0",
+ "prost 0.14.1",
+ "prost-types 0.14.1",
+]
 
 [[package]]
 name = "pear"

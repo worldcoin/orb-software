@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message BackendKeys {
+  BackendKey iris = 1;
+  BackendKey normalized_iris = 2 [json_name = "normalized_iris"];
+  BackendKey face = 3;
+  BackendKey tier2 = 4;
+}
+
+message BackendKey {
+  optional string public_key = 1 [json_name = "public_key"];
+  optional string encrypted_private_key = 2 [json_name = "encrypted_private_key"];
+}
