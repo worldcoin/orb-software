@@ -17,3 +17,14 @@ both 2.7 and 2.8.
 
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
+
+## Next breaking version
+
+Changes that need a new package because they change the signed bytes:
+
+- Nest per-frame hashes under their own map. Today they sit as flat keys in
+  `hashes.json`, so no message can describe them and readers have to ignore
+  unknown keys.
+- Write and sign the manifest as protobuf, not JSON, so it can be verified
+  inside a proof.
+- Carry binary payloads as `bytes`, not base64 or hex strings.
