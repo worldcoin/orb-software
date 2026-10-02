@@ -7406,7 +7406,7 @@ dependencies = [
  "hex 0.4.3",
  "hmac 0.13.0",
  "hpke",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae)",
  "serde_json",
  "sha2 0.11.0",
  "thiserror 2.0.17",
@@ -7601,7 +7601,7 @@ name = "orb-qr-link"
 version = "0.1.0"
 dependencies = [
  "data-encoding",
- "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41)",
+ "orb-relay-messages 0.0.0 (git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae)",
  "thiserror 1.0.69",
  "uuid 1.19.0",
 ]
@@ -7630,7 +7630,7 @@ dependencies = [
 [[package]]
 name = "orb-relay-messages"
 version = "0.0.0"
-source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41#4a3b490f2ea7c6a3a4b0b4d6c13b1348f8bb9c41"
+source = "git+https://github.com/worldcoin/orb-relay-messages.git?rev=50301bd41e9ece98c4c0f73a274207d5683793ae#50301bd41e9ece98c4c0f73a274207d5683793ae"
 dependencies = [
  "blake3",
  "prost 0.14.1",
