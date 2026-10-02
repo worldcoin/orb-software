@@ -35,3 +35,13 @@ Changes that need a new package because they change the signed bytes:
 - Carry binary payloads as `bytes`, not base64 or hex strings.
 - Model each salted value as one `{value, salt}` type, not two sibling
   entries.
+
+## Checking a real package
+
+`scripts/check-tier0.sh <tier0.tar.gz> [other-tier0.tar.gz]` checks an
+unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
+`not-prod-pcp-no-encrypt`): every JSON file is compact with sorted keys, and
+`hashes.json` matches every JSON file. Given two packages it also diffs each
+file's keys and value types, which shows whether two orb-core builds write
+the same layout. Needs `jq`. The packages hold raw biometrics, so keep them
+out of git.
