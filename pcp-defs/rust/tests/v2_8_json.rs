@@ -46,3 +46,16 @@ fn hashes_ignores_multiframe_keys() {
 
     assert_eq!(hashes.version.as_deref(), Some("2.8"));
 }
+
+#[test]
+fn info_keeps_empty_arrays() {
+    let info = Info {
+        signup_id: Some("s".into()),
+        ..Default::default()
+    };
+
+    let json = serde_json::to_value(&info).unwrap();
+
+    assert_eq!(json["left_ir_multiframe_image_ids"], serde_json::json!([]));
+    assert!(json.get("orb_id").is_none());
+}

@@ -30,6 +30,8 @@ fn main() -> Result<()> {
         .register_descriptors(&std::fs::read(&descriptor_path)?)?
         // Readers must accept fields added after them; also skips per-frame hash keys.
         .ignore_unknown_fields()
+        // Orb-core writes empty arrays as `[]`; dropping them would change the signed bytes.
+        .emit_fields()
         .build(&[".pcp"])?;
 
     Ok(())
