@@ -27,4 +27,10 @@ Changes that need a new package because they change the signed bytes:
   unknown keys.
 - Write and sign the manifest as protobuf, not JSON, so it can be verified
   inside a proof.
+- Move the remaining JSON files (iris codes, iris code shares, face
+  embeddings, info, backend keys) to `.pb`, the way the deep-identifier files
+  moved in 2.7. Iris code shares can then share a layout with the
+  deep-identifier shares, still one file per share.
 - Carry binary payloads as `bytes`, not base64 or hex strings.
+- Model each salted value as one `{value, salt}` type, not two sibling
+  entries.
