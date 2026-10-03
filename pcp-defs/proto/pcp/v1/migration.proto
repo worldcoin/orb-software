@@ -6,7 +6,6 @@ message Migration {
   optional string tee_version = 1 [json_name = "tee_version"];
   optional string src_signup_id = 2 [json_name = "src_signup_id"];
   optional string source_pcp_version = 3 [json_name = "source_pcp_version"];
-  // SHA-256 of the original hashes.json bytes.
   optional string source_hashes_sha256 = 4 [json_name = "source_hashes_sha256"];
   optional uint64 migrated_ts = 5 [json_name = "migrated_ts"];
   optional string enclave_measurement = 6 [json_name = "enclave_measurement"];
