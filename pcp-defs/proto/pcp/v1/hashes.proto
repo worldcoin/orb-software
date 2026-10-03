@@ -67,9 +67,7 @@ message Hashes {
   optional string left_depth_png = 57 [json_name = "left_depth.png"];
   optional string right_depth_png = 58 [json_name = "right_depth.png"];
 
-  // Optional PCP 2.9 migration artifacts. Digests cover exact final artifact bytes.
   optional string migration_json = 59 [json_name = "migration.json"];
   optional string legacy_tar = 60 [json_name = "legacy.tar"];
-  // Whole-document coverage supplements the existing salted capture fields.
   optional string info_json = 61 [json_name = "info.json"];
 }

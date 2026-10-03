@@ -30,7 +30,12 @@ migration adds two optional tier-0 artifacts:
 | `legacy.tar` | Opaque tar containing original source artifact bytes | `Hashes.legacy_tar`, JSON key `legacy.tar` |
 
 `migration.json` records the migration execution. Original Orb capture fields
-remain in `info.json`. `src_signup_id` identifies the source package's signup.
+remain in `info.json`. Its new optional `src_signup_id` field (tag 29) records the
+source package's `Info.signup_id`; the active `signup_id` is the new signup.
+Ordinary captures omit `src_signup_id`. For a migration, `Info.src_signup_id`
+and `Migration.src_signup_id` must both equal the source's `Info.signup_id`.
+The whole-document `info.json` digest covers this field; no separate salt or
+salted-field hash is added.
 
 Both artifacts are absent for ordinary Orb captures. For a successful TEE
 migration, the proposed builder profile requires both, together with their

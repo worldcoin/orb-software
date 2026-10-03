@@ -1,6 +1,6 @@
 use orb_pcp_defs::{
     prost::Message,
-    v1::{Hashes, Migration},
+    v1::{Hashes, Info, Migration},
 };
 use serde_json::json;
 
@@ -120,4 +120,29 @@ fn old_manifests_omit_migration_hashes_and_new_hashes_round_trip() {
     let decoded = Hashes::decode(hashes.encode_to_vec().as_slice()).unwrap();
     assert_eq!(decoded, hashes);
     assert_eq!(serde_json::to_value(decoded).unwrap(), expected);
+}
+
+#[test]
+fn info_source_signup_is_optional_and_round_trips() {
+    let old: Info =
+        serde_json::from_str(include_str!("fixtures/v2_8/info.json")).unwrap();
+    assert!(old.src_signup_id.is_none());
+    assert!(serde_json::to_value(&old)
+        .unwrap()
+        .get("src_signup_id")
+        .is_none());
+    let absent: Info = serde_json::from_str(r#"{"src_signup_id":null}"#).unwrap();
+    assert!(absent.src_signup_id.is_none());
+    for source in ["", "test-previous-signup"] {
+        let info = Info {
+            signup_id: Some("test-new-signup".into()),
+            src_signup_id: Some(source.into()),
+            ..Default::default()
+        };
+        let encoded = serde_json::to_value(&info).unwrap();
+        assert_eq!(encoded["src_signup_id"], source);
+        assert!(encoded.get("srcSignupId").is_none());
+        assert_eq!(serde_json::from_value::<Info>(encoded).unwrap(), info);
+        assert_eq!(Info::decode(info.encode_to_vec().as_slice()).unwrap(), info);
+    }
 }
