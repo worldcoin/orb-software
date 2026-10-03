@@ -1,9 +1,0 @@
-{
-  "tee_version": "0.1.0-test",
-  "src_signup_id": "test-previous-signup",
-  "source_pcp_version": "2.7",
-  "source_hashes_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "migrated_ts": "1800000000",
-  "enclave_measurement": "test-measurement",
-  "biometric_pipeline_version": "1.2.3-test"
-}

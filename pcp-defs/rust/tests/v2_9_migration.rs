@@ -4,91 +4,61 @@ use orb_pcp_defs::{
 };
 use serde_json::json;
 
-const MIGRATION_JSON: &str = include_str!("fixtures/v2_9/migration.json");
-
 #[test]
-fn migration_round_trips_with_exact_json_field_names() {
-    let migration: Migration = serde_json::from_str(MIGRATION_JSON).unwrap();
-    assert_eq!(migration.source_pcp_version.as_deref(), Some("2.7"));
-    assert_eq!(
-        migration.src_signup_id.as_deref(),
-        Some("test-previous-signup")
-    );
-    assert_eq!(migration.tee_version.as_deref(), Some("0.1.0-test"));
-    assert_eq!(migration.migrated_ts, Some(1800000000));
-    assert_eq!(
-        migration.biometric_pipeline_version.as_deref(),
-        Some("1.2.3-test")
-    );
+fn migration_binary_round_trip_preserves_raw_digest() {
+    let migration = Migration {
+        tee_version: Some("0.1.0-test".into()),
+        src_signup_id: Some("test-previous-signup".into()),
+        source_pcp_version: Some("2.7".into()),
+        source_hashes_sha256: Some((0x80..0xa0).collect()),
+        migrated_ts: Some(1800000000),
+        enclave_measurement: Some("test-measurement".into()),
+        biometric_pipeline_version: Some("1.2.3-test".into()),
+    };
 
-    let decoded = Migration::decode(migration.encode_to_vec().as_slice()).unwrap();
-    assert_eq!(decoded, migration);
-    assert_eq!(
-        serde_json::to_value(&decoded).unwrap(),
-        serde_json::from_str::<serde_json::Value>(MIGRATION_JSON).unwrap()
-    );
+    let wire = migration.encode_to_vec();
+    assert_eq!(Migration::decode(wire.as_slice()).unwrap(), migration);
 }
 
 #[test]
-fn absent_null_and_present_empty_values_keep_presence() {
-    for raw in [
-        "{}",
-        r#"{"tee_version":null,"migrated_ts":null,"biometric_pipeline_version":null}"#,
-    ] {
-        let migration: Migration = serde_json::from_str(raw).unwrap();
-        assert_eq!(migration, Migration::default());
-        assert_eq!(serde_json::to_value(migration).unwrap(), json!({}));
-    }
-    let migration = Migration {
+fn binary_absent_and_present_empty_values_keep_presence() {
+    let absent = Migration::decode(&[][..]).unwrap();
+    assert_eq!(absent, Migration::default());
+    assert!(absent.encode_to_vec().is_empty());
+
+    let present = Migration {
         tee_version: Some(String::new()),
+        source_hashes_sha256: Some(Vec::new()),
         biometric_pipeline_version: Some(String::new()),
         migrated_ts: Some(0),
         ..Default::default()
     };
-    assert_eq!(
-        Migration::decode(migration.encode_to_vec().as_slice()).unwrap(),
-        migration
-    );
-    assert_eq!(
-        serde_json::to_value(&migration).unwrap(),
-        json!({"tee_version":"", "migrated_ts":"0", "biometric_pipeline_version":""})
-    );
+    let wire = present.encode_to_vec();
+    assert!(!wire.is_empty());
+    assert_eq!(Migration::decode(wire.as_slice()).unwrap(), present);
 }
 
 #[test]
-fn timestamp_is_exact_at_uint64_limit_and_rejects_invalid_values() {
+fn binary_timestamp_preserves_uint64_limit_and_rejects_truncation() {
     let migration = Migration {
         migrated_ts: Some(u64::MAX),
         ..Default::default()
     };
-    let json = serde_json::to_string(&migration).unwrap();
-    assert_eq!(json, r#"{"migrated_ts":"18446744073709551615"}"#);
-    assert_eq!(serde_json::from_str::<Migration>(&json).unwrap(), migration);
-    assert_eq!(
-        serde_json::from_str::<Migration>(r#"{"migrated_ts":1800000000}"#)
-            .unwrap()
-            .migrated_ts,
-        Some(1800000000)
-    );
-    for raw in [
-        r#"{"migrated_ts":"18446744073709551616"}"#,
-        r#"{"migrated_ts":-1}"#,
-        r#"{"migrated_ts":1.5}"#,
-    ] {
-        assert!(serde_json::from_str::<Migration>(raw).is_err());
-    }
+    let wire = migration.encode_to_vec();
+    assert_eq!(Migration::decode(wire.as_slice()).unwrap(), migration);
+    assert!(Migration::decode(&wire[..wire.len() - 1]).is_err());
 }
 
 #[test]
-fn migration_ignores_future_fields_using_shared_reader_policy() {
-    let migration: Migration = serde_json::from_str(
-        r#"{"future_field":true,"biometric_pipeline_version":"1.2.3"}"#,
-    )
-    .unwrap();
-    assert_eq!(
-        migration.biometric_pipeline_version.as_deref(),
-        Some("1.2.3")
-    );
+fn migration_binary_ignores_future_fields() {
+    let migration = Migration {
+        biometric_pipeline_version: Some("1.2.3".into()),
+        ..Default::default()
+    };
+    let mut wire = migration.encode_to_vec();
+    // Unknown field 8, varint value 1.
+    wire.extend_from_slice(&[0x40, 0x01]);
+    assert_eq!(Migration::decode(wire.as_slice()).unwrap(), migration);
 }
 
 #[test]
@@ -98,21 +68,21 @@ fn old_manifests_omit_migration_hashes_and_new_hashes_round_trip() {
         include_str!("fixtures/v2_8/hashes_redacted_v2_7.json"),
     ] {
         let hashes: Hashes = serde_json::from_str(old).unwrap();
-        assert!(hashes.migration_json.is_none());
+        assert!(hashes.migration_pb.is_none());
         assert!(hashes.legacy_tar.is_none());
         assert!(hashes.info_json.is_none());
         let json = serde_json::to_value(hashes).unwrap();
-        assert!(json.get("migration.json").is_none());
+        assert!(json.get("migration.pb").is_none());
         assert!(json.get("legacy.tar").is_none());
         assert!(json.get("info.json").is_none());
     }
     let expected = json!({
-        "version":"2.9", "migration.json":"11".repeat(32),
+        "version":"2.9", "migration.pb":"11".repeat(32),
         "legacy.tar":"22".repeat(32), "info.json":"33".repeat(32)
     });
     let hashes: Hashes = serde_json::from_value(expected.clone()).unwrap();
     assert_eq!(
-        hashes.migration_json.as_deref(),
+        hashes.migration_pb.as_deref(),
         Some("11".repeat(32).as_str())
     );
     assert_eq!(hashes.legacy_tar.as_deref(), Some("22".repeat(32).as_str()));

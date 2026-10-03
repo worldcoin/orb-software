@@ -21,17 +21,19 @@ bytes, never against a re-encoded message.
 
 ## PCP 2.9 migration artifacts (proposal)
 
-- `migration.json` (`Migration`): TEE/pipeline versions, source signup/version/manifest
-  digest, migration timestamp and optional enclave measurement. `migrated_ts` is
-  uint64 Unix seconds, serialized as a decimal string in ProtoJSON.
+- `migration.pb` (binary protobuf `Migration`): TEE/pipeline versions, source
+  signup/version/manifest digest, migration timestamp and optional enclave
+  measurement. `migrated_ts` is uint64 Unix seconds; `source_hashes_sha256` is
+  the raw 32-byte SHA-256 digest of the original `hashes.json` bytes.
 - `legacy.tar`: preserved source artifacts, with byte-identical contents.
 - `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
   `Migration.src_signup_id`; `Info.signup_id` identifies the new signup.
-- `Hashes` tags 59–61: SHA-256 of the complete `migration.json`, `legacy.tar` and
-  `info.json` files.
+- `Hashes` tags 59–61: SHA-256 of the complete `migration.pb`, `legacy.tar` and
+  `info.json` files. Hash and verify the exact emitted `migration.pb` bytes,
+  never a decoded and re-encoded message.
 
 These additions are optional for ordinary captures. The migration builder must
-require both artifacts and matching source IDs.
+require both artifacts, matching source IDs and a 32-byte source manifest digest.
 
 ## Next breaking version
 
