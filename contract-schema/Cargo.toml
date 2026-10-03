@@ -1,0 +1,14 @@
+[package]
+name = "orb-contract-schema"
+version = "0.1.0"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+inventory.workspace = true
+orb-contract-schema-macros.workspace = true
+schemars.workspace = true
