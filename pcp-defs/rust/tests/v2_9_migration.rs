@@ -70,7 +70,6 @@ fn old_manifests_omit_migration_hashes_and_new_hashes_round_trip() {
         let hashes: Hashes = serde_json::from_str(old).unwrap();
         assert!(hashes.migration_pb.is_none());
         assert!(hashes.legacy_tar.is_none());
-        assert!(hashes.info_json.is_none());
         let json = serde_json::to_value(hashes).unwrap();
         assert!(json.get("migration.pb").is_none());
         assert!(json.get("legacy.tar").is_none());
@@ -78,7 +77,7 @@ fn old_manifests_omit_migration_hashes_and_new_hashes_round_trip() {
     }
     let expected = json!({
         "version":"2.9", "migration.pb":"11".repeat(32),
-        "legacy.tar":"22".repeat(32), "info.json":"33".repeat(32)
+        "legacy.tar":"22".repeat(32)
     });
     let hashes: Hashes = serde_json::from_value(expected.clone()).unwrap();
     assert_eq!(
@@ -86,7 +85,6 @@ fn old_manifests_omit_migration_hashes_and_new_hashes_round_trip() {
         Some("11".repeat(32).as_str())
     );
     assert_eq!(hashes.legacy_tar.as_deref(), Some("22".repeat(32).as_str()));
-    assert_eq!(hashes.info_json.as_deref(), Some("33".repeat(32).as_str()));
     let decoded = Hashes::decode(hashes.encode_to_vec().as_slice()).unwrap();
     assert_eq!(decoded, hashes);
     assert_eq!(serde_json::to_value(decoded).unwrap(), expected);

@@ -28,8 +28,8 @@ bytes, never against a re-encoded message.
 - `legacy.tar`: preserved source artifacts, with byte-identical contents.
 - `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
   `Migration.src_signup_id`; `Info.signup_id` identifies the new signup.
-- `Hashes` tags 59–61: SHA-256 of the complete `migration.pb`, `legacy.tar` and
-  `info.json` files. Hash and verify the exact emitted `migration.pb` bytes,
+- `Hashes` tags 59–60: SHA-256 of the complete `migration.pb` and `legacy.tar`
+  files. Hash and verify the exact emitted `migration.pb` bytes,
   never a decoded and re-encoded message.
 
 These additions are optional for ordinary captures. The migration builder must
