@@ -31,8 +31,7 @@ bytes, never against a re-encoded message.
   `info.json` files.
 
 These additions are optional for ordinary captures. The migration builder must
-require both artifacts and matching source IDs. Builder integration follows in
-[PR #1419](https://github.com/worldcoin/orb-software/pull/1419).
+require both artifacts and matching source IDs.
 
 ## Next breaking version
 
