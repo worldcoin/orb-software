@@ -3,6 +3,7 @@ syntax = "proto3";
 package pcp.v1;
 
 message Migration {
+  // Release version of the deployed di-migration-tee software.
   optional string tee_version = 1 [json_name = "tee_version"];
   optional string src_signup_id = 2 [json_name = "src_signup_id"];
   optional string source_pcp_version = 3 [json_name = "source_pcp_version"];

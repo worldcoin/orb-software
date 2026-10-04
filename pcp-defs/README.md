@@ -56,16 +56,6 @@ Preserve every available source artifact listed above.
 This directory contains only the listed artifacts; capture metadata,
 key envelopes, raw images and other archives are outside this legacy contract.
 
-Verify `legacy/hashes.sign` against the exact `legacy/hashes.json` bytes using
-the trusted source signing identity. Verify each preserved biometric against its
-source manifest entry using the source format's hashing rules.
-Resolve those artifact names within `legacy/`,
-separately from fresh top-level biometrics. A missing hash or mismatch fails
-verification. Never reserialize the original manifest before verification.
-
-Package assembly and enforcement of this contract belong to the migration
-builder; this crate supplies the shared schema.
-
 ## Next breaking version
 
 Changes that need a new package because they change the signed bytes:
