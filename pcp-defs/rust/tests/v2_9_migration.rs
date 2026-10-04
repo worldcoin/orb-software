@@ -12,7 +12,6 @@ fn migration_binary_round_trip_preserves_raw_digest() {
         source_pcp_version: Some("2.7".into()),
         source_hashes_sha256: Some((0x80..0xa0).collect()),
         migrated_ts: Some(1800000000),
-        enclave_measurement: Some("test-measurement".into()),
         biometric_pipeline_version: Some("1.2.3-test".into()),
     };
 

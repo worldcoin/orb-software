@@ -22,8 +22,8 @@ bytes, never against a re-encoded message.
 ## PCP 2.9 migration artifacts (proposal)
 
 - `migration.pb` (binary protobuf `Migration`): TEE/pipeline versions, source
-  signup/version/manifest digest, migration timestamp and optional enclave
-  measurement. `migrated_ts` is uint64 Unix seconds; `source_hashes_sha256` is
+  signup/version/manifest digest and migration timestamp.
+  `migrated_ts` is uint64 Unix seconds; `source_hashes_sha256` is
   the raw 32-byte SHA-256 digest of the original `hashes.json` bytes.
 - `legacy.tar`: preserved source artifacts, with byte-identical contents.
 - `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
