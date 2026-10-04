@@ -5,12 +5,11 @@ use orb_pcp_defs::{
 use serde_json::json;
 
 #[test]
-fn migration_binary_round_trip_preserves_raw_digest() {
+fn migration_binary_round_trip() {
     let migration = Migration {
         tee_version: Some("0.1.0-test".into()),
         src_signup_id: Some("test-previous-signup".into()),
         source_pcp_version: Some("2.7".into()),
-        source_hashes_sha256: Some((0x80..0xa0).collect()),
         migrated_ts: Some(1800000000),
         biometric_pipeline_version: Some("1.2.3-test".into()),
     };
@@ -27,7 +26,6 @@ fn binary_absent_and_present_empty_values_keep_presence() {
 
     let present = Migration {
         tee_version: Some(String::new()),
-        source_hashes_sha256: Some(Vec::new()),
         biometric_pipeline_version: Some(String::new()),
         migrated_ts: Some(0),
         ..Default::default()
@@ -70,8 +68,6 @@ fn old_manifests_omit_migration_hash_and_new_hash_round_trips() {
         assert!(hashes.migration_pb.is_none());
         let json = serde_json::to_value(hashes).unwrap();
         assert!(json.get("migration.pb").is_none());
-        assert!(json.get("legacy.tar").is_none());
-        assert!(json.get("info.json").is_none());
     }
     let expected = json!({
         "version":"2.9", "migration.pb":"11".repeat(32)

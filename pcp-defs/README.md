@@ -21,10 +21,9 @@ bytes, never against a re-encoded message.
 
 ## PCP 2.9 migration artifacts (proposal)
 
-- `migration.pb` (binary protobuf `Migration`): TEE/pipeline versions, source
-  signup/version/manifest digest and migration timestamp.
-  `migrated_ts` is uint64 Unix seconds; `source_hashes_sha256` is
-  the raw 32-byte SHA-256 digest of the original `hashes.json` bytes.
+- `migration.pb` (binary protobuf `Migration`): TEE software and biometric
+  pipeline versions, source signup ID and PCP version, and migration timestamp.
+  `migrated_ts` is uint64 Unix seconds.
 - `legacy/`: preserved source biometrics and original manifest/signature, as
   defined below.
 - `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
@@ -34,8 +33,7 @@ bytes, never against a re-encoded message.
   never a decoded and re-encoded message.
 
 These additions are optional for ordinary captures. The migration builder must
-require `migration.pb`, the legacy contents below, matching source IDs and a
-32-byte source manifest digest.
+require `migration.pb`, the legacy contents below and matching source IDs.
 
 ### Legacy directory contract
 
@@ -58,12 +56,10 @@ Preserve every available source artifact listed above.
 This directory contains only the listed artifacts; capture metadata,
 key envelopes, raw images and other archives are outside this legacy contract.
 
-`Migration.source_hashes_sha256` must equal SHA-256 of the exact
-`legacy/hashes.json` bytes. The new signed manifest covers `migration.pb`, which
-binds the migration to that source manifest. Verify `legacy/hashes.sign` against
-the original manifest bytes using the trusted source signing identity, and
-verify each preserved biometric against its source manifest entry using the
-source format's hashing rules. Resolve those artifact names within `legacy/`,
+Verify `legacy/hashes.sign` against the exact `legacy/hashes.json` bytes using
+the trusted source signing identity. Verify each preserved biometric against its
+source manifest entry using the source format's hashing rules.
+Resolve those artifact names within `legacy/`,
 separately from fresh top-level biometrics. A missing hash or mismatch fails
 verification. Never reserialize the original manifest before verification.
 
