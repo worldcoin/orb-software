@@ -68,5 +68,4 @@ message Hashes {
   optional string right_depth_png = 58 [json_name = "right_depth.png"];
 
   optional string migration_pb = 59 [json_name = "migration.pb"];
-  optional string legacy_tar = 60 [json_name = "legacy.tar"];
 }
