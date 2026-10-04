@@ -54,10 +54,8 @@ encoding. Fresh biometric outputs retain their existing top-level paths.
 | `legacy/hashes.json` | Complete original signed manifest | Required |
 | `legacy/hashes.sign` | Original manifest signature | Required |
 
-Preserve every available source artifact listed above. A listed biometric
-referenced by the source manifest must not silently disappear; a missing source
-file is an error. Do not fabricate files for biometrics absent from older source
-versions. This directory contains only the listed artifacts; capture metadata,
+Preserve every available source artifact listed above.
+This directory contains only the listed artifacts; capture metadata,
 key envelopes, raw images and other archives are outside this legacy contract.
 
 `Migration.source_hashes_sha256` must equal SHA-256 of the exact
@@ -68,11 +66,6 @@ verify each preserved biometric against its source manifest entry using the
 source format's hashing rules. Resolve those artifact names within `legacy/`,
 separately from fresh top-level biometrics. A missing hash or mismatch fails
 verification. Never reserialize the original manifest before verification.
-
-There is no `legacy.tar` or directory hash in the new manifest, and legacy hashes
-must not be flattened into its top-level artifact namespace. The preserved
-manifest can reference other original artifacts that are not in `legacy/`;
-this subset does not reconstruct or verify the entire original PCP.
 
 Package assembly and enforcement of this contract belong to the migration
 builder; this crate supplies the shared schema.
