@@ -10,6 +10,7 @@ use zeroize::Zeroizing;
 use crate::{
     builder::Envelope,
     crypto, manifest,
+    migration::LegacyArtifacts,
     payload::{EncodedDaugman, EncodedDi},
 };
 
@@ -29,10 +30,11 @@ pub enum ArchiveError {
 /// Headers use uid/gid 0, mode 0644, and device major/minor 0. Input buffers
 /// are borrowed; the returned archive owns a copy of their bytes.
 ///
-/// Names must be nonempty single components, at most 100 UTF-8 bytes, without
-/// `/`, `\`, `:`, or control characters; `.` and `..` are rejected. The package
-/// manifest validates duplicate names. This helper only encodes the supplied
-/// order and does not enforce a complete package layout.
+/// Names must be at most 100 UTF-8 bytes. Each is a nonempty single component
+/// without `/`, `\`, `:`, or control characters, optionally under the
+/// [`LEGACY_DIR`] prefix; `.` and `..` are rejected. No directory entries are
+/// written. The package manifest validates duplicate names. This helper only
+/// encodes the supplied order and does not enforce a complete package layout.
 pub(crate) fn encode_tar<'a>(
     timestamp: u64,
     entries: impl IntoIterator<Item = (&'a str, &'a [u8])>,
@@ -40,7 +42,10 @@ pub(crate) fn encode_tar<'a>(
     let mut bytes = Zeroizing::new(Vec::new());
     let mut archive = tar::Builder::new(&mut *bytes);
     for (name, data) in entries {
-        validate_name(name)?;
+        if name.len() > 100 {
+            return Err(ArchiveError::InvalidName);
+        }
+        validate_name(name.strip_prefix(LEGACY_DIR).unwrap_or(name))?;
         // Preserve the GNU header's NUL regular-file type for byte compatibility.
         let mut header = tar::Header::new_gnu();
         header.set_path(name)?;
@@ -83,6 +88,9 @@ pub(crate) fn compress(
     Ok(bytes)
 }
 
+/// The only directory in the package layout: PCP 2.9 preserved source files.
+pub(crate) const LEGACY_DIR: &str = "legacy/";
+
 fn validate_name(name: &str) -> Result<(), ArchiveError> {
     if name.is_empty()
         || name.len() > 100
@@ -104,7 +112,9 @@ pub struct NormalizedIrisFrame<'a> {
 }
 
 pub struct IrisFrame<'a> {
-    pub image_id: &'a str,
+    /// Required for extra captures, whose ID names their archive files. A primary
+    /// may lack one only in a PCP 2.9 migration of a source that never recorded it.
+    pub image_id: Option<&'a str>,
     pub ir_png: &'a [u8],
     /// Required for primary frames; extra captures may have no normalized output.
     pub normalized: Option<NormalizedIrisFrame<'a>>,
@@ -163,6 +173,8 @@ pub enum InnerArchiveError {
     MissingLeftNormalization,
     #[error("right primary normalized data is required by the current package format")]
     MissingRightNormalization,
+    #[error("multiframe captures require an image ID")]
+    MissingMultiframeImageId,
     #[error("inner archive encoding failed")]
     Archive(#[from] ArchiveError),
     #[error("normalized iris commitment generation failed")]
@@ -197,14 +209,25 @@ pub(crate) fn encode_inner(
         .normalized
         .as_ref()
         .ok_or(InnerArchiveError::MissingRightNormalization)?;
+    let multiframe = left
+        .multiframe
+        .iter()
+        .chain(right.multiframe)
+        .map(|frame| {
+            let id = frame
+                .image_id
+                .ok_or(InnerArchiveError::MissingMultiframeImageId)?;
+            Ok((id, frame))
+        })
+        .collect::<Result<Vec<_>, InnerArchiveError>>()?;
     let mut hashes = Vec::new();
 
     let mut iris_files = vec![
         ("left_ir.png".to_owned(), left.primary.ir_png),
         ("right_ir.png".to_owned(), right.primary.ir_png),
     ];
-    for frame in left.multiframe.iter().chain(right.multiframe) {
-        iris_files.push((format!("{}.png", frame.image_id), frame.ir_png));
+    for (id, frame) in &multiframe {
+        iris_files.push((format!("{id}.png"), frame.ir_png));
     }
     let iris = encode_archive(
         timestamp,
@@ -220,17 +243,12 @@ pub(crate) fn encode_inner(
             normalized_files.extend(normalized_pair(prefix, frame, resized, rng)?);
         }
     }
-    for frame in left.multiframe.iter().chain(right.multiframe) {
+    for (id, frame) in &multiframe {
         let Some(normalized) = &frame.normalized else {
             continue;
         };
         for resized in [false, true] {
-            normalized_files.extend(normalized_pair(
-                frame.image_id,
-                normalized,
-                resized,
-                rng,
-            )?);
+            normalized_files.extend(normalized_pair(id, normalized, resized, rng)?);
         }
     }
     let normalized_iris = encode_archive(
@@ -367,6 +385,14 @@ pub(crate) struct Tier0Files<'a> {
     pub hashes_json: &'a [u8],
     pub hashes_signature: &'a [u8],
     pub backend_keys_json: &'a [u8],
+    pub migration: Option<MigrationFiles<'a>>,
+}
+
+/// PCP 2.9 additions: `migration.pb` follows `info.json`; legacy files follow
+/// the biometric payloads.
+pub(crate) struct MigrationFiles<'a> {
+    pub migration_pb: &'a [u8],
+    pub legacy: &'a LegacyArtifacts<'a>,
 }
 
 pub(crate) struct AuxiliaryTiers {
@@ -422,6 +448,9 @@ pub(crate) fn tier0(
         ));
     }
     entries.push(("info.json", files.info_json));
+    if let Some(migration) = &files.migration {
+        entries.push(("migration.pb", migration.migration_pb));
+    }
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
         entries.push(("iris_codes.json", biometrics.daugman.codes.as_slice()));
@@ -444,6 +473,9 @@ pub(crate) fn tier0(
             .into_iter()
             .zip(biometrics.di.shares.iter().map(Vec::as_slice)),
         );
+    }
+    if let Some(migration) = &files.migration {
+        entries.extend(migration.legacy.entries());
     }
     entries.extend([
         ("hashes.sign", files.hashes_signature),

@@ -9,7 +9,7 @@
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
-use crate::{archive, crypto, manifest, metadata, payload};
+use crate::{archive, crypto, manifest, metadata, migration, payload};
 use manifest::sha256;
 
 /// Coupled archive placement, inner protection and manifest tier coverage.
@@ -23,6 +23,9 @@ pub(crate) enum Envelope {
 pub enum PcpVersion {
     V2_7,
     V2_8,
+    /// The 2.8 layout. Orb captures follow the 2.8 rules; TEE migrations of
+    /// older packages add migration files and relax source-dependent fields.
+    V2_9,
     V3_0,
 }
 
@@ -31,18 +34,29 @@ impl PcpVersion {
         self,
         request: &BuildRequest<'_>,
     ) -> Result<(), BuildError<E>> {
-        match self {
-            Self::V2_7 => {
-                if request.info.device_public_key.is_some() {
-                    return Err(BuildError::DeviceKeyVersionMismatch);
+        match (self, &request.migration) {
+            // Sources may predate device binding and other capture fields.
+            (Self::V2_9, Some(migration)) => {
+                if matches!(request.biometrics, BiometricPolicy::Redacted) {
+                    return Err(BuildError::RedactedMigration);
+                }
+                if let Some(field) = migration.empty_field() {
+                    return Err(BuildError::EmptyMigrationField { field });
                 }
             }
-            Self::V2_8 => {
-                if request.info.device_public_key.is_none() {
+            (_, Some(_)) => return Err(BuildError::MigrationVersionMismatch),
+            (_, None) => {
+                let device_key = request.info.device_public_key.is_some();
+                if matches!(
+                    (self, device_key),
+                    (Self::V2_7, true) | (Self::V2_8 | Self::V2_9, false)
+                ) {
                     return Err(BuildError::DeviceKeyVersionMismatch);
                 }
+                if let Some(field) = missing_capture_field(request) {
+                    return Err(BuildError::MissingRequiredField { field });
+                }
             }
-            Self::V3_0 => {}
         }
         Ok(())
     }
@@ -51,16 +65,52 @@ impl PcpVersion {
         match self {
             Self::V2_7 => "2.7",
             Self::V2_8 => "2.8",
+            Self::V2_9 => "2.9",
             Self::V3_0 => "3.0",
         }
     }
 
     fn envelope(self) -> Envelope {
         match self {
-            Self::V2_7 | Self::V2_8 => Envelope::V2,
+            Self::V2_7 | Self::V2_8 | Self::V2_9 => Envelope::V2,
             Self::V3_0 => Envelope::V3,
         }
     }
+}
+
+/// Fields that only PCP 2.9 migrations may omit.
+fn missing_capture_field(request: &BuildRequest<'_>) -> Option<&'static str> {
+    let info = &request.info;
+    let mut present = vec![
+        ("qr_code", info.qr_code.is_some()),
+        ("id_commitment", info.id_commitment.is_some()),
+        ("software_version", info.software_version.is_some()),
+        ("orb_country", info.orb_country.is_some()),
+        (
+            "orb_public_key_certificate",
+            info.orb_public_key_certificate.is_some(),
+        ),
+    ];
+    if let BiometricPolicy::Included {
+        images,
+        thumbnail_image_id,
+        ..
+    } = &request.biometrics
+    {
+        // Absent eyes are rejected separately, in every version.
+        let primary_id = |eye: &Option<archive::IrisEye<'_>>| {
+            eye.as_ref()
+                .is_none_or(|eye| eye.primary.image_id.is_some())
+        };
+        present.extend([
+            ("left_ir_image_id", primary_id(&images.left)),
+            ("right_ir_image_id", primary_id(&images.right)),
+            ("thumbnail_image_id", thumbnail_image_id.is_some()),
+        ]);
+    }
+    present
+        .into_iter()
+        .find_map(|(field, present)| (!present).then_some(field))
 }
 
 /// One privacy decision controls files, manifest hashes and metadata image IDs.
@@ -71,7 +121,7 @@ pub enum BiometricPolicy<'a> {
     /// imported commitments are not accepted.
     Included {
         images: &'a archive::PackageImages<'a>,
-        /// Required in the current profile, even when the thumbnail PNG is absent.
+        /// Required except in PCP 2.9 migrations, even when the thumbnail PNG is absent.
         thumbnail_image_id: Option<&'a str>,
         left_iris_code_aggregate_image_ids: &'a [&'a str],
         right_iris_code_aggregate_image_ids: &'a [&'a str],
@@ -91,6 +141,8 @@ pub struct BuildRequest<'a> {
     /// Normal builds serialize these same keys and use them for inner encryption.
     pub backend_keys: payload::BackendKeys<'a>,
     pub biometrics: BiometricPolicy<'a>,
+    /// TEE migrations only, and only with PCP 2.9. Orb captures leave it `None`.
+    pub migration: Option<migration::MigrationProvenance<'a>>,
 }
 
 /// Final encrypted tiers and SHA-256 checksums of those ciphertext bytes.
@@ -126,6 +178,14 @@ type Sealer = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, crypto::SealingError>;
 pub enum BuildError<E> {
     #[error("device key presence does not match the requested PCP version")]
     DeviceKeyVersionMismatch,
+    #[error("migration provenance requires PCP 2.9")]
+    MigrationVersionMismatch,
+    #[error("PCP 2.9 migrations require included biometrics")]
+    RedactedMigration,
+    #[error("migration provenance field is empty: {field}")]
+    EmptyMigrationField { field: &'static str },
+    #[error("field required by the requested PCP version is missing: {field}")]
+    MissingRequiredField { field: &'static str },
     #[error("metadata construction failed")]
     Metadata(#[from] metadata::MetadataError),
     #[error("inner archive construction failed")]
@@ -142,8 +202,11 @@ pub enum BuildError<E> {
 
 /// Builds all three tiers, invoking the supplied raw-digest signer once.
 /// No successful package is returned on failure. The signer owns its retry and
-/// deadline policy. V2.7 requires no device key; V2.8 requires one; V3 accepts
-/// either. Version negotiation remains a consumer responsibility.
+/// deadline policy. V2.7 requires no device key; V2.8 and V2.9 require one; V3
+/// accepts either. Only V2.9 accepts migration provenance; a migration requires
+/// included biometrics and may omit the device key and optional capture
+/// metadata its source lacked. Version negotiation remains a consumer
+/// responsibility.
 /// This function always encrypts, including when diagnostic features are enabled.
 pub fn build<E>(
     request: &BuildRequest<'_>,
@@ -203,6 +266,13 @@ fn build_with_sealer<E>(
     let envelope = request.version.envelope();
     let backend_keys_json = payload::backend_keys(&request.backend_keys)?;
     let mut hashes = vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
+    let migration = request
+        .migration
+        .as_ref()
+        .map(|provenance| (provenance.encode(), &provenance.legacy));
+    if let Some((migration_pb, _)) = &migration {
+        hashes.push(("migration.pb".to_owned(), sha256(migration_pb)));
+    }
     let prepared = envelope.prepare_biometrics(request, rng, seal)?;
     if let Some(prepared) = &prepared {
         hashes.extend(prepared.archives.hashes.iter().cloned());
@@ -236,6 +306,12 @@ fn build_with_sealer<E>(
             hashes_json: &signed.hashes_json,
             hashes_signature: &signed.hashes_signature,
             backend_keys_json: &backend_keys_json,
+            migration: migration.as_ref().map(|(migration_pb, legacy)| {
+                archive::MigrationFiles {
+                    migration_pb,
+                    legacy,
+                }
+            }),
         },
         biometric_files.as_ref(),
     )?;
@@ -354,10 +430,17 @@ fn encode_metadata(
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<metadata::EncodedMetadata, metadata::MetadataError> {
+    let src_signup_id = request
+        .migration
+        .as_ref()
+        .map(|migration| migration.src_signup_id);
     match &request.biometrics {
-        BiometricPolicy::Redacted => {
-            metadata::encode(&request.info, &metadata::ImageIdPolicy::Redacted, rng)
-        }
+        BiometricPolicy::Redacted => metadata::encode(
+            &request.info,
+            &metadata::ImageIdPolicy::Redacted,
+            src_signup_id,
+            rng,
+        ),
         BiometricPolicy::Included {
             images,
             thumbnail_image_id,
@@ -365,18 +448,10 @@ fn encode_metadata(
             right_iris_code_aggregate_image_ids,
             ..
         } => {
-            let left_ids: Vec<_> = images
-                .left
-                .as_ref()
-                .into_iter()
-                .flat_map(|eye| eye.multiframe.iter().map(|frame| frame.image_id))
-                .collect();
-            let right_ids: Vec<_> = images
-                .right
-                .as_ref()
-                .into_iter()
-                .flat_map(|eye| eye.multiframe.iter().map(|frame| frame.image_id))
-                .collect();
+            let left_ids =
+                multiframe_ids(&images.left, "left_ir_multiframe_image_ids")?;
+            let right_ids =
+                multiframe_ids(&images.right, "right_ir_multiframe_image_ids")?;
             let images = metadata::ImageIdPolicy::Included(metadata::ImageIds {
                 left: images.left.as_ref().map(|eye| metadata::IrisImageIds {
                     primary: eye.primary.image_id,
@@ -390,9 +465,23 @@ fn encode_metadata(
                 left_iris_code_aggregate: left_iris_code_aggregate_image_ids,
                 right_iris_code_aggregate: right_iris_code_aggregate_image_ids,
             });
-            metadata::encode(&request.info, &images, rng)
+            metadata::encode(&request.info, &images, src_signup_id, rng)
         }
     }
+}
+
+fn multiframe_ids<'a>(
+    eye: &Option<archive::IrisEye<'a>>,
+    field: &'static str,
+) -> Result<Vec<&'a str>, metadata::MetadataError> {
+    eye.iter()
+        .flat_map(|eye| eye.multiframe)
+        .map(|frame| {
+            frame
+                .image_id
+                .ok_or(metadata::MetadataError::MissingImageId { field })
+        })
+        .collect()
 }
 
 fn seal_tier<E>(

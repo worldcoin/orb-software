@@ -98,6 +98,37 @@ mod tar_gzip {
     }
 
     #[test]
+    fn only_the_legacy_directory_is_accepted_in_tar_names() {
+        let name = "legacy/hashes.json";
+        let bytes = archive::encode_tar(0, [(name, b"".as_slice())]).unwrap();
+        assert_eq!(&bytes[..name.len() + 1], format!("{name}\0").as_bytes());
+        let long = format!("legacy/{}", "a".repeat(93));
+        assert!(archive::encode_tar(0, [(long.as_str(), b"".as_slice())]).is_ok());
+        for name in [
+            "legacy/",
+            "legacy/.",
+            "legacy/..",
+            "legacy/../file",
+            "legacy/a/b",
+            "legacy/legacy/file",
+            "legacy//file",
+            "Legacy/file",
+            "other/file",
+            "/legacy/file",
+            &format!("legacy/{}", "a".repeat(94)),
+        ] {
+            assert!(matches!(
+                archive::encode_tar(0, [(name, b"".as_slice())]),
+                Err(ArchiveError::InvalidName)
+            ));
+        }
+        assert!(matches!(
+            archive::compress(b"", 0, "legacy/hashes.json"),
+            Err(ArchiveError::InvalidName)
+        ));
+    }
+
+    #[test]
     fn tar_preserves_duplicate_entries_for_package_manifest_validation() {
         for second in [b"a".as_slice(), b"b".as_slice()] {
             let bytes =
@@ -161,7 +192,7 @@ mod inner_archives {
 
     fn frame(id: &str) -> IrisFrame<'_> {
         IrisFrame {
-            image_id: id,
+            image_id: Some(id),
             ir_png: b"synthetic-png",
             normalized: Some(NormalizedIrisFrame {
                 image: &[1; 512],
@@ -438,6 +469,34 @@ mod inner_archives {
     }
 
     #[test]
+    fn multiframe_without_image_id_fails_without_consuming_randomness() {
+        use rand::RngCore;
+        let mut extra = frame("unused");
+        extra.image_id = None;
+        let extra = [extra];
+        let mut rng = StdRng::seed_from_u64(0);
+        assert!(matches!(
+            archive::encode_inner(123, &images(&[], &extra), &mut rng),
+            Err(archive::InnerArchiveError::MissingMultiframeImageId)
+        ));
+        assert_eq!(rng.next_u64(), StdRng::seed_from_u64(0).next_u64());
+    }
+
+    #[test]
+    fn primaries_without_image_ids_keep_fixed_archive_names() {
+        let mut input = images(&[], &[]);
+        input.left.as_mut().unwrap().primary.image_id = None;
+        input.right.as_mut().unwrap().primary.image_id = None;
+        let encoded =
+            archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(0)).unwrap();
+        let names: Vec<_> = entries(&encoded.iris)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(names, ["left_ir.png", "right_ir.png"]);
+    }
+
+    #[test]
     fn duplicate_derived_names_are_rejected_by_manifest_before_signing() {
         for id in ["left_ir", "left", "thumbnail", "face_ir"] {
             let extra = [frame(id)];
@@ -497,8 +556,11 @@ mod inner_archives {
 mod tier_layout {
     use std::io::Read;
 
-    use crate::archive::{self, BiometricArchives, PreparedBiometricFiles, Tier0Files};
+    use crate::archive::{
+        self, BiometricArchives, MigrationFiles, PreparedBiometricFiles, Tier0Files,
+    };
     use crate::builder::Envelope;
+    use crate::migration::LegacyArtifacts;
     use crate::payload::{EncodedDaugman, EncodedDi};
 
     fn payloads() -> (EncodedDaugman, EncodedDi) {
@@ -541,6 +603,7 @@ mod tier_layout {
             hashes_json: b"hashes-json",
             hashes_signature: b"signature",
             backend_keys_json: b"backend-keys-json",
+            migration: None,
         }
     }
 
@@ -655,6 +718,83 @@ mod tier_layout {
                 .collect();
             assert_eq!(di_files.len(), 4);
             assert!(di_files.iter().all(|(_, bytes)| bytes.is_empty()));
+        }
+    }
+
+    #[test]
+    fn migration_files_follow_info_and_biometric_payloads() {
+        let full = LegacyArtifacts {
+            hashes_json: b"old-hashes",
+            hashes_sign: b"old-signature",
+            face_embeddings_json: Some(b"old-face"),
+            iris_codes_json: Some(b"old-iris"),
+            iris_code_shares_json: [
+                Some(b"old-iris-0"),
+                Some(b"old-iris-1"),
+                Some(b"old-iris-2"),
+            ],
+            di_iris_embeddings_pb: Some(b"old-di"),
+            di_iris_embeddings_shares_pb: [
+                Some(b"old-di-0"),
+                Some(b"old-di-1"),
+                Some(b"old-di-2"),
+            ],
+        };
+        let partial = LegacyArtifacts {
+            face_embeddings_json: None,
+            iris_code_shares_json: [None, Some(b""), None],
+            di_iris_embeddings_pb: Some(b""),
+            di_iris_embeddings_shares_pb: [None; 3],
+            ..full
+        };
+        for (legacy, expected_legacy) in [
+            (
+                &full,
+                vec![
+                    ("legacy/face_embeddings.json", b"old-face".as_slice()),
+                    ("legacy/iris_codes.json", b"old-iris"),
+                    ("legacy/iris_code_shares_0.json", b"old-iris-0"),
+                    ("legacy/iris_code_shares_1.json", b"old-iris-1"),
+                    ("legacy/iris_code_shares_2.json", b"old-iris-2"),
+                    ("legacy/di_iris_embeddings.pb", b"old-di"),
+                    ("legacy/di_iris_embeddings_shares_0.pb", b"old-di-0"),
+                    ("legacy/di_iris_embeddings_shares_1.pb", b"old-di-1"),
+                    ("legacy/di_iris_embeddings_shares_2.pb", b"old-di-2"),
+                    ("legacy/hashes.sign", b"old-signature"),
+                    ("legacy/hashes.json", b"old-hashes"),
+                ],
+            ),
+            (
+                &partial,
+                vec![
+                    ("legacy/iris_codes.json", b"old-iris".as_slice()),
+                    ("legacy/iris_code_shares_1.json", b""),
+                    ("legacy/di_iris_embeddings.pb", b""),
+                    ("legacy/hashes.sign", b"old-signature"),
+                    ("legacy/hashes.json", b"old-hashes"),
+                ],
+            ),
+        ] {
+            let (daugman, di) = payloads();
+            let bio = biometrics(false, &daugman, &di);
+            let mut files = common_files();
+            files.migration = Some(MigrationFiles {
+                migration_pb: b"migration-protobuf",
+                legacy,
+            });
+            let tier0 = archive::tier0(Envelope::V2, 123, files, Some(&bio)).unwrap();
+            let mut expected: Vec<(&str, &[u8])> = vec![
+                ("iris.tar", b"iris-ciphertext"),
+                ("normalized_iris.tar", b"normalized-ciphertext"),
+                ("face.tar", b"face-ciphertext"),
+                ("face_ir_and_thermal.tar", b"modality-archive"),
+            ];
+            let mut remainder = full_tier0_remainder();
+            let signature = remainder.len() - 3;
+            remainder.splice(signature..signature, expected_legacy);
+            remainder.insert(1, ("migration.pb", b"migration-protobuf"));
+            expected.extend(remainder);
+            assert_entries(&tier0, &expected);
         }
     }
 

@@ -15,30 +15,33 @@ use serde_json::json;
 /// Caller-authorized metadata. The legacy manifest covers salted identity fields,
 /// but not the certificate, image IDs or `info.json` as a whole. Construction
 /// does not authenticate these inputs.
+///
+/// `Option` fields are omitted together with any salt and hash when absent.
+/// Apart from the version-dependent device key, only PCP 2.9 migrations, whose
+/// sources may predate these fields, accept absent values.
 pub struct PackageInfo<'a> {
     pub signup_id: &'a str,
     pub signup_reason: &'a str,
     pub orb_id: &'a str,
     pub operator_id: &'a str,
     pub capture_start: SystemTime,
-    pub qr_code: &'a str,
-    pub id_commitment: &'a str,
-    pub software_version: &'a str,
-    pub orb_country: &'a str,
+    pub qr_code: Option<&'a str>,
+    pub id_commitment: Option<&'a str>,
+    pub software_version: Option<&'a str>,
+    pub orb_country: Option<&'a str>,
     /// Raw certificate bytes, encoded as padded standard Base64.
-    pub orb_public_key_certificate: &'a [u8],
-    /// Omitted together with its salt and hash when absent.
+    pub orb_public_key_certificate: Option<&'a [u8]>,
     pub device_public_key: Option<&'a str>,
 }
 
 pub(crate) struct IrisImageIds<'a> {
-    pub primary: &'a str,
+    pub primary: Option<&'a str>,
     pub multiframe: &'a [&'a str],
 }
 
-/// Availability is distinct from redaction. The current wire profile requires
-/// both eye groups and a thumbnail ID; absent groups return an error. Optional
-/// groups preserve that distinction for future partial-data support.
+/// Availability is distinct from redaction. Both eye groups are required;
+/// absent groups return an error. Absent primary and thumbnail IDs are omitted;
+/// the builder decides which versions accept that.
 pub(crate) struct ImageIds<'a> {
     pub left: Option<IrisImageIds<'a>>,
     pub right: Option<IrisImageIds<'a>>,
@@ -78,17 +81,19 @@ pub enum MetadataError {
 /// Capture time uses whole Unix seconds, clamping pre-epoch times to zero.
 /// Redaction clears all image IDs but retains identity metadata and its hashes.
 /// Missing included image groups are rejected before drawing randomness.
+/// `src_signup_id` is written unsalted and unhashed; `migration.pb` covers it.
 pub(crate) fn encode(
     info: &PackageInfo<'_>,
     images: &ImageIdPolicy<'_>,
+    src_signup_id: Option<&str>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<EncodedMetadata, MetadataError> {
     let empty_eye = IrisImageIds {
-        primary: "",
+        primary: Some(""),
         multiframe: &[],
     };
     let (left, right, thumbnail, left_aggregate, right_aggregate) = match images {
-        ImageIdPolicy::Redacted => (&empty_eye, &empty_eye, "", &[][..], &[][..]),
+        ImageIdPolicy::Redacted => (&empty_eye, &empty_eye, Some(""), &[][..], &[][..]),
         ImageIdPolicy::Included(ids) => (
             ids.left.as_ref().ok_or(MetadataError::MissingImageId {
                 field: "left_ir_image_id",
@@ -96,32 +101,39 @@ pub(crate) fn encode(
             ids.right.as_ref().ok_or(MetadataError::MissingImageId {
                 field: "right_ir_image_id",
             })?,
-            ids.thumbnail.ok_or(MetadataError::MissingImageId {
-                field: "thumbnail_image_id",
-            })?,
+            ids.thumbnail,
             ids.left_iris_code_aggregate,
             ids.right_iris_code_aggregate,
         ),
     };
     let mut fields: BTreeMap<String, _> = [
-        ("left_ir_image_id", json!(left.primary)),
         ("left_ir_multiframe_image_ids", json!(left.multiframe)),
         ("left_iris_code_aggregate_image_ids", json!(left_aggregate)),
-        ("right_ir_image_id", json!(right.primary)),
         ("right_ir_multiframe_image_ids", json!(right.multiframe)),
         (
             "right_iris_code_aggregate_image_ids",
             json!(right_aggregate),
         ),
-        ("thumbnail_image_id", json!(thumbnail)),
-        (
-            "orb_public_key_certificate",
-            json!(BASE64.encode(info.orb_public_key_certificate)),
-        ),
     ]
     .into_iter()
     .map(|(name, value)| (name.to_owned(), value))
     .collect();
+    for (name, value) in [
+        ("left_ir_image_id", left.primary),
+        ("right_ir_image_id", right.primary),
+        ("thumbnail_image_id", thumbnail),
+        ("src_signup_id", src_signup_id),
+    ] {
+        if let Some(value) = value {
+            fields.insert(name.to_owned(), json!(value));
+        }
+    }
+    if let Some(certificate) = info.orb_public_key_certificate {
+        fields.insert(
+            "orb_public_key_certificate".to_owned(),
+            json!(BASE64.encode(certificate)),
+        );
+    }
     let timestamp = info
         .capture_start
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -129,19 +141,21 @@ pub(crate) fn encode(
         .as_secs()
         .to_string();
     let mut hashes = BTreeMap::new();
+    // Salt generation order is part of deterministic compatibility with seeded callers.
     for (name, value) in [
-        ("signup_id", info.signup_id),
-        ("signup_reason", info.signup_reason),
-        ("orb_id", info.orb_id),
-        ("operator_id", info.operator_id),
-        ("timestamp", timestamp.as_str()),
+        ("signup_id", Some(info.signup_id)),
+        ("signup_reason", Some(info.signup_reason)),
+        ("orb_id", Some(info.orb_id)),
+        ("operator_id", Some(info.operator_id)),
+        ("timestamp", Some(timestamp.as_str())),
         ("qr_code", info.qr_code),
         ("id_commitment", info.id_commitment),
         ("software_version", info.software_version),
         ("orb_country", info.orb_country),
+        ("device_public_key", info.device_public_key),
     ]
     .into_iter()
-    .chain(info.device_public_key.map(|key| ("device_public_key", key)))
+    .filter_map(|(name, value)| value.map(|value| (name, value)))
     {
         let mut salt = [0; 16];
         rng.try_fill_bytes(&mut salt)

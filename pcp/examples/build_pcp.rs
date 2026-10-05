@@ -2,7 +2,9 @@
 //! untrusted-package verifier or a production signer implementation.
 //!
 //! Run with `cargo run -p orb-pcp --example build_pcp`. Builds and verifies
-//! 2.7, 2.8, and 3.0 (with and without a device key), included and redacted.
+//! 2.7, 2.8, 2.9 and 3.0 (with and without a device key) Orb captures, included
+//! and redacted, and 2.9 TEE migrations (with and without a device key), which
+//! are never redacted.
 //! Everything stays in memory; only case labels and encrypted sizes are printed.
 
 use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
@@ -13,7 +15,7 @@ use flate2::read::GzDecoder;
 use orb_pcp as pcp;
 use orb_pcp_defs::{
     prost::Message,
-    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
+    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings, Migration},
 };
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -29,6 +31,16 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const TIMESTAMP: u64 = 1_700_000_000;
 // A synthetic 1x1 white grayscale/alpha PNG, never a captured image.
 const PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+// Synthetic stand-ins for the source package files a migration preserves.
+const LEGACY: pcp::LegacyArtifacts<'static> = pcp::LegacyArtifacts {
+    hashes_json: b"{\"version\": \"2.6\"}\n",
+    hashes_sign: b"synthetic-source-signature",
+    face_embeddings_json: Some(b"[{\"embedding\": \"synthetic-source\"}]"),
+    iris_codes_json: Some(b"{\"IRIS_version\": \"synthetic-source\"}"),
+    iris_code_shares_json: [Some(b"source-share-0"), Some(b"source-share-1"), None],
+    di_iris_embeddings_pb: None,
+    di_iris_embeddings_shares_pb: [None; 3],
+};
 
 fn main() -> Result<()> {
     run()
@@ -39,12 +51,12 @@ pub fn run() -> Result<()> {
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
     let extra_left = [pcp::IrisFrame {
-        image_id: "synthetic-extra-left",
+        image_id: Some("synthetic-extra-left"),
         ir_png: &png,
         normalized: None,
     }];
     let extra_right = [pcp::IrisFrame {
-        image_id: "synthetic-extra-right",
+        image_id: Some("synthetic-extra-right"),
         ir_png: &png,
         normalized: None,
     }];
@@ -112,13 +124,19 @@ pub fn run() -> Result<()> {
 
     // Callers select the exact version and supply their actual metadata.
     // Archive/encryption/manifest choices belong to the builder, not the caller.
-    for (version, device_public_key) in [
-        (pcp::PcpVersion::V2_7, None),
-        (pcp::PcpVersion::V2_8, Some("synthetic-device-key")),
-        (pcp::PcpVersion::V3_0, None),
-        (pcp::PcpVersion::V3_0, Some("synthetic-device-key")),
+    for (version, device_public_key, migration) in [
+        (pcp::PcpVersion::V2_7, None, false),
+        (pcp::PcpVersion::V2_8, Some("synthetic-device-key"), false),
+        (pcp::PcpVersion::V2_9, Some("synthetic-device-key"), false),
+        (pcp::PcpVersion::V2_9, None, true),
+        (pcp::PcpVersion::V2_9, Some("synthetic-device-key"), true),
+        (pcp::PcpVersion::V3_0, None, false),
+        (pcp::PcpVersion::V3_0, Some("synthetic-device-key"), false),
     ] {
         for redacted in [false, true] {
+            if migration && redacted {
+                continue;
+            }
             let user = KeyPair::generate()?;
             let backends = [
                 KeyPair::generate()?,
@@ -149,12 +167,13 @@ pub fn run() -> Result<()> {
                     operator_id: "synthetic-operator",
                     capture_start: SystemTime::UNIX_EPOCH
                         + std::time::Duration::from_secs(TIMESTAMP),
-                    qr_code: "synthetic-qr",
-                    id_commitment: "synthetic-id-commitment",
-                    software_version: "synthetic-example",
-                    orb_country: "XX",
-                    orb_public_key_certificate:
+                    qr_code: Some("synthetic-qr"),
+                    id_commitment: Some("synthetic-id-commitment"),
+                    software_version: Some("synthetic-example"),
+                    orb_country: Some("XX"),
+                    orb_public_key_certificate: Some(
                         b"synthetic-placeholder-not-a-certificate",
+                    ),
                     device_public_key,
                 },
                 user_public_key: &user.public_key,
@@ -182,6 +201,14 @@ pub fn run() -> Result<()> {
                         di: Some(&di),
                     }
                 },
+                migration: migration.then_some(pcp::MigrationProvenance {
+                    tee_version: "synthetic-tee",
+                    src_signup_id: "synthetic-source-signup",
+                    source_pcp_version: "2.6",
+                    migrated_ts: TIMESTAMP,
+                    biometric_pipeline_version: "synthetic-pipeline",
+                    legacy: LEGACY,
+                }),
             };
             // P-256 is only this example's caller-owned signer choice.
             let signer = SigningKey::random(&mut OsRng);
@@ -192,17 +219,15 @@ pub fn run() -> Result<()> {
                 Ok::<_, p256::ecdsa::Error>(signature.to_der().as_bytes().to_vec())
             })?;
             assert_eq!(calls, 1);
-            verify(
-                &package,
+            let case = Case {
                 version,
                 device_public_key,
                 redacted,
-                &user,
-                &backends,
-                &signer,
-            )?;
+                migration,
+            };
+            verify(&package, case, &user, &backends, &signer)?;
             println!(
-                "{version:?} device_key={} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
+                "{version:?} device_key={} redacted={redacted} migration={migration}: encrypted tier lengths [{}, {}, {}]; verified",
                 device_public_key.is_some(), package.tier0.len(), package.tier1.len(), package.tier2.len()
             );
         }
@@ -212,7 +237,7 @@ pub fn run() -> Result<()> {
 
 fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> pcp::IrisFrame<'a> {
     pcp::IrisFrame {
-        image_id: id,
+        image_id: Some(id),
         ir_png: png,
         normalized: Some(pcp::NormalizedIrisFrame {
             image: data,
@@ -273,15 +298,26 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
     files(&tar)
 }
 
+struct Case<'a> {
+    version: pcp::PcpVersion,
+    device_public_key: Option<&'a str>,
+    redacted: bool,
+    migration: bool,
+}
+
 fn verify(
     package: &pcp::Package,
-    version: pcp::PcpVersion,
-    device_public_key: Option<&str>,
-    redacted: bool,
+    case: Case<'_>,
     user: &KeyPair,
     backends: &[KeyPair; 4],
     signer: &SigningKey,
 ) -> Result<()> {
+    let Case {
+        version,
+        device_public_key,
+        redacted,
+        migration,
+    } = case;
     for (bytes, checksum) in [
         (&package.tier0, &package.tier0_checksum),
         (&package.tier1, &package.tier1_checksum),
@@ -359,9 +395,45 @@ fn verify(
         "backend_keys.json".to_owned(),
         hash(&tier0["backend_keys.json"]),
     );
+    let legacy = [
+        ("legacy/face_embeddings.json", LEGACY.face_embeddings_json),
+        ("legacy/iris_codes.json", LEGACY.iris_codes_json),
+        (
+            "legacy/iris_code_shares_0.json",
+            LEGACY.iris_code_shares_json[0],
+        ),
+        (
+            "legacy/iris_code_shares_1.json",
+            LEGACY.iris_code_shares_json[1],
+        ),
+        ("legacy/hashes.sign", Some(LEGACY.hashes_sign)),
+        ("legacy/hashes.json", Some(LEGACY.hashes_json)),
+    ];
+    assert_eq!(info.get("src_signup_id").is_some(), migration);
+    if migration {
+        let provenance = Migration::decode(tier0["migration.pb"].as_slice())?;
+        assert_eq!(
+            provenance.src_signup_id.as_deref(),
+            info["src_signup_id"].as_str(),
+            "migration and capture lineage disagree"
+        );
+        assert_eq!(provenance.source_pcp_version.as_deref(), Some("2.6"));
+        for (name, bytes) in legacy {
+            assert_eq!(Some(tier0[name].as_slice()), bytes, "legacy file changed");
+        }
+        expected.insert("migration.pb".to_owned(), hash(&tier0["migration.pb"]));
+    } else {
+        assert!(
+            tier0
+                .keys()
+                .all(|name| name != "migration.pb" && !name.starts_with("legacy/")),
+            "migration files in an Orb capture"
+        );
+    }
     let wire_version = match version {
         pcp::PcpVersion::V2_7 => "2.7",
         pcp::PcpVersion::V2_8 => "2.8",
+        pcp::PcpVersion::V2_9 => "2.9",
         pcp::PcpVersion::V3_0 => {
             expected.insert("tier_1".to_owned(), hash(&package.tier1));
             expected.insert("tier_2".to_owned(), hash(&package.tier2));
@@ -462,7 +534,8 @@ fn verify(
             assert_eq!(tier2.len(), 1);
             &tier1
         } else {
-            assert_eq!(tier0.len(), 18);
+            let migration_files = if migration { 1 + legacy.len() } else { 0 };
+            assert_eq!(tier0.len(), 18 + migration_files);
             assert!(tier1.is_empty() && tier2.is_empty());
             &tier0
         };
