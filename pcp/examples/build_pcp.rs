@@ -410,13 +410,13 @@ fn verify(
         ("legacy/hashes.sign", Some(LEGACY.hashes_sign)),
         ("legacy/hashes.json", Some(LEGACY.hashes_json)),
     ];
-    assert_eq!(info.get("src_signup_id").is_some(), migration);
+    assert!(info.get("src_signup_id").is_none());
     if migration {
         let provenance = Migration::decode(tier0["migration.pb"].as_slice())?;
         assert_eq!(
             provenance.src_signup_id.as_deref(),
-            info["src_signup_id"].as_str(),
-            "migration and capture lineage disagree"
+            Some("synthetic-source-signup"),
+            "unexpected migration source signup"
         );
         assert_eq!(provenance.source_pcp_version.as_deref(), Some("2.6"));
         for (name, bytes) in legacy {

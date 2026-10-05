@@ -41,7 +41,8 @@ except that the device key is optional.
 TEE migrations of older packages set it; other versions reject it.
 
 - `MigrationProvenance` becomes binary `migration.pb`, hashed in `hashes.json`
-  as `migration.pb`. Its `src_signup_id` is also written unsalted to `info.json`.
+  as `migration.pb`. Its `src_signup_id` identifies the source signup;
+  `info.json` contains the new signup ID.
 - `LegacyArtifacts` holds the exact source bytes for the fixed `legacy/` file
   set. The source `hashes.json` and `hashes.sign` are required; other files are
   written only when supplied. Legacy files are not covered by the new manifest.

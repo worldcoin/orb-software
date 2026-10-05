@@ -81,11 +81,9 @@ pub enum MetadataError {
 /// Capture time uses whole Unix seconds, clamping pre-epoch times to zero.
 /// Redaction clears all image IDs but retains identity metadata and its hashes.
 /// Missing included image groups are rejected before drawing randomness.
-/// `src_signup_id` is written unsalted and unhashed; `migration.pb` covers it.
 pub(crate) fn encode(
     info: &PackageInfo<'_>,
     images: &ImageIdPolicy<'_>,
-    src_signup_id: Option<&str>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<EncodedMetadata, MetadataError> {
     let empty_eye = IrisImageIds {
@@ -122,7 +120,6 @@ pub(crate) fn encode(
         ("left_ir_image_id", left.primary),
         ("right_ir_image_id", right.primary),
         ("thumbnail_image_id", thumbnail),
-        ("src_signup_id", src_signup_id),
     ] {
         if let Some(value) = value {
             fields.insert(name.to_owned(), json!(value));

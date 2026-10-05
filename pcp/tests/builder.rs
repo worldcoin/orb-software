@@ -623,7 +623,7 @@ fn v2_9_round_trip_preserves_legacy_bytes_and_covers_migration() {
             serde_json::from_slice(&files["info.json"]).unwrap();
         let info: v1::Info = serde_json::from_slice(&files["info.json"]).unwrap();
         assert_eq!(info.signup_id.as_deref(), Some("synthetic"));
-        assert_eq!(info.src_signup_id.as_deref(), Some("synthetic-source"));
+        assert!(raw_info.get("src_signup_id").is_none());
         assert!(raw_info.get("src_signup_id_salt").is_none());
         assert!(!manifest.contains_key("src_signup_id"));
         assert_eq!(info.device_public_key.as_deref(), device);

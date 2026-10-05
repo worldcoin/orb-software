@@ -10,7 +10,6 @@
 use orb_pcp_defs::{prost::Message, v1::Migration};
 
 /// TEE-supplied lineage and execution metadata, encoded as `migration.pb`.
-/// `src_signup_id` is also written as the unsalted `info.json` `src_signup_id`.
 pub struct MigrationProvenance<'a> {
     /// Release version of the TEE software performing the migration.
     pub tee_version: &'a str,

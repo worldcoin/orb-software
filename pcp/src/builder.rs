@@ -426,17 +426,10 @@ fn encode_metadata(
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<metadata::EncodedMetadata, metadata::MetadataError> {
-    let src_signup_id = request
-        .migration
-        .as_ref()
-        .map(|migration| migration.src_signup_id);
     match &request.biometrics {
-        BiometricPolicy::Redacted => metadata::encode(
-            &request.info,
-            &metadata::ImageIdPolicy::Redacted,
-            src_signup_id,
-            rng,
-        ),
+        BiometricPolicy::Redacted => {
+            metadata::encode(&request.info, &metadata::ImageIdPolicy::Redacted, rng)
+        }
         BiometricPolicy::Included {
             images,
             thumbnail_image_id,
@@ -461,7 +454,7 @@ fn encode_metadata(
                 left_iris_code_aggregate: left_iris_code_aggregate_image_ids,
                 right_iris_code_aggregate: right_iris_code_aggregate_image_ids,
             });
-            metadata::encode(&request.info, &images, src_signup_id, rng)
+            metadata::encode(&request.info, &images, rng)
         }
     }
 }
