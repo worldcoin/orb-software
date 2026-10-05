@@ -18,7 +18,7 @@ use orb_connd::{
         ModemManager, Signal, SimInfo,
     },
     network_manager::NetworkManager,
-    reporters::conn_quality::{Config, SpeedTest},
+    reporters::conn_quality::SpeedTest,
     resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
@@ -276,7 +276,6 @@ impl Fixture {
             .insert(mock_modem_manager())
             .insert(ModemConfig::default())
             .insert(SpeedTest::faux())
-            .insert(Config::default())
             .insert(statsd)
             .insert(zenorb.clone())
             .merge(self.registry.take().unwrap_or_default());

@@ -7,7 +7,7 @@ use orb_connd::{
     modem::ModemConfig,
     modem_manager::ModemManager,
     network_manager::NetworkManager,
-    reporters::conn_quality::{self, SpeedTest},
+    reporters::conn_quality::SpeedTest,
     resolved::Resolved,
     secure_storage::{self, ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
@@ -118,7 +118,6 @@ fn connectivity_daemon() -> Result<()> {
             .insert(ModemManager)
             .insert(ModemConfig::default())
             .insert(SpeedTest::new(orb_id, session_bus.clone()))
-            .insert(conn_quality::Config::default())
             .insert(DogstatsdClient::default())
             .insert(zenoh);
 

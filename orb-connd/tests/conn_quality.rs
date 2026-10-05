@@ -79,13 +79,30 @@ async fn publishes_bounded_history_and_separate_averages() {
     // Act
     let handle = fixture
         .run_with()
-        .registry(Registry::new().insert(speed_test).insert(cfg))
+        .registry(Registry::new().insert(speed_test))
         .call()
         .await;
 
     let subscriber = handle
         .zenoh()
         .declare_subscriber("connd/oes/connection_quality")
+        .await
+        .unwrap();
+
+    handle
+        .zenoh()
+        .session()
+        .put(
+            format!("{}/core/config", handle.zenoh().orb_id()),
+            serde_json::json!({
+                "conn_quality": {
+                    "IntervalSecs": cfg.interval.as_secs(),
+                    "HistoryCycles": cfg.history_cycles,
+                    "TestPayloadBytes": cfg.test_payload_bytes,
+                }
+            })
+            .to_string(),
+        )
         .await
         .unwrap();
 
