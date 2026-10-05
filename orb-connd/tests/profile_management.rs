@@ -251,6 +251,38 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_wipes_disposable_files_when_count_exceeds_limit() {
+    // Arrange
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .build()
+        .await;
+
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    fs::create_dir_all(&varlib).await.unwrap();
+    fs::write(varlib.join("seen-bssids"), "history")
+        .await
+        .unwrap();
+
+    for n in 0..16 {
+        fs::write(varlib.join(format!("{n}.lease")), [])
+            .await
+            .unwrap();
+    }
+
+    // Act
+    let _handle = fx.run().await;
+
+    // Assert
+    assert!(!fs::try_exists(varlib.join("seen-bssids")).await.unwrap());
+    for n in 0..16 {
+        assert!(!fs::try_exists(varlib.join(format!("{n}.lease")))
+            .await
+            .unwrap());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Diamond)

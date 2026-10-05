@@ -10,7 +10,13 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+pbjson = "0.9.0"
 prost = { version = "0.14.1", default-features = false, features = ["std", "derive"] }
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [build-dependencies]
+pbjson-build = "0.9.0"
 prost-build = "0.14.1"
