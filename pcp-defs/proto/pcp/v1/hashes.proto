@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+message Hashes {
+  optional string version = 1;
+
+  optional string signup_id = 2 [json_name = "signup_id"];
+  optional string signup_reason = 3 [json_name = "signup_reason"];
+  optional string orb_id = 4 [json_name = "orb_id"];
+  optional string operator_id = 5 [json_name = "operator_id"];
+  optional string timestamp = 6;
+  optional string qr_code = 7 [json_name = "qr_code"];
+  optional string id_commitment = 8 [json_name = "id_commitment"];
+  optional string software_version = 9 [json_name = "software_version"];
+  optional string orb_country = 10 [json_name = "orb_country"];
+  optional string device_public_key = 11 [json_name = "device_public_key"];
+
+  optional string backend_keys_json = 12 [json_name = "backend_keys.json"];
+  optional string face_embeddings_json = 13 [json_name = "face_embeddings.json"];
+  optional string iris_codes_json = 14 [json_name = "iris_codes.json"];
+  optional string iris_code_shares_0_json = 15 [json_name = "iris_code_shares_0.json"];
+  optional string iris_code_shares_1_json = 16 [json_name = "iris_code_shares_1.json"];
+  optional string iris_code_shares_2_json = 17 [json_name = "iris_code_shares_2.json"];
+  optional string di_iris_embeddings_pb = 18 [json_name = "di_iris_embeddings.pb"];
+  optional string di_iris_embeddings_shares_0_pb = 19 [json_name = "di_iris_embeddings_shares_0.pb"];
+  optional string di_iris_embeddings_shares_1_pb = 20 [json_name = "di_iris_embeddings_shares_1.pb"];
+  optional string di_iris_embeddings_shares_2_pb = 21 [json_name = "di_iris_embeddings_shares_2.pb"];
+
+  optional string left_ir_png = 22 [json_name = "left_ir.png"];
+  optional string right_ir_png = 23 [json_name = "right_ir.png"];
+  optional string thumbnail_png = 24 [json_name = "thumbnail.png"];
+  optional string face_ir_png = 25 [json_name = "face_ir.png"];
+  optional string thermal_png = 26 [json_name = "thermal.png"];
+
+  optional string left_normalized_image_bin = 27 [json_name = "left_normalized_image.bin"];
+  optional string left_normalized_image_commitment_bin = 28 [json_name = "left_normalized_image_commitment.bin"];
+  optional string left_normalized_image_blinding_factors_bin = 29 [json_name = "left_normalized_image_blinding_factors.bin"];
+  optional string left_normalized_mask_bin = 30 [json_name = "left_normalized_mask.bin"];
+  optional string left_normalized_mask_commitment_bin = 31 [json_name = "left_normalized_mask_commitment.bin"];
+  optional string left_normalized_mask_blinding_factors_bin = 32 [json_name = "left_normalized_mask_blinding_factors.bin"];
+  optional string left_normalized_image_resized_bin = 33 [json_name = "left_normalized_image_resized.bin"];
+  optional string left_normalized_image_commitment_resized_bin = 34 [json_name = "left_normalized_image_commitment_resized.bin"];
+  optional string left_normalized_image_blinding_factors_resized_bin = 35 [json_name = "left_normalized_image_blinding_factors_resized.bin"];
+  optional string left_normalized_mask_resized_bin = 36 [json_name = "left_normalized_mask_resized.bin"];
+  optional string left_normalized_mask_commitment_resized_bin = 37 [json_name = "left_normalized_mask_commitment_resized.bin"];
+  optional string left_normalized_mask_blinding_factors_resized_bin = 38 [json_name = "left_normalized_mask_blinding_factors_resized.bin"];
+  optional string right_normalized_image_bin = 39 [json_name = "right_normalized_image.bin"];
+  optional string right_normalized_image_commitment_bin = 40 [json_name = "right_normalized_image_commitment.bin"];
+  optional string right_normalized_image_blinding_factors_bin = 41 [json_name = "right_normalized_image_blinding_factors.bin"];
+  optional string right_normalized_mask_bin = 42 [json_name = "right_normalized_mask.bin"];
+  optional string right_normalized_mask_commitment_bin = 43 [json_name = "right_normalized_mask_commitment.bin"];
+  optional string right_normalized_mask_blinding_factors_bin = 44 [json_name = "right_normalized_mask_blinding_factors.bin"];
+  optional string right_normalized_image_resized_bin = 45 [json_name = "right_normalized_image_resized.bin"];
+  optional string right_normalized_image_commitment_resized_bin = 46 [json_name = "right_normalized_image_commitment_resized.bin"];
+  optional string right_normalized_image_blinding_factors_resized_bin = 47 [json_name = "right_normalized_image_blinding_factors_resized.bin"];
+  optional string right_normalized_mask_resized_bin = 48 [json_name = "right_normalized_mask_resized.bin"];
+  optional string right_normalized_mask_commitment_resized_bin = 49 [json_name = "right_normalized_mask_commitment_resized.bin"];
+  optional string right_normalized_mask_blinding_factors_resized_bin = 50 [json_name = "right_normalized_mask_blinding_factors_resized.bin"];
+
+  optional string scc_rgb_png = 51 [json_name = "scc_rgb.png"];
+  optional string left_rgb_png = 52 [json_name = "left_rgb.png"];
+  optional string right_rgb_png = 53 [json_name = "right_rgb.png"];
+  optional string left_thermal_png = 54 [json_name = "left_thermal.png"];
+  optional string right_thermal_png = 55 [json_name = "right_thermal.png"];
+  optional string scc_depth_png = 56 [json_name = "scc_depth.png"];
+  optional string left_depth_png = 57 [json_name = "left_depth.png"];
+  optional string right_depth_png = 58 [json_name = "right_depth.png"];
+}

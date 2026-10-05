@@ -12,10 +12,7 @@ pub async fn configure() -> Result<Config> {
     let endpoint = Endpoints::new(Backend::from_env()?, &orb_id).status;
     let endpoint = Url::parse(endpoint.as_str())?;
 
-    let orb_name = OrbName::read().await.unwrap_or_else(|e| {
-        warn!("failed to read orb name: {e:?}");
-        OrbName("unknown".to_string())
-    });
+    let orb_name = OrbName::read_unfallable().await;
     let orb_jabil_id = OrbJabilId::read().await.unwrap_or_else(|e| {
         warn!("failed to read orb jabil id: {e:?}");
         OrbJabilId("unknown".to_string())

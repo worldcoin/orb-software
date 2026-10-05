@@ -57,7 +57,7 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
 
     Ok(Config {
         orb_id,
-        orb_name: OrbName("unknown".to_owned()),
+        orb_name: OrbName::read_unfallable().await,
         orb_jabil_id: OrbJabilId("unknown".to_owned()),
         orb_os_version: args.orb_os_version,
         endpoint: args.endpoint,

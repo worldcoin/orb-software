@@ -5,7 +5,6 @@ use crate::{
     network_manager::{self, WifiSec},
     service::{netconfig::NetConfig, wifi, ConndService},
     utils::IntoZResult,
-    OrbCapabilities,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -27,7 +26,7 @@ impl ConndT for ConndService {
         set_smart_switching: bool,
         set_airplane_mode: bool,
     ) -> ZResult<orb_connd_dbus::NetConfig> {
-        if let OrbCapabilities::WifiOnly = self.cap {
+        if !self.cap.cellular {
             return Err(eyre!(
                 "cannot apply netconfig on orbs that do not have cellular"
             ))
@@ -76,7 +75,7 @@ impl ConndT for ConndService {
 
     /// d-bus impl
     async fn netconfig_get(&self) -> ZResult<orb_connd_dbus::NetConfig> {
-        if let OrbCapabilities::WifiOnly = self.cap {
+        if !self.cap.cellular {
             return Err(eyre!(
                 "cannot apply netconfig on orbs that do not have cellular"
             ))
@@ -215,7 +214,7 @@ impl ConndT for ConndService {
             };
 
             // Orbs without cellular do not support extra NetConfig fields
-            if self.cap == OrbCapabilities::WifiOnly {
+            if !self.cap.cellular {
                 return connect_result.into_z();
             }
 

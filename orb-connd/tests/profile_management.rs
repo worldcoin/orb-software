@@ -4,7 +4,6 @@ use futures::TryStreamExt;
 use orb_connd::{
     network_manager::{WifiProfile, WifiSec},
     service::{zoci::WifiProfileDto, ConndService, ProfileStorage},
-    OrbCapabilities,
 };
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use serde_json::json;
@@ -252,6 +251,38 @@ async fn it_wipes_dhcp_leases_and_seen_bssids_if_too_big() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_wipes_disposable_files_when_count_exceeds_limit() {
+    // Arrange
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Prod)
+        .build()
+        .await;
+
+    let varlib = fx.usr_persistent.join("network-manager").join("varlib");
+    fs::create_dir_all(&varlib).await.unwrap();
+    fs::write(varlib.join("seen-bssids"), "history")
+        .await
+        .unwrap();
+
+    for n in 0..16 {
+        fs::write(varlib.join(format!("{n}.lease")), [])
+            .await
+            .unwrap();
+    }
+
+    // Act
+    let _handle = fx.run().await;
+
+    // Assert
+    assert!(!fs::try_exists(varlib.join("seen-bssids")).await.unwrap());
+    for n in 0..16 {
+        assert!(!fs::try_exists(varlib.join(format!("{n}.lease")))
+            .await
+            .unwrap());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_cleans_allocated_lease_space_without_deleting_saved_profiles() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
@@ -357,7 +388,7 @@ async fn it_cleans_leases_without_evicting_profiles_when_secure_storage_fails() 
         handle.dbus.clone(),
         handle.nm.clone(),
         OrbRelease::Prod,
-        OrbCapabilities::WifiOnly,
+        handle.cap,
         Duration::from_secs(1),
         &fx.usr_persistent,
         ProfileStorage::SecureStorage(handle.secure_storage.clone()),
@@ -547,7 +578,7 @@ async fn it_returns_saved_wifi_profiles() {
 async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -617,7 +648,7 @@ async fn it_bumps_priority_of_wifi_profile_on_manual_connection_attempt() {
 async fn profile_is_persisted_after_bumping_priority() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;

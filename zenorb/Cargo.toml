@@ -23,6 +23,7 @@ zenoh = { workspace = true, default-features = false, features = [
 
 [dev-dependencies]
 async-tempfile.workspace = true
+orb-info = { workspace = true, features = ["testing"] }
 portpicker = "0.1.1"
 test-utils.workspace = true
 tracing-subscriber.workspace = true

@@ -12,7 +12,6 @@ use orb_connd::{
         ModemManager, Signal, SimId, SimInfo,
     },
     systemd::Systemd,
-    OrbCapabilities,
 };
 use orb_dogd::test::agent::Agent;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
@@ -29,7 +28,7 @@ mod fixture;
 async fn it_publishes_modem_snapshot_on_poll_interval() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -64,7 +63,7 @@ async fn it_publishes_modem_snapshot_on_poll_interval() {
 async fn it_powercycles_modem_and_emits_metric_when_snapshot_fails() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;
@@ -135,7 +134,7 @@ async fn it_powercycles_modem_and_emits_metric_when_snapshot_fails() {
 async fn it_retries_after_restart_service_fails_and_succeeds_on_second_attempt() {
     // Arrange
     let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
-        .cap(OrbCapabilities::CellularAndWifi)
+        .cellular(true)
         .release(OrbRelease::Dev)
         .build()
         .await;

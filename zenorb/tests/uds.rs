@@ -1,4 +1,5 @@
 use async_tempfile::TempDir;
+use orb_info::orb_id::test_orb_id;
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use zenorb::{zenoh, Zenorb};
@@ -50,14 +51,15 @@ async fn routes_events_between_clients_over_uds() {
                 &serde_json::to_string(&[&endpoint]).unwrap(),
             )
             .unwrap();
+        let orb_id = test_orb_id();
         let publisher = Zenorb::from_cfg(config.clone())
-            .orb_id("00000000".parse().unwrap())
+            .orb_id(orb_id.clone())
             .retries(0)
             .with_name("orb-engine")
             .await
             .unwrap();
         let consumer = Zenorb::from_cfg(config)
-            .orb_id("00000000".parse().unwrap())
+            .orb_id(orb_id.clone())
             .retries(0)
             .with_name("orb-backend-status")
             .await
@@ -75,7 +77,10 @@ async fn routes_events_between_clients_over_uds() {
         }
         event_publisher.put(r#"{"value":42}"#).await.unwrap();
         let sample = subscriber.recv_async().await.unwrap();
-        assert_eq!(sample.key_expr().as_str(), "00000000/orb-engine/oes/test");
+        assert_eq!(
+            sample.key_expr().as_str(),
+            format!("{orb_id}/orb-engine/oes/test")
+        );
         assert_eq!(sample.payload().try_to_string().unwrap(), r#"{"value":42}"#);
         router.close().await.unwrap();
     })

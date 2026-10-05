@@ -5,7 +5,7 @@ use crate::{
     sender::BackendSender,
 };
 use orb_dogd::test::MetricSinkhole;
-use orb_info::orb_id::test_orb_id;
+use orb_info::{orb_id::test_orb_id, orb_name::test_orb_name};
 use std::time::Duration;
 use tokio::time::timeout;
 use wiremock::{
@@ -26,7 +26,7 @@ async fn setup(token: &str, server: &MockServer) -> (Collectors, StatusClient) {
     let client = StatusClient::builder()
         .metrics(MetricSinkhole)
         .orb_id(test_orb_id())
-        .orb_name("android-test".parse().unwrap())
+        .orb_name(test_orb_name())
         .jabil_id("android-test".parse().unwrap())
         .orb_os_version("android-test".to_owned())
         .endpoint(server.uri().parse().unwrap())

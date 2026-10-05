@@ -80,7 +80,7 @@ fn make_framed_subprocess(
         }
     };
 
-    let mut cmd = tokio::process::Command::new(exe_path);
+    let mut cmd = tokio::process::Command::new(&exe_path);
     cmd.arg("secure-storage-worker")
         .args(["--scope", &scope.to_string()])
         .uid(child_euid)
@@ -90,9 +90,12 @@ fn make_framed_subprocess(
     if in_memory {
         cmd.arg("--in-memory");
     }
-    let mut child = cmd
-        .spawn()
-        .expect("failed to spawn secure storage subprocess");
+    let mut child = cmd.spawn().unwrap_or_else(|error| {
+        panic!(
+            "failed to spawn secure storage subprocess {}: {error}",
+            exe_path.display()
+        )
+    });
     let stdin = child.stdin.take().unwrap();
     let stdout = child.stdout.take().unwrap();
 

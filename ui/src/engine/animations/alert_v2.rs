@@ -170,9 +170,7 @@ impl<const N: usize> Animation for Alert<N> {
         };
 
         if !idle {
-            for led in frame {
-                *led = color;
-            }
+            frame.fill(color);
         }
 
         if self.current_edge == self.square_pulse_train.0.len() - 1

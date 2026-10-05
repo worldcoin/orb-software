@@ -171,9 +171,7 @@ impl Animation for Idle {
         // on wifi card initialization failure, the operator led stays colored in
         // DIAMOND_OPERATOR_WIFI_MODULE_BAD, cannot be overridden by other states
         if let (OrbType::Diamond, Wlan::InitFailure) = (&self.orb_type, self.wlan) {
-            for f in frame {
-                *f = Argb::DIAMOND_OPERATOR_WIFI_MODULE_BAD;
-            }
+            frame.fill(Argb::DIAMOND_OPERATOR_WIFI_MODULE_BAD);
 
             return AnimationState::Running;
         }
