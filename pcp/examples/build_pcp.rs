@@ -127,6 +127,7 @@ pub fn run() -> Result<()> {
     for (version, device_public_key, migration) in [
         (pcp::PcpVersion::V2_7, None, false),
         (pcp::PcpVersion::V2_8, Some("synthetic-device-key"), false),
+        (pcp::PcpVersion::V2_9, None, false),
         (pcp::PcpVersion::V2_9, Some("synthetic-device-key"), false),
         (pcp::PcpVersion::V2_9, None, true),
         (pcp::PcpVersion::V2_9, Some("synthetic-device-key"), true),

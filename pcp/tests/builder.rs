@@ -163,10 +163,10 @@ impl RngCore for FailingRng {
 
 #[test]
 fn version_device_binding_mismatches_fail_before_signing() {
-    for version in [PcpVersion::V2_7, PcpVersion::V2_8, PcpVersion::V2_9] {
+    for version in [PcpVersion::V2_7, PcpVersion::V2_8] {
         let mut input = request(&[0; 32]);
         input.version = version;
-        if version != PcpVersion::V2_7 {
+        if version == PcpVersion::V2_8 {
             input.info.device_public_key = None;
         }
         let result = pcp::build(
@@ -187,6 +187,7 @@ fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
         (PcpVersion::V2_7, "2.7", None),
         (PcpVersion::V2_8, "2.8", Some("device")),
         (PcpVersion::V2_8, "2.8", Some("")),
+        (PcpVersion::V2_9, "2.9", None),
         (PcpVersion::V2_9, "2.9", Some("device")),
         (PcpVersion::V2_9, "2.9", Some("")),
         (PcpVersion::V3_0, "3.0", None),

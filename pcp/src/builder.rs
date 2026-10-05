@@ -23,8 +23,8 @@ pub(crate) enum Envelope {
 pub enum PcpVersion {
     V2_7,
     V2_8,
-    /// The 2.8 layout. Orb captures follow the 2.8 rules; TEE migrations of
-    /// older packages add migration files and relax source-dependent fields.
+    /// The 2.8 layout; the device key is optional. TEE migrations of older
+    /// packages add migration files and relax source-dependent fields.
     V2_9,
     V3_0,
 }
@@ -34,8 +34,12 @@ impl PcpVersion {
         self,
         request: &BuildRequest<'_>,
     ) -> Result<(), BuildError<E>> {
+        let device_key = request.info.device_public_key.is_some();
+        if matches!((self, device_key), (Self::V2_7, true) | (Self::V2_8, false)) {
+            return Err(BuildError::DeviceKeyVersionMismatch);
+        }
         match (self, &request.migration) {
-            // Sources may predate device binding and other capture fields.
+            // Sources may predate optional capture fields.
             (Self::V2_9, Some(migration)) => {
                 if matches!(request.biometrics, BiometricPolicy::Redacted) {
                     return Err(BuildError::RedactedMigration);
@@ -46,13 +50,6 @@ impl PcpVersion {
             }
             (_, Some(_)) => return Err(BuildError::MigrationVersionMismatch),
             (_, None) => {
-                let device_key = request.info.device_public_key.is_some();
-                if matches!(
-                    (self, device_key),
-                    (Self::V2_7, true) | (Self::V2_8 | Self::V2_9, false)
-                ) {
-                    return Err(BuildError::DeviceKeyVersionMismatch);
-                }
                 if let Some(field) = missing_capture_field(request) {
                     return Err(BuildError::MissingRequiredField { field });
                 }
@@ -202,11 +199,10 @@ pub enum BuildError<E> {
 
 /// Builds all three tiers, invoking the supplied raw-digest signer once.
 /// No successful package is returned on failure. The signer owns its retry and
-/// deadline policy. V2.7 requires no device key; V2.8 and V2.9 require one; V3
-/// accepts either. Only V2.9 accepts migration provenance; a migration requires
-/// included biometrics and may omit the device key and optional capture
-/// metadata its source lacked. Version negotiation remains a consumer
-/// responsibility.
+/// deadline policy. V2.7 requires no device key; V2.8 requires one; V2.9 and V3
+/// accept either. Only V2.9 accepts migration provenance; a migration requires
+/// included biometrics and may omit optional capture metadata its source
+/// lacked. Version negotiation remains a consumer responsibility.
 /// This function always encrypts, including when diagnostic features are enabled.
 pub fn build<E>(
     request: &BuildRequest<'_>,
