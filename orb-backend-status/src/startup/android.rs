@@ -19,7 +19,7 @@ pub struct Args {
     #[arg(long)]
     token_file: PathBuf,
     /// Socket exposed by the separate Zenoh router.
-    #[arg(long, default_value = "/data/local/tmp/zenohd.sock")]
+    #[arg(long, default_value = "/dev/socket/zenohd.sock")]
     zenoh_socket: String,
     /// Socket exposed by the local DogStatsD agent.
     #[arg(long, default_value = "/data/local/tmp/dsd.socket")]
@@ -85,6 +85,19 @@ mod tests {
     }
 
     #[test]
+    fn defaults_to_android_zenoh_socket() {
+        let args = Args::try_parse_from([
+            "orb-backend-status",
+            "--endpoint",
+            "https://example.com/status",
+            "--token-file",
+            "/data/local/tmp/token",
+        ])
+        .unwrap();
+        assert_eq!(args.zenoh_socket, "/dev/socket/zenohd.sock");
+    }
+
+    #[test]
     fn accepts_explicit_startup_configuration() {
         let args = Args::try_parse_from([
             "orb-backend-status",
@@ -114,7 +127,7 @@ mod tests {
         let args = Args {
             endpoint: "https://example.com/status".parse().unwrap(),
             token_file: dir.to_path_buf().join("missing-token"),
-            zenoh_socket: "/data/local/tmp/zenohd.sock".to_owned(),
+            zenoh_socket: "/dev/socket/zenohd.sock".to_owned(),
             metrics_socket: "/data/local/tmp/dsd.socket".to_owned(),
             orb_os_version: "unknown".to_owned(),
         };

@@ -24,7 +24,7 @@ fn android_router_config_uses_only_local_uds() {
         ("mode", r#""router""#),
         (
             "listen/endpoints",
-            r#"["unixsock-stream//data/local/tmp/zenohd.sock"]"#,
+            r#"["unixsock-stream//dev/socket/zenohd.sock"]"#,
         ),
         ("connect/endpoints", "[]"),
         ("scouting/multicast/enabled", "false"),

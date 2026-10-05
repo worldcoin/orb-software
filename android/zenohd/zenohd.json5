@@ -1,7 +1,7 @@
 {
   mode: "router",
   listen: {
-    endpoints: ["unixsock-stream//data/local/tmp/zenohd.sock"],
+    endpoints: ["unixsock-stream//dev/socket/zenohd.sock"],
   },
   connect: {
     endpoints: [],
