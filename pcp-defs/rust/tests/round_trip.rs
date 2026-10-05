@@ -1,6 +1,7 @@
 use orb_pcp_defs::prost::Message;
 use orb_pcp_defs::v1::{
     DiIrisEmbeddingShareV1, DiIrisEmbeddingShares, DiIrisEmbeddingV1, DiIrisEmbeddings,
+    LiveMatch, MatchStatus, ReferenceFace,
 };
 
 const VECTOR_LEN: usize = 512;
@@ -67,4 +68,37 @@ fn embeddings_unset_round_trips_as_none() {
     let decoded = DiIrisEmbeddings::decode(wire.as_slice()).expect("decode");
 
     assert!(decoded.embedding_v1.is_none());
+}
+
+#[test]
+fn reference_face_round_trip() {
+    let original = ReferenceFace {
+        embedding_type: "ghostfacenet_flipped_mean".into(),
+        embedding_version: "2.0.0".into(),
+        embedding_inference_backend: "tensorrt".into(),
+        embedding: (0..VECTOR_LEN).map(|i| (i as f32) * 0.001).collect(),
+        match_status: MatchStatus::NotMatched.into(),
+        match_threshold: 0.5,
+        live_matches: vec![
+            LiveMatch {
+                match_score: 0.72,
+                is_match: true,
+            },
+            LiveMatch {
+                match_score: 0.31,
+                is_match: false,
+            },
+            LiveMatch {
+                match_score: 0.28,
+                is_match: false,
+            },
+        ],
+    };
+
+    let wire = original.encode_to_vec();
+    let decoded = ReferenceFace::decode(wire.as_slice())
+        .expect("encode + decode should round-trip");
+
+    assert_eq!(original, decoded);
+    assert_eq!(decoded.match_status(), MatchStatus::NotMatched);
 }

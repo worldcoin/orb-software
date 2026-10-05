@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+// reference_face.pb: the user-supplied reference face and how it matched the live capture.
+message ReferenceFace {
+  string embedding_type = 1;
+  string embedding_version = 2;
+  string embedding_inference_backend = 3;
+  repeated float embedding = 4;
+
+  MatchStatus match_status = 5;
+  float match_threshold = 6;
+  repeated LiveMatch live_matches = 7;
+}
+
+enum MatchStatus {
+  MATCH_STATUS_UNSPECIFIED = 0;
+  MATCH_STATUS_MATCHED = 1;
+  MATCH_STATUS_NOT_MATCHED = 2;
+  MATCH_STATUS_ERROR = 3;
+  MATCH_STATUS_NOT_RUN = 4;
+}
+
+message LiveMatch {
+  float match_score = 1;
+  bool is_match = 2;
+}

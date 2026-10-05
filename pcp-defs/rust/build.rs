@@ -11,6 +11,7 @@ fn main() -> Result<()> {
         "./proto/pcp/v1/info.proto",
         "./proto/pcp/v1/iris_code_shares.proto",
         "./proto/pcp/v1/iris_codes.proto",
+        "./proto/pcp/v1/reference_face.proto",
     ];
 
     for f in &proto_files {
