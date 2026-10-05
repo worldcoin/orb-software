@@ -14,7 +14,7 @@ use crate::{
     orb_event_stream::OrbEventStream,
 };
 use color_eyre::Result;
-use hardware_states::HardwareState;
+use hardware_states::{ComponentName, HardwareState};
 use orb_messages::main::AmbientLight;
 use reroute::OesReroute;
 use secrecy::SecretString;
@@ -28,7 +28,7 @@ use zenorb::Zenorb;
 pub(crate) struct ZenorbCtx {
     pub backend_status: BackendStatusImpl,
     pub connectivity_tx: watch::Sender<GlobalConnectivity>,
-    pub hardware_states: Arc<tokio::sync::Mutex<HashMap<String, HardwareState>>>,
+    pub hardware_states: Arc<tokio::sync::Mutex<HashMap<ComponentName, HardwareState>>>,
     pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
     pub oes: OrbEventStream,
 }
