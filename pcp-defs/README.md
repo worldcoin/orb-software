@@ -26,14 +26,14 @@ bytes, never against a re-encoded message.
   `migrated_ts` is uint64 Unix seconds.
 - `legacy/`: preserved source biometrics and original manifest/signature, as
   defined below.
-- `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
-  `Migration.src_signup_id`; `Info.signup_id` identifies the new signup.
+- `Migration.src_signup_id`: the source package's `Info.signup_id`.
+  The new package's `Info.signup_id` identifies the new signup.
 - `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
   Hash and verify the exact emitted `migration.pb` bytes,
   never a decoded and re-encoded message.
 
 These additions are optional for ordinary captures. The migration builder must
-require `migration.pb`, the legacy contents below and matching source IDs.
+require `migration.pb` and the legacy contents below.
 
 ### Legacy directory contract
 
