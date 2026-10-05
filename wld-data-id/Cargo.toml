@@ -1,12 +1,13 @@
 [package]
 name = "orb-wld-data-id"
-version = "0.1.0"
-authors = ["Dan Girshovich"]
+version = "0.0.0"
+description = "Signup and image IDs for the Orb"
+publish = false
+
 edition.workspace = true
-license = "LicenseRef-wc-proprietary"
+license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-publish = false
 
 [dependencies]
 bincode.workspace = true
