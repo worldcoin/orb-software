@@ -58,7 +58,8 @@ impl PcpVersion {
         Ok(())
     }
 
-    fn label(self) -> &'static str {
+    /// The version string written to `hashes.json`, e.g. `"2.9"`.
+    pub fn label(self) -> &'static str {
         match self {
             Self::V2_7 => "2.7",
             Self::V2_8 => "2.8",
