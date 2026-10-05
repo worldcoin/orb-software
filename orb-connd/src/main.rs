@@ -119,7 +119,8 @@ fn connectivity_daemon() -> Result<()> {
             .insert(ModemConfig::default())
             .insert(SpeedTest::new(orb_id, session_bus.clone()))
             .insert(conn_quality::Config::default())
-            .insert(DogstatsdClient::default());
+            .insert(DogstatsdClient::default())
+            .insert(zenoh);
 
         crabwire::register!(registry);
 
@@ -133,7 +134,6 @@ fn connectivity_daemon() -> Result<()> {
             .os_release(os_release)
             .connect_timeout(Duration::from_secs(15))
             .profile_storage(profile_storage)
-            .zenoh(&zenoh)
             .run()
             .await?;
 
