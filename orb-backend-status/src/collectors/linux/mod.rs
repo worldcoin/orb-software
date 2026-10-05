@@ -17,6 +17,7 @@ use color_eyre::Result;
 use hardware_states::HardwareState;
 use orb_messages::main::AmbientLight;
 use reroute::OesReroute;
+use secrecy::SecretString;
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use token::TokenWatcher;
 use tokio::{sync::watch, task::JoinHandle};
@@ -49,7 +50,7 @@ impl Collectors {
         shutdown_token: CancellationToken,
     ) -> Result<(
         Self,
-        watch::Receiver<String>,
+        watch::Receiver<SecretString>,
         watch::Receiver<GlobalConnectivity>,
     )> {
         let state = BackendStatusImpl::new();

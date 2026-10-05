@@ -5,7 +5,7 @@ mod fixture;
 use fixture::{mocks, Fixture};
 use std::time::Duration;
 use wiremock::{
-    matchers::{method, path},
+    matchers::{basic_auth, method, path},
     Mock, ResponseTemplate,
 };
 use zbus::{fdo::DBusProxy, names::BusName};
@@ -113,7 +113,9 @@ async fn it_sends_when_connected_with_token() {
     let fx = Fixture::spawn_with_token(Duration::from_millis(100)).await;
     Mock::given(method("POST"))
         .and(path("/"))
+        .and(basic_auth("bba85baa", "test-token"))
         .respond_with(ResponseTemplate::new(200))
+        .expect(1..)
         .mount(&fx.mock_server)
         .await;
 
@@ -821,7 +823,9 @@ async fn it_sends_after_token_becomes_available() {
 
     Mock::given(method("POST"))
         .and(path("/"))
+        .and(basic_auth("bba85baa", "new-auth-token"))
         .respond_with(ResponseTemplate::new(200))
+        .expect(1..)
         .mount(&fx.mock_server)
         .await;
 

@@ -6,6 +6,7 @@ use crate::{
 };
 use orb_dogd::test::MetricSinkhole;
 use orb_info::{orb_id::test_orb_id, orb_name::test_orb_name};
+use secrecy::ExposeSecret;
 use std::time::Duration;
 use tokio::time::timeout;
 use wiremock::{
@@ -16,7 +17,7 @@ use wiremock::{
 async fn setup(token: &str, server: &MockServer) -> (Collectors, StatusClient) {
     let (collectors, token_rx, connectivity_rx) = Collectors::new(
         Config {
-            token: token.to_owned(),
+            token: SecretString::new(token.to_owned()),
         },
         CancellationToken::new(),
     )
@@ -45,14 +46,14 @@ async fn static_channels_stay_open_without_background_reporters() {
     let shutdown = CancellationToken::new();
     let (collectors, token_rx, connectivity_rx) = Collectors::new(
         Config {
-            token: "static-token".to_owned(),
+            token: SecretString::new("static-token".to_owned()),
         },
         shutdown.clone(),
     )
     .await
     .unwrap();
 
-    assert_eq!(&*token_rx.borrow(), "static-token");
+    assert_eq!(token_rx.borrow().expose_secret(), "static-token");
     assert!(connectivity_rx.borrow().is_connected());
     assert!(!token_rx.has_changed().unwrap());
     assert!(!connectivity_rx.has_changed().unwrap());

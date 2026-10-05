@@ -2,17 +2,18 @@ use super::GlobalConnectivity;
 use crate::{backend::types::OrbStatusApiV2, orb_event_stream::OrbEventStream};
 use chrono::Utc;
 use color_eyre::Result;
+use secrecy::SecretString;
 use std::{future::pending, path::PathBuf};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use zenorb::Zenorb;
 
 pub struct Config {
-    pub token: String,
+    pub token: SecretString,
 }
 
 pub struct Collectors {
-    _token_tx: watch::Sender<String>,
+    _token_tx: watch::Sender<SecretString>,
     _connectivity_tx: watch::Sender<GlobalConnectivity>,
 }
 
@@ -22,7 +23,7 @@ impl Collectors {
         _shutdown_token: CancellationToken,
     ) -> Result<(
         Self,
-        watch::Receiver<String>,
+        watch::Receiver<SecretString>,
         watch::Receiver<GlobalConnectivity>,
     )> {
         let (token_tx, token_receiver) = watch::channel(config.token);

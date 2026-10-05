@@ -7,6 +7,7 @@ use color_eyre::{
 use orb_backend_status::{collectors, BUILD_INFO};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use reqwest::Url;
+use secrecy::{ExposeSecret, SecretString};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -52,14 +53,18 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         .into_os_string()
         .into_string()
         .map_err(|_| eyre!("metrics socket path must be valid UTF-8"))?;
-    let token = tokio::fs::read_to_string(&args.token_file)
-        .await
-        .wrap_err_with(|| {
-            format!("failed to read token file {}", args.token_file.display())
-        })?;
-    let token = token.trim();
+    let token = {
+        let contents = SecretString::new(
+            tokio::fs::read_to_string(&args.token_file)
+                .await
+                .wrap_err_with(|| {
+                    format!("failed to read token file {}", args.token_file.display())
+                })?,
+        );
+        SecretString::new(contents.expose_secret().trim().to_owned())
+    };
     ensure!(
-        !token.is_empty(),
+        !token.expose_secret().is_empty(),
         "token file {} is empty or whitespace-only; provide a non-empty backend authentication token before starting",
         args.token_file.display()
     );
@@ -71,9 +76,7 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         orb_os_version: args.orb_os_version,
         endpoint: args.endpoint,
         zenoh,
-        collectors: collectors::Config {
-            token: token.to_owned(),
-        },
+        collectors: collectors::Config { token },
         metrics_socket: Some(metrics_socket),
     })
 }
