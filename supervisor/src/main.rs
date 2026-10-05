@@ -3,10 +3,8 @@ use clap::{
     Parser,
 };
 use color_eyre::eyre::WrapErr as _;
-use orb_info::{orb_os_release::OrbOsRelease, OrbId};
 use orb_supervisor::startup::{Application, Settings};
 use tracing::{debug, info};
-use zenorb::Zenorb;
 
 use orb_supervisor::BUILD_INFO;
 
@@ -43,21 +41,11 @@ async fn main() -> color_eyre::Result<()> {
         let settings = Settings::default();
         info!(?settings, "starting supervisor with settings");
 
-        let orb_id = OrbId::read().await.wrap_err("failed to read orb id")?;
-        let os_release = OrbOsRelease::read()
-            .await
-            .wrap_err("failed to read orb os release metadata")?;
-        let zenorb = Zenorb::from_cfg(zenorb::default_cfg())
-            .orb_id(orb_id)
-            .with_name("supervisor")
-            .await
-            .wrap_err("failed to initialize zenorb session")?;
-
-        let application = Application::build(settings.clone(), zenorb)
+        let application = Application::build(settings)
             .await
             .wrap_err("failed to build supervisor")?;
 
-        application.run(os_release).await
+        application.run().await
     }
     .await;
     telemetry.flush().await;

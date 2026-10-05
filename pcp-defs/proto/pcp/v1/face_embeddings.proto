@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+// One element of face_embeddings.json, which is a top-level JSON array.
+message FaceEmbedding {
+  optional string embedding = 1;
+  optional string embedding_type = 2 [json_name = "embedding_type"];
+  optional string embedding_version = 3 [json_name = "embedding_version"];
+  optional string embedding_inference_backend = 4 [json_name = "embedding_inference_backend"];
+}
