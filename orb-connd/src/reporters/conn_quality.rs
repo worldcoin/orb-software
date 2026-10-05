@@ -26,6 +26,10 @@ use zenorb::{
     Zenorb,
 };
 
+const DEFAULT_INTERVAL_SECS: u64 = 900;
+const DEFAULT_HISTORY_CYCLES: usize = 4;
+const DEFAULT_TEST_PAYLOAD_BYTES: usize = 250_000;
+
 /// Scheduling, history and test payload limits for connection-quality reports.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -37,9 +41,9 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            interval: Duration::from_secs(900),
-            history_cycles: 4,
-            test_payload_bytes: 250_000,
+            interval: Duration::from_secs(DEFAULT_INTERVAL_SECS),
+            history_cycles: DEFAULT_HISTORY_CYCLES,
+            test_payload_bytes: DEFAULT_TEST_PAYLOAD_BYTES,
         }
     }
 }
@@ -66,6 +70,11 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
+        if interval.period() != cfg.interval {
+            interval = time::interval_at(Instant::now() + cfg.interval, cfg.interval);
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        }
+
         select! {
             biased;
 
@@ -154,7 +163,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                     },
                 };
 
-                if history.len() == cfg.history_cycles {
+                while history.len() >= cfg.history_cycles {
                     history.pop_front();
                 }
 
@@ -175,11 +184,47 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
     }
 }
 
+#[derive(Deserialize)]
+struct CoreConfig {
+    conn_quality: Option<ConnQualityConfig>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct ConnQualityConfig {
+    interval_secs: Option<u64>,
+    history_cycles: Option<usize>,
+    test_payload_bytes: Option<usize>,
+}
+
 async fn recv_config(sub: &Subscriber<FifoChannelHandler<Sample>>) -> Result<Config> {
     let sample = sub.recv_async().await.map_err(|e| eyre!("{e}"))?;
     let payload = sample.payload();
+    let core: CoreConfig = serde_json::from_slice(payload.to_bytes().as_bytes())?;
+    let quality = core.conn_quality.unwrap_or_default();
 
-    Ok(serde_json::from_slice(payload.to_bytes().as_bytes())?)
+    let cfg = Config {
+        interval: Duration::from_secs(
+            quality.interval_secs.unwrap_or(DEFAULT_INTERVAL_SECS),
+        ),
+        history_cycles: quality.history_cycles.unwrap_or(DEFAULT_HISTORY_CYCLES),
+        test_payload_bytes: quality
+            .test_payload_bytes
+            .unwrap_or(DEFAULT_TEST_PAYLOAD_BYTES),
+    };
+
+    if cfg.interval.is_zero() || cfg.history_cycles == 0 || cfg.test_payload_bytes == 0
+    {
+        return Err(eyre!(
+            "connection-quality settings must be greater than zero"
+        ));
+    }
+
+    if Instant::now().checked_add(cfg.interval).is_none() {
+        return Err(eyre!("connection-quality interval is too large"));
+    }
+
+    Ok(cfg)
 }
 
 /// Calls the Cloudflare and PCP speed tests using this Orb's identity and bus.
