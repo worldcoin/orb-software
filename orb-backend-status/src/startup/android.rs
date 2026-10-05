@@ -22,7 +22,7 @@ pub struct Args {
     #[arg(long, default_value = "/dev/socket/zenohd.sock")]
     zenoh_socket: String,
     /// Socket exposed by the local DogStatsD agent.
-    #[arg(long, default_value = "/data/local/tmp/dsd.socket")]
+    #[arg(long, default_value = "/dev/socket/datadog.socket")]
     metrics_socket: String,
     /// Platform version to report to the backend.
     #[arg(long, default_value = "unknown")]
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_android_zenoh_socket() {
+    fn defaults_to_android_sockets() {
         let args = Args::try_parse_from([
             "orb-backend-status",
             "--endpoint",
@@ -95,6 +95,7 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(args.zenoh_socket, "/dev/socket/zenohd.sock");
+        assert_eq!(args.metrics_socket, "/dev/socket/datadog.socket");
     }
 
     #[test]
@@ -109,11 +110,14 @@ mod tests {
             "/data/local/tmp/custom.sock",
             "--orb-os-version",
             "android-test",
+            "--metrics-socket",
+            "/data/local/tmp/custom-metrics.sock",
         ])
         .unwrap();
         assert_eq!(args.endpoint.as_str(), "https://example.com/status");
         assert_eq!(args.token_file, PathBuf::from("/data/local/tmp/token"));
         assert_eq!(args.orb_os_version, "android-test");
+        assert_eq!(args.metrics_socket, "/data/local/tmp/custom-metrics.sock");
         let config = zenoh_config(&args.zenoh_socket).unwrap();
         assert_eq!(
             config.get_json("connect/endpoints").unwrap(),
@@ -128,7 +132,7 @@ mod tests {
             endpoint: "https://example.com/status".parse().unwrap(),
             token_file: dir.to_path_buf().join("missing-token"),
             zenoh_socket: "/dev/socket/zenohd.sock".to_owned(),
-            metrics_socket: "/data/local/tmp/dsd.socket".to_owned(),
+            metrics_socket: "/dev/socket/datadog.socket".to_owned(),
             orb_os_version: "unknown".to_owned(),
         };
         let orb_id = orb_info::orb_id::test_orb_id();
