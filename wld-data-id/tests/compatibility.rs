@@ -1,0 +1,62 @@
+use orb_wld_data_id::{ImageId, SignupId};
+use serde_json::json;
+use std::path::Path;
+
+const SIGNUP: &str = "00120011223344556677889900000000";
+const IMAGE: &str = "00120011223344556677889978563412";
+
+#[test]
+fn signup_and_image_wire_format() {
+    let signup: SignupId = SIGNUP.parse().unwrap();
+    assert_eq!(signup.to_string(), SIGNUP);
+    let image = ImageId::new(&signup, 0x12345678);
+    assert_eq!(image.to_string(), IMAGE);
+    assert_eq!(IMAGE.parse::<ImageId>().unwrap(), image);
+    assert_eq!(SignupId::from(image), signup);
+    assert_eq!(ImageId::new(&signup, 0).to_string(), SIGNUP);
+
+    let hyphenated: SignupId = "00120011-2233-4455-6677-889900000000".parse().unwrap();
+    assert_eq!(hyphenated, signup);
+    let uppercase: SignupId = "00FF0011223344556677889900000000".parse().unwrap();
+    assert_eq!(uppercase.to_string(), "00ff0011223344556677889900000000");
+}
+
+#[test]
+fn serde_json_and_bincode_format() {
+    let signup: SignupId = SIGNUP.parse().unwrap();
+    let expected = json!({
+        "version": 0,
+        "s3_region": 18,
+        "signup_id": [0, 17, 34, 51, 68, 85, 102, 119, 136, 153],
+        "data_id": 0,
+    });
+    assert_eq!(serde_json::to_value(&signup).unwrap(), expected);
+    assert_eq!(
+        serde_json::from_value::<SignupId>(expected).unwrap(),
+        signup
+    );
+
+    let image = ImageId::new(&signup, 0x12345678);
+    let bytes = [
+        0x00, 0x12, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x78,
+        0x56, 0x34, 0x12,
+    ];
+    assert_eq!(bincode::serialize(&image).unwrap(), bytes);
+    assert_eq!(bincode::deserialize::<ImageId>(&bytes).unwrap(), image);
+}
+
+#[test]
+fn pin_and_path_helpers() {
+    let signup: SignupId = SIGNUP.parse().unwrap();
+    assert_eq!(signup.to_pin_string(), "665416");
+    assert_eq!(
+        SignupId::from_signup_dir(Path::new(SIGNUP)).unwrap(),
+        signup
+    );
+    assert_eq!(
+        ImageId::from_image_path(Path::new("00120011223344556677889978563412.png"))
+            .unwrap()
+            .to_string(),
+        IMAGE,
+    );
+}

@@ -1,0 +1,21 @@
+[package]
+name = "orb-wld-data-id"
+version = "0.1.0"
+authors = ["Dan Girshovich"]
+edition.workspace = true
+license = "LicenseRef-wc-proprietary"
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+bincode.workspace = true
+eyre.workspace = true
+rand.workspace = true
+schemars.workspace = true
+serde.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

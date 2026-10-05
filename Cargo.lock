@@ -1408,6 +1408,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.71.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8139,6 +8148,20 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
+]
+
+[[package]]
+name = "orb-wld-data-id"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "eyre",
+ "rand 0.8.7",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "uuid 1.19.0",
 ]
 
 [[package]]
