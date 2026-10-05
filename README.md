@@ -2,7 +2,7 @@
 
 Open source software for [the orb][inside-orb].
 
-![A wireframe expansion of the orb][orb-wireframe]
+![Orb-software banner][orb-software]
 
 ## Repository structure
 
@@ -61,3 +61,4 @@ additional terms or conditions.
 [inside-orb]: https://worldcoin.org/blog/engineering/opening-orb-look-inside-worldcoin-biometric-imaging-device
 [mdbook]: https://worldcoin.github.io/orb-software
 [orb-wireframe]: docs/src/orb-wireframe.png
+[orb-software]: docs/src/orb-software.png
