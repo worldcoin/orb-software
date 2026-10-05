@@ -114,6 +114,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                         warn!(
                             "skipping conn quality check, background downloads are not allowed"
                         );
+                        continue;
                     }
 
                     Err(e) => {
@@ -152,13 +153,13 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                     speed_test_upload: Traffic {
                         measured_at,
                         duration_ms: cloudflare.upload_duration_ms,
-                        bytes: 1_000_000,
+                        bytes: (cloudflare.upload_mb * 1_000_000.0).round() as u64,
                         mbps: cloudflare.upload_mbps,
                     },
                     speed_test_download: Traffic {
                         measured_at,
                         duration_ms: cloudflare.download_duration_ms,
-                        bytes: 1_000_000,
+                        bytes: (cloudflare.download_mb * 1_000_000.0).round() as u64,
                         mbps: cloudflare.download_mbps,
                     },
                 };

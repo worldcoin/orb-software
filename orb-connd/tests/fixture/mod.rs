@@ -278,6 +278,7 @@ impl Fixture {
             .insert(SpeedTest::faux())
             .insert(Config::default())
             .insert(statsd)
+            .insert(zenorb.clone())
             .merge(self.registry.take().unwrap_or_default());
 
         crabwire::reregister!(base_registry);
@@ -302,7 +303,6 @@ impl Fixture {
             .session_bus(dbus.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
-            .zenoh(&zenorb)
             .run()
             .await
             .unwrap();

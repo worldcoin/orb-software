@@ -89,6 +89,10 @@ async fn publishes_bounded_history_and_separate_averages() {
         .await
         .unwrap();
 
+    time::sleep(Duration::from_secs(2)).await;
+    let blocked_cloudflare_calls = cloudflare_calls.load(Ordering::SeqCst);
+    let blocked_pcp_calls = pcp_calls.load(Ordering::SeqCst);
+
     handle.allow_background_downloads();
 
     let received = time::timeout(Duration::from_secs(5), async {
@@ -111,6 +115,14 @@ async fn publishes_bounded_history_and_separate_averages() {
     handle.stop().await;
 
     // Assert
+    assert_eq!(
+        blocked_cloudflare_calls, 0,
+        "Cloudflare speed test ran while background downloads were disabled"
+    );
+    assert_eq!(
+        blocked_pcp_calls, 0,
+        "PCP speed test ran while background downloads were disabled"
+    );
     let reports = received.unwrap();
     let last = reports.last().unwrap();
 
