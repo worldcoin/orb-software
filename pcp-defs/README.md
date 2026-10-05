@@ -19,6 +19,43 @@ both 2.7 and 2.8.
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
 
+## PCP 2.9 migration artifacts (proposal)
+
+- `migration.pb` (binary protobuf `Migration`): TEE software and biometric
+  pipeline versions, source signup ID and PCP version, and migration timestamp.
+  `migrated_ts` is uint64 Unix seconds.
+- `legacy/`: preserved source biometrics and original manifest/signature, as
+  defined below.
+- `Info.src_signup_id` (tag 29): source `Info.signup_id`, matching
+  `Migration.src_signup_id`; `Info.signup_id` identifies the new signup.
+- `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
+  Hash and verify the exact emitted `migration.pb` bytes,
+  never a decoded and re-encoded message.
+
+These additions are optional for ordinary captures. The migration builder must
+require `migration.pb`, the legacy contents below and matching source IDs.
+
+### Legacy directory contract
+
+`legacy/` is a directory inside the package tar, under the same outer user
+encryption as the current biometric artifacts. Preserve each source file's
+original basename and exact bytes, including JSON whitespace and protobuf
+encoding. Fresh biometric outputs retain their existing top-level paths.
+
+| Package path | Contents | Presence |
+| --- | --- | --- |
+| `legacy/iris_codes.json` | Original iris codes and masks | When present in the source |
+| `legacy/iris_code_shares_{0,1,2}.json` | Original iris code shares | Each file present in the source |
+| `legacy/di_iris_embeddings.pb` | Original DI embeddings | When present in the source |
+| `legacy/di_iris_embeddings_shares_{0,1,2}.pb` | Original DI embedding shares | Each file present in the source |
+| `legacy/face_embeddings.json` | Original face embeddings | When present in the source |
+| `legacy/hashes.json` | Complete original signed manifest | Required |
+| `legacy/hashes.sign` | Original manifest signature | Required |
+
+Preserve every available source artifact listed above.
+This directory contains only the listed artifacts; capture metadata,
+key envelopes, raw images and other archives are outside this legacy contract.
+
 ## Next breaking version
 
 Changes that need a new package because they change the signed bytes:

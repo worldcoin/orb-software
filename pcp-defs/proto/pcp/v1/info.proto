@@ -31,4 +31,5 @@ message Info {
   optional string id_commitment_salt = 26 [json_name = "id_commitment_salt"];
   optional string device_public_key = 27 [json_name = "device_public_key"];
   optional string device_public_key_salt = 28 [json_name = "device_public_key_salt"];
+  optional string src_signup_id = 29 [json_name = "src_signup_id"];
 }
