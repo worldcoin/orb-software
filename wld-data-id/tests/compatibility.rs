@@ -1,10 +1,60 @@
-use orb_wld_data_id::{ImageId, SignupId};
+use orb_wld_data_id::{ImageId, S3Region, SignupId};
 use serde_json::json;
 use std::path::Path;
 use uuid::Uuid;
 
 const SIGNUP: &str = "00120011223344556677889900000000";
 const IMAGE: &str = "00120011223344556677889978563412";
+
+#[test]
+fn s3_region_names_and_wire_codes() {
+    let regions = [
+        (S3Region::AfSouth1, "af-south-1", 0),
+        (S3Region::ApEast1, "ap-east-1", 1),
+        (S3Region::ApNortheast1, "ap-northeast-1", 2),
+        (S3Region::ApNortheast2, "ap-northeast-2", 3),
+        (S3Region::ApNortheast3, "ap-northeast-3", 4),
+        (S3Region::ApSouth1, "ap-south-1", 5),
+        (S3Region::ApSoutheast1, "ap-southeast-1", 6),
+        (S3Region::ApSoutheast2, "ap-southeast-2", 7),
+        (S3Region::CaCentral1, "ca-central-1", 8),
+        (S3Region::CnNorthwest1, "cn-northwest-1", 9),
+        (S3Region::EuCentral1, "eu-central-1", 10),
+        (S3Region::EuNorth1, "eu-north-1", 11),
+        (S3Region::EuSouth1, "eu-south-1", 12),
+        (S3Region::EuWest1, "eu-west-1", 13),
+        (S3Region::EuWest2, "eu-west-2", 14),
+        (S3Region::EuWest3, "eu-west-3", 15),
+        (S3Region::MeSouth1, "me-south-1", 16),
+        (S3Region::SaEast1, "sa-east-1", 17),
+        (S3Region::UsEast1, "us-east-1", 18),
+        (S3Region::UsEast2, "us-east-2", 19),
+        (S3Region::UsGovEast1, "us-gov-east-1", 20),
+        (S3Region::UsGovWest1, "us-gov-west-1", 21),
+        (S3Region::UsWest1, "us-west-1", 22),
+        (S3Region::UsWest2, "us-west-2", 23),
+    ];
+    for (region, name, code) in regions {
+        assert_eq!(name.parse::<S3Region>().unwrap(), region);
+        assert_eq!(region as u8, code);
+        assert_eq!(serde_json::to_value(region).unwrap(), json!(code));
+        assert_eq!(
+            serde_json::from_value::<S3Region>(json!(code)).unwrap(),
+            region
+        );
+    }
+
+    for name in ["", "unknown", "US-EAST-1", "us-east-1 "] {
+        assert_eq!(name.parse::<S3Region>().unwrap(), S3Region::Unknown);
+    }
+    for code in 24..=u8::MAX {
+        assert_eq!(
+            serde_json::from_value::<S3Region>(json!(code)).unwrap(),
+            S3Region::Unknown,
+        );
+    }
+    assert_eq!(serde_json::to_value(S3Region::Unknown).unwrap(), json!(255));
+}
 
 #[test]
 fn signup_and_image_wire_format() {
