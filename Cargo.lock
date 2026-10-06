@@ -7501,6 +7501,7 @@ dependencies = [
  "orb-info",
  "orb-secure-storage-ca",
  "orb-security-utils 0.0.0",
+ "orb-speed-test",
  "orb-telemetry",
  "p256 0.13.2",
  "portpicker",
@@ -8382,6 +8383,19 @@ dependencies = [
  "tracing",
  "zbus",
  "zbus_systemd",
+]
+
+[[package]]
+name = "orb-wld-data-id"
+version = "0.0.0"
+dependencies = [
+ "eyre",
+ "rand 0.8.7",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "uuid 1.19.0",
 ]
 
 [[package]]

@@ -3,6 +3,7 @@ use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
 use crate::{ble, modem, reporters, OrbCapabilities};
 use color_eyre::eyre::Result;
+use crabwire::inject;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbOsRelease};
 use speare::mini::{self, OnErr};
 use speare::{Backoff, Limit};
@@ -13,6 +14,7 @@ use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
+#[inject(zenoh: &Zenorb)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
     procfs: impl AsRef<Path>,
@@ -23,7 +25,6 @@ pub async fn program(
     os_release: OrbOsRelease,
     connect_timeout: Duration,
     profile_storage: ProfileStorage,
-    zenoh: &Zenorb,
 ) -> Result<mini::Ctx<()>> {
     let sysfs = sysfs.as_ref().to_path_buf();
     let procfs = procfs.as_ref().to_path_buf();
@@ -40,6 +41,9 @@ pub async fn program(
 
     let zsender = zenoh
         .sender()
+        .publisher_with("oes/connection_quality", |p| {
+            p.encoding(Encoding::APPLICATION_JSON)
+        })
         .publisher_with("oes/active_connections", |p| {
             p.encoding(Encoding::APPLICATION_JSON)
         })
