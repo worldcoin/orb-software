@@ -60,7 +60,7 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
             Ok(None) => continue,
             Err(err) => {
                 warn!("core/config recv failed with: {err}");
-                continue;
+                return Err(err);
             }
         };
 
@@ -82,7 +82,10 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                     match result {
                         Ok(Some(next)) => cfg = next,
                         Ok(None) => break,
-                        Err(err) => warn!("core/config recv failed with: {err}"),
+                        Err(err) => {
+                            warn!("core/config recv failed with: {err}");
+                            return Err(err);
+                        },
                     }
                 }
 
