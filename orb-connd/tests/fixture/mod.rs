@@ -18,6 +18,7 @@ use orb_connd::{
         ModemManager, Signal, SimInfo,
     },
     network_manager::NetworkManager,
+    reporters::conn_quality::SpeedTest,
     resolved::Resolved,
     secure_storage::{ConndStorageScopes, SecureStorage},
     service::ProfileStorage,
@@ -36,6 +37,10 @@ use std::{
     os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 use test_utils::docker::{self, Container};
@@ -73,6 +78,7 @@ pub struct FxHandle {
     zenoh_router_socket: PathBuf,
 
     pub dbus: zbus::Connection,
+    background_downloads_allowed: Arc<AtomicBool>,
     pub nm: NetworkManager,
 
     pub secure_storage: SecureStorage,
@@ -202,6 +208,20 @@ impl Fixture {
             .await
             .unwrap();
 
+        let background_downloads_allowed = Arc::new(AtomicBool::new(false));
+        dbus.object_server()
+            .at(
+                "/org/worldcoin/OrbSupervisor1/Manager",
+                FakeSupervisor {
+                    allowed: Arc::clone(&background_downloads_allowed),
+                },
+            )
+            .await
+            .unwrap();
+        dbus.request_name("org.worldcoin.OrbSupervisor1")
+            .await
+            .unwrap();
+
         let nm = NetworkManager::new(
             dbus.clone(),
             self.wpa_ctrl.take().unwrap_or_else(default_mock_wpa_cli),
@@ -255,7 +275,9 @@ impl Fixture {
             .insert(mock_mcu_util())
             .insert(mock_modem_manager())
             .insert(ModemConfig::default())
+            .insert(SpeedTest::faux())
             .insert(statsd)
+            .insert(zenorb.clone())
             .merge(self.registry.take().unwrap_or_default());
 
         crabwire::reregister!(base_registry);
@@ -280,7 +302,6 @@ impl Fixture {
             .session_bus(dbus.clone())
             .connect_timeout(Duration::from_secs(1))
             .profile_storage(profile_storage)
-            .zenoh(&zenorb)
             .run()
             .await
             .unwrap();
@@ -300,6 +321,7 @@ impl Fixture {
             zenorb,
             zenoh_router_socket,
             dbus,
+            background_downloads_allowed,
             nm,
             secure_storage,
             secure_storage_cancel_token,
@@ -319,6 +341,11 @@ impl Drop for FxHandle {
 }
 
 impl FxHandle {
+    pub fn allow_background_downloads(&self) {
+        self.background_downloads_allowed
+            .store(true, Ordering::SeqCst);
+    }
+
     pub async fn stop(mut self) {
         self.secure_storage_cancel_token.cancel();
         self.speare.abort_children().unwrap();
@@ -574,4 +601,16 @@ fn mock_systemd() -> Systemd {
     when!(systemd.loaded_services).then(|_| Ok(Vec::new()));
 
     systemd
+}
+
+struct FakeSupervisor {
+    allowed: Arc<AtomicBool>,
+}
+
+#[zbus::interface(name = "org.worldcoin.OrbSupervisor1.Manager")]
+impl FakeSupervisor {
+    #[zbus(property, name = "BackgroundDownloadsAllowed")]
+    fn background_downloads_allowed(&self) -> bool {
+        self.allowed.load(Ordering::SeqCst)
+    }
 }
