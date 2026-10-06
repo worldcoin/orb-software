@@ -13,11 +13,29 @@ number and name as `reserved` so neither is ever reused.
 
 Adding a field is not a new package version. New fields are `optional` or
 `repeated`, and consumers (oxide, backends) must treat an absent field as not
-set and ignore fields they don't know. That is how a single `pcp.v1` covers
-both 2.7 and 2.8.
+set and ignore fields they don't know. A single `pcp.v1` can cover multiple
+PCP versions.
 
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
+
+## Migration artifacts
+
+- `migration.pb` (binary protobuf `Migration`): TEE software and biometric
+  pipeline versions, source signup ID and PCP version, and migration timestamp.
+  `migrated_ts` is uint64 Unix seconds.
+- `Migration.src_signup_id`: the source package's `Info.signup_id`.
+  The new package's `Info.signup_id` identifies the new signup.
+- `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
+  Hash and verify the exact emitted `migration.pb` bytes,
+  never a decoded and re-encoded message.
+
+These additions are optional for ordinary captures. The migration builder must
+require `migration.pb` and its hash in `hashes.json`.
+
+The TEE verifies the source manifest and signature before processing the
+package, then produces a new `hashes.json` and `hashes.sign` covering the
+migrated package.
 
 ## Next breaking version
 
