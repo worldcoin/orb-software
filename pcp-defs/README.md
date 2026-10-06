@@ -13,19 +13,17 @@ number and name as `reserved` so neither is ever reused.
 
 Adding a field is not a new package version. New fields are `optional` or
 `repeated`, and consumers (oxide, backends) must treat an absent field as not
-set and ignore fields they don't know. That is how a single `pcp.v1` covers
-both 2.7 and 2.8.
+set and ignore fields they don't know. A single `pcp.v1` can cover multiple
+PCP versions.
 
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
 
-## PCP 2.9 migration artifacts (proposal)
+## Migration artifacts
 
 - `migration.pb` (binary protobuf `Migration`): TEE software and biometric
   pipeline versions, source signup ID and PCP version, and migration timestamp.
   `migrated_ts` is uint64 Unix seconds.
-- `legacy/`: preserved source biometrics and original manifest/signature, as
-  defined below.
 - `Migration.src_signup_id`: the source package's `Info.signup_id`.
   The new package's `Info.signup_id` identifies the new signup.
 - `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
@@ -33,28 +31,17 @@ bytes, never against a re-encoded message.
   never a decoded and re-encoded message.
 
 These additions are optional for ordinary captures. The migration builder must
-require `migration.pb` and the legacy contents below.
+require `migration.pb` and its hash in `hashes.json`.
 
-### Legacy directory contract
+The migration builder preserves the source `iris_codes.json` and each available
+`iris_code_shares_{0,1,2}.json` at their existing top-level paths with exact
+bytes, including JSON whitespace. Raw capture images are also byte-identical
+to the source. DI embeddings and their shares, face embeddings, and normalized
+iris data come from the migration pipeline run.
 
-`legacy/` is a directory inside the package tar, under the same outer user
-encryption as the current biometric artifacts. Preserve each source file's
-original basename and exact bytes, including JSON whitespace and protobuf
-encoding. Fresh biometric outputs retain their existing top-level paths.
-
-| Package path | Contents | Presence |
-| --- | --- | --- |
-| `legacy/iris_codes.json` | Original iris codes and masks | When present in the source |
-| `legacy/iris_code_shares_{0,1,2}.json` | Original iris code shares | Each file present in the source |
-| `legacy/di_iris_embeddings.pb` | Original DI embeddings | When present in the source |
-| `legacy/di_iris_embeddings_shares_{0,1,2}.pb` | Original DI embedding shares | Each file present in the source |
-| `legacy/face_embeddings.json` | Original face embeddings | When present in the source |
-| `legacy/hashes.json` | Complete original signed manifest | Required |
-| `legacy/hashes.sign` | Original manifest signature | Required |
-
-Preserve every available source artifact listed above.
-This directory contains only the listed artifacts; capture metadata,
-key envelopes, raw images and other archives are outside this legacy contract.
+The TEE verifies the source manifest and signature before processing the
+package, then produces a new `hashes.json` and `hashes.sign` covering the
+migrated package.
 
 ## Next breaking version
 
