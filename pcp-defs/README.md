@@ -33,12 +33,6 @@ bytes, never against a re-encoded message.
 These additions are optional for ordinary captures. The migration builder must
 require `migration.pb` and its hash in `hashes.json`.
 
-The migration builder preserves the source `iris_codes.json` and each available
-`iris_code_shares_{0,1,2}.json` at their existing top-level paths with exact
-bytes, including JSON whitespace. Raw capture images are also byte-identical
-to the source. DI embeddings and their shares, face embeddings, and normalized
-iris data come from the migration pipeline run.
-
 The TEE verifies the source manifest and signature before processing the
 package, then produces a new `hashes.json` and `hashes.sign` covering the
 migrated package.
