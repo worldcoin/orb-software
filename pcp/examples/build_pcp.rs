@@ -5,12 +5,12 @@
 //! 2.7, 2.8, and 3.0 (with and without a device key), included and redacted.
 //! Everything stays in memory; only case labels and encrypted sizes are printed.
 
-use std::{collections::BTreeMap, error::Error, io::Read, time::SystemTime};
+use std::{collections::BTreeMap, error::Error, io::Read};
 
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use data_encoding::{BASE64, HEXLOWER};
 use flate2::read::GzDecoder;
-use orb_pcp as pcp;
+use orb_pcp::{self as pcp, v1};
 use orb_pcp_defs::{
     prost::Message,
     v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
@@ -50,11 +50,11 @@ pub fn run() -> Result<()> {
     }];
     let images = pcp::PackageImages {
         left: Some(pcp::IrisEye {
-            primary: frame("synthetic-left", &png, &normalized),
+            primary: primary(&png, &normalized),
             multiframe: &extra_left,
         }),
         right: Some(pcp::IrisEye {
-            primary: frame("synthetic-right", &png, &normalized),
+            primary: primary(&png, &normalized),
             multiframe: &extra_right,
         }),
         thumbnail_png: Some(&png),
@@ -71,44 +71,53 @@ pub fn run() -> Result<()> {
             right_depth_png: Some(&png),
         }),
     };
-    let daugman = pcp::DaugmanData {
-        iris_version: Some("synthetic"),
-        shares_version: "synthetic-sharing",
-        left: pcp::DaugmanEyeData {
-            iris_code: Some("synthetic-left-iris"),
-            mask_code: Some("synthetic-left-mask"),
-            iris_code_shares: ["left-iris-0", "left-iris-1", "left-iris-2"],
-            mask_code_shares: ["left-mask-0", "left-mask-1", "left-mask-2"],
-        },
-        right: pcp::DaugmanEyeData {
-            iris_code: Some("synthetic-right-iris"),
-            mask_code: Some("synthetic-right-mask"),
-            iris_code_shares: ["right-iris-0", "right-iris-1", "right-iris-2"],
-            mask_code_shares: ["right-mask-0", "right-mask-1", "right-mask-2"],
-        },
+    let iris_codes = v1::IrisCodes {
+        iris_version: Some("synthetic".into()),
+        left_iris_code: Some("synthetic-left-iris".into()),
+        left_mask_code: Some("synthetic-left-mask".into()),
+        right_iris_code: Some("synthetic-right-iris".into()),
+        right_mask_code: Some("synthetic-right-mask".into()),
     };
-    let di = pcp::DiData {
-        model_version: "synthetic-model",
-        embedding_version: "synthetic-embedding",
-        inference_backend: "none",
-        shares_version: "synthetic-di-sharing",
-        left: Some(pcp::DiEyeData {
-            embedding: &[-1, 2],
-            mirror_embedding: &[3, -4],
-            embedding_f32: &[1.0, 2.0],
-            mirror_embedding_f32: &[3.0, -4.0],
-            embedding_shares: [&[10], &[11], &[12]],
-            mirror_embedding_shares: [&[20], &[21], &[22]],
-        }),
-        right: Some(pcp::DiEyeData {
-            embedding: &[5, -6],
-            mirror_embedding: &[-7, 8],
-            embedding_f32: &[5.0, -6.0],
-            mirror_embedding_f32: &[-7.0, 8.0],
-            embedding_shares: [&[30], &[31], &[32]],
-            mirror_embedding_shares: [&[40], &[41], &[42]],
+    let iris_code_shares = [0, 1, 2].map(|i| v1::IrisCodeShares {
+        iris_version: Some("synthetic".into()),
+        iris_shares_version: Some("synthetic-sharing".into()),
+        left_iris_code_shares: Some(format!("left-iris-{i}")),
+        left_mask_code_shares: Some(format!("left-mask-{i}")),
+        right_iris_code_shares: Some(format!("right-iris-{i}")),
+        right_mask_code_shares: Some(format!("right-mask-{i}")),
+    });
+    let di_embeddings = v1::DiIrisEmbeddings {
+        embedding_v1: Some(v1::DiIrisEmbeddingV1 {
+            model_version: "synthetic-model".into(),
+            embedding_inference_backend: "none".into(),
+            embedding_version: "synthetic-embedding".into(),
+            left_embedding: vec![-1, 2],
+            left_mirror_embedding: vec![3, -4],
+            right_embedding: vec![5, -6],
+            right_mirror_embedding: vec![-7, 8],
+            left_embedding_f32: vec![1.0, 2.0],
+            left_mirror_embedding_f32: vec![3.0, -4.0],
+            right_embedding_f32: vec![5.0, -6.0],
+            right_mirror_embedding_f32: vec![-7.0, 8.0],
         }),
     };
+    let di_embedding_shares = [0, 1, 2].map(|i| v1::DiIrisEmbeddingShares {
+        share_v1: Some(v1::DiIrisEmbeddingShareV1 {
+            model_version: "synthetic-model".into(),
+            shares_version: "synthetic-di-sharing".into(),
+            embedding_version: "synthetic-embedding".into(),
+            left_share: vec![10 + i],
+            left_mirror_share: vec![20 + i],
+            right_share: vec![30 + i],
+            right_mirror_share: vec![40 + i],
+        }),
+    });
+    let face_embeddings = [v1::FaceEmbedding {
+        embedding: Some("synthetic-embedding".into()),
+        embedding_type: Some("synthetic".into()),
+        embedding_version: Some("example".into()),
+        embedding_inference_backend: Some("none".into()),
+    }];
 
     // Callers select the exact version and supply their actual metadata.
     // Archive/encryption/manifest choices belong to the builder, not the caller.
@@ -118,6 +127,28 @@ pub fn run() -> Result<()> {
         (pcp::PcpVersion::V3_0, None),
         (pcp::PcpVersion::V3_0, Some("synthetic-device-key")),
     ] {
+        let some = |value: &str| Some(value.to_owned());
+        let info = v1::Info {
+            signup_id: some("synthetic-signup"),
+            signup_reason: some("synthetic-example"),
+            orb_id: some("synthetic-orb"),
+            operator_id: some("synthetic-operator"),
+            timestamp: Some(TIMESTAMP.to_string()),
+            qr_code: some("synthetic-qr"),
+            id_commitment: some("synthetic-id-commitment"),
+            software_version: some("synthetic-example"),
+            orb_country: some("XX"),
+            orb_public_key_certificate: Some(
+                BASE64.encode(b"synthetic-placeholder-not-a-certificate"),
+            ),
+            left_ir_image_id: some("synthetic-left"),
+            right_ir_image_id: some("synthetic-right"),
+            thumbnail_image_id: some("synthetic-thumbnail"),
+            left_iris_code_aggregate_image_ids: vec!["synthetic-left".into()],
+            right_iris_code_aggregate_image_ids: vec!["synthetic-right".into()],
+            device_public_key: device_public_key.map(str::to_owned),
+            ..Default::default()
+        };
         for redacted in [false, true] {
             let user = KeyPair::generate()?;
             let backends = [
@@ -142,21 +173,7 @@ pub fn run() -> Result<()> {
             let request = pcp::BuildRequest {
                 version,
                 timestamp: TIMESTAMP,
-                info: pcp::PackageInfo {
-                    signup_id: "synthetic-signup",
-                    signup_reason: "synthetic-example",
-                    orb_id: "synthetic-orb",
-                    operator_id: "synthetic-operator",
-                    capture_start: SystemTime::UNIX_EPOCH
-                        + std::time::Duration::from_secs(TIMESTAMP),
-                    qr_code: "synthetic-qr",
-                    id_commitment: "synthetic-id-commitment",
-                    software_version: "synthetic-example",
-                    orb_country: "XX",
-                    orb_public_key_certificate:
-                        b"synthetic-placeholder-not-a-certificate",
-                    device_public_key,
-                },
+                info: &info,
                 user_public_key: &user.public_key,
                 backend_keys: pcp::BackendKeys {
                     iris: backend_key(&backends[0], &encrypted_keys[0]),
@@ -169,19 +186,14 @@ pub fn run() -> Result<()> {
                 } else {
                     pcp::BiometricPolicy::Included {
                         images: &images,
-                        thumbnail_image_id: Some("synthetic-thumbnail"),
-                        left_iris_code_aggregate_image_ids: &["synthetic-left"],
-                        right_iris_code_aggregate_image_ids: &["synthetic-right"],
-                        face_embeddings: &[pcp::FaceEmbedding {
-                            embedding: "synthetic-embedding",
-                            embedding_type: "synthetic",
-                            embedding_version: "example",
-                            embedding_inference_backend: "none",
-                        }],
-                        daugman: &daugman,
-                        di: Some(&di),
+                        face_embeddings: &face_embeddings,
+                        iris_codes: &iris_codes,
+                        iris_code_shares: &iris_code_shares,
+                        di_embeddings: &di_embeddings,
+                        di_embedding_shares: &di_embedding_shares,
                     }
                 },
+                migration: None,
             };
             // P-256 is only this example's caller-owned signer choice.
             let signer = SigningKey::random(&mut OsRng);
@@ -210,16 +222,15 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-fn frame<'a>(id: &'a str, png: &'a [u8], data: &'a [u8]) -> pcp::IrisFrame<'a> {
-    pcp::IrisFrame {
-        image_id: id,
+fn primary<'a>(png: &'a [u8], data: &'a [u8]) -> pcp::PrimaryIrisFrame<'a> {
+    pcp::PrimaryIrisFrame {
         ir_png: png,
-        normalized: Some(pcp::NormalizedIrisFrame {
+        normalized: pcp::NormalizedIrisFrame {
             image: data,
             mask: data,
             image_resized: data,
             mask_resized: data,
-        }),
+        },
     }
 }
 

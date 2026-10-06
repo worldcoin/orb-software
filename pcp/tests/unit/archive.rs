@@ -153,22 +153,36 @@ mod inner_archives {
     use std::{collections::BTreeMap, io::Read};
 
     use crate::{
-        archive::{self, IrisEye, IrisFrame, NormalizedIrisFrame, PackageImages},
+        archive::{
+            self, IrisEye, IrisFrame, NormalizedIrisFrame, PackageImages,
+            PrimaryIrisFrame,
+        },
         crypto, manifest,
     };
     use rand::{rngs::StdRng, SeedableRng};
     use ring::digest::{digest, SHA256};
 
+    fn normalized() -> NormalizedIrisFrame<'static> {
+        NormalizedIrisFrame {
+            image: &[1; 512],
+            mask: b"mask",
+            image_resized: b"resized image",
+            mask_resized: b"resized mask",
+        }
+    }
+
     fn frame(id: &str) -> IrisFrame<'_> {
         IrisFrame {
             image_id: id,
             ir_png: b"synthetic-png",
-            normalized: Some(NormalizedIrisFrame {
-                image: &[1; 512],
-                mask: b"mask",
-                image_resized: b"resized image",
-                mask_resized: b"resized mask",
-            }),
+            normalized: Some(normalized()),
+        }
+    }
+
+    fn primary() -> PrimaryIrisFrame<'static> {
+        PrimaryIrisFrame {
+            ir_png: b"synthetic-png",
+            normalized: normalized(),
         }
     }
 
@@ -178,11 +192,11 @@ mod inner_archives {
     ) -> PackageImages<'a> {
         PackageImages {
             left: Some(IrisEye {
-                primary: frame("primary-left"),
+                primary: primary(),
                 multiframe: left,
             }),
             right: Some(IrisEye {
-                primary: frame("primary-right"),
+                primary: primary(),
                 multiframe: right,
             }),
             thumbnail_png: None,
@@ -329,29 +343,6 @@ mod inner_archives {
             encoded.hashes.into_iter().collect::<BTreeMap<_, _>>(),
             expected_hashes
         );
-    }
-
-    #[test]
-    fn missing_primary_normalization_fails_before_randomness() {
-        use rand::RngCore;
-
-        for left_missing in [true, false] {
-            let mut input = images(&[], &[]);
-            let eye = if left_missing {
-                &mut input.left
-            } else {
-                &mut input.right
-            };
-            eye.as_mut().unwrap().primary.normalized = None;
-            let mut rng = StdRng::seed_from_u64(0);
-            let error = archive::encode_inner(123, &input, &mut rng).err().unwrap();
-            assert!(matches!(
-                (left_missing, error),
-                (true, archive::InnerArchiveError::MissingLeftNormalization)
-                    | (false, archive::InnerArchiveError::MissingRightNormalization)
-            ));
-            assert_eq!(rng.next_u64(), StdRng::seed_from_u64(0).next_u64());
-        }
     }
 
     #[test]
@@ -541,6 +532,7 @@ mod tier_layout {
             hashes_json: b"hashes-json",
             hashes_signature: b"signature",
             backend_keys_json: b"backend-keys-json",
+            migration_pb: None,
         }
     }
 
@@ -655,6 +647,29 @@ mod tier_layout {
                 .collect();
             assert_eq!(di_files.len(), 4);
             assert!(di_files.iter().all(|(_, bytes)| bytes.is_empty()));
+        }
+    }
+
+    #[test]
+    fn migration_pb_follows_info_in_every_envelope() {
+        for (envelope, included) in [
+            (Envelope::V2, true),
+            (Envelope::V3, true),
+            (Envelope::V2, false),
+        ] {
+            let (daugman, di) = payloads();
+            let bio = included.then(|| biometrics(false, &daugman, &di));
+            let mut files = common_files();
+            files.migration_pb = Some(b"migration-protobuf");
+            let tier0 = archive::tier0(envelope, 123, files, bio.as_ref()).unwrap();
+            let names: Vec<_> =
+                entries(&tier0).into_iter().map(|(name, _)| name).collect();
+            let info = names.iter().position(|name| name == "info.json").unwrap();
+            assert_eq!(names[info + 1], "migration.pb");
+            assert_eq!(
+                names.iter().filter(|name| *name == "migration.pb").count(),
+                1
+            );
         }
     }
 

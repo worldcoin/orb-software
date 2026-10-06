@@ -24,14 +24,24 @@ It uses synthetic data and in-memory keys; no packages or keys are written to di
 Call `orb_pcp::build` with a `BuildRequest`, a cryptographically secure RNG and
 a signer callback receiving the exact 32-byte SHA-256 digest.
 
-- Supply encoded images, metadata, recipient keys, `DaugmanData`, `DiData` and
-  face embeddings. Image encoding, quantization, secret sharing and key
-  authorization belong to the caller.
-- Choose `BiometricPolicy::Included` or `Redacted`. Redaction removes biometric
-  files, hashes and image IDs, but retains identity/signup metadata.
+- Supply encoded images, recipient keys and the shared `orb_pcp::v1` messages:
+  `Info`, face embeddings, iris codes and shares, and DI embeddings and shares.
+  Messages are written as given, so fields added to `pcp-defs` pass through
+  without builder changes, and absent optional fields are omitted. Image
+  encoding, quantization, secret sharing and key authorization belong to the
+  caller.
+- The builder owns every `*_salt` field and the multiframe image ID lists in
+  `info.json`; caller values there are replaced. Each present salted value gets
+  a fresh salt and a salted hash in `hashes.json`.
+- Choose `BiometricPolicy::Included` or `Redacted`. Redaction removes the
+  biometric files and their hashes and blanks all image IDs. `info.json`,
+  `backend_keys.json`, the salted metadata hashes and the `backend_keys.json`
+  hash remain.
 - PCP 2.7 forbids a device key, 2.8 requires one, and 3.0 accepts either.
-- Validate per-eye DI metadata agreement before grouping the inputs; the builder
-  does not verify that shares reconstruct the supplied codes or embeddings.
+- TEE migrations set `BuildRequest::migration`; it is written as binary
+  `migration.pb` and hashed in `hashes.json`. The PCP version is unchanged.
+- The builder does not verify that shares reconstruct the supplied codes or
+  embeddings.
 
 The result contains three encrypted tiers and their SHA-256 checksums.
 Construction is synchronous; use a blocking worker in async applications.

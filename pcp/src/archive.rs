@@ -103,15 +103,23 @@ pub struct NormalizedIrisFrame<'a> {
     pub mask_resized: &'a [u8],
 }
 
+/// Written as `left_ir.png`/`right_ir.png`; its image ID belongs in `info.json`.
+pub struct PrimaryIrisFrame<'a> {
+    pub ir_png: &'a [u8],
+    pub normalized: NormalizedIrisFrame<'a>,
+}
+
+/// An extra capture, named after its image ID, which also fills the eye's
+/// multiframe ID list in `info.json`.
 pub struct IrisFrame<'a> {
     pub image_id: &'a str,
     pub ir_png: &'a [u8],
-    /// Required for primary frames; extra captures may have no normalized output.
+    /// Extra captures may have no normalized output.
     pub normalized: Option<NormalizedIrisFrame<'a>>,
 }
 
 pub struct IrisEye<'a> {
-    pub primary: IrisFrame<'a>,
+    pub primary: PrimaryIrisFrame<'a>,
     pub multiframe: &'a [IrisFrame<'a>],
 }
 
@@ -127,9 +135,9 @@ pub struct FraudImages<'a> {
 }
 
 /// Consumer-encoded PNGs and normalized bytes; image encoding stays with the caller.
-/// Both eyes and their primary normalized data are required by the current wire
-/// profile. Optional fields distinguish unavailable data from redaction; they
-/// do not enable the future partial-package format.
+/// Both eyes are required by the current wire profile. Optional fields
+/// distinguish unavailable data from redaction; they do not enable the future
+/// partial-package format.
 pub struct PackageImages<'a> {
     pub left: Option<IrisEye<'a>>,
     pub right: Option<IrisEye<'a>>,
@@ -159,10 +167,6 @@ pub enum InnerArchiveError {
     MissingLeftEye,
     #[error("right eye is required by the current package format")]
     MissingRightEye,
-    #[error("left primary normalized data is required by the current package format")]
-    MissingLeftNormalization,
-    #[error("right primary normalized data is required by the current package format")]
-    MissingRightNormalization,
     #[error("inner archive encoding failed")]
     Archive(#[from] ArchiveError),
     #[error("normalized iris commitment generation failed")]
@@ -187,16 +191,8 @@ pub(crate) fn encode_inner(
         .right
         .as_ref()
         .ok_or(InnerArchiveError::MissingRightEye)?;
-    let left_normalized = left
-        .primary
-        .normalized
-        .as_ref()
-        .ok_or(InnerArchiveError::MissingLeftNormalization)?;
-    let right_normalized = right
-        .primary
-        .normalized
-        .as_ref()
-        .ok_or(InnerArchiveError::MissingRightNormalization)?;
+    let left_normalized = &left.primary.normalized;
+    let right_normalized = &right.primary.normalized;
     let mut hashes = Vec::new();
 
     let mut iris_files = vec![
@@ -367,6 +363,8 @@ pub(crate) struct Tier0Files<'a> {
     pub hashes_json: &'a [u8],
     pub hashes_signature: &'a [u8],
     pub backend_keys_json: &'a [u8],
+    /// Follows `info.json` when present.
+    pub migration_pb: Option<&'a [u8]>,
 }
 
 pub(crate) struct AuxiliaryTiers {
@@ -422,6 +420,9 @@ pub(crate) fn tier0(
         ));
     }
     entries.push(("info.json", files.info_json));
+    if let Some(migration_pb) = files.migration_pb {
+        entries.push(("migration.pb", migration_pb));
+    }
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
         entries.push(("iris_codes.json", biometrics.daugman.codes.as_slice()));

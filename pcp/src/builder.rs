@@ -6,6 +6,7 @@
 //! This prototype is not an untrusted-package verifier. Call from a blocking
 //! worker in async applications. Plaintext intermediates are not all zeroized.
 
+use orb_pcp_defs::{prost::Message, v1};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
@@ -71,14 +72,13 @@ pub enum BiometricPolicy<'a> {
     /// imported commitments are not accepted.
     Included {
         images: &'a archive::PackageImages<'a>,
-        /// Required in the current profile, even when the thumbnail PNG is absent.
-        thumbnail_image_id: Option<&'a str>,
-        left_iris_code_aggregate_image_ids: &'a [&'a str],
-        right_iris_code_aggregate_image_ids: &'a [&'a str],
-        face_embeddings: &'a [payload::FaceEmbedding<'a>],
-        daugman: &'a payload::DaugmanData<'a>,
-        /// Absent DI data or either missing eye produces four empty DI files.
-        di: Option<&'a payload::DiData<'a>>,
+        face_embeddings: &'a [v1::FaceEmbedding],
+        iris_codes: &'a v1::IrisCodes,
+        /// Same-index files belong to the same recipient.
+        iris_code_shares: &'a [v1::IrisCodeShares; 3],
+        /// Default messages produce the empty DI files of a capture without DI data.
+        di_embeddings: &'a v1::DiIrisEmbeddings,
+        di_embedding_shares: &'a [v1::DiIrisEmbeddingShares; 3],
     },
 }
 
@@ -86,11 +86,17 @@ pub struct BuildRequest<'a> {
     pub version: PcpVersion,
     /// Whole Unix seconds used for archive and gzip headers.
     pub timestamp: u64,
-    pub info: metadata::PackageInfo<'a>,
+    /// Written as `info.json` as given, except for the builder-owned salts,
+    /// multiframe image ID lists and, under redaction, all image IDs. Absent
+    /// fields are omitted.
+    pub info: &'a v1::Info,
     pub user_public_key: &'a [u8; 32],
     /// Normal builds serialize these same keys and use them for inner encryption.
     pub backend_keys: payload::BackendKeys<'a>,
     pub biometrics: BiometricPolicy<'a>,
+    /// Written verbatim as binary `migration.pb` after `info.json` and hashed in
+    /// `hashes.json`. Set by TEE migrations; Orb captures leave it `None`.
+    pub migration: Option<&'a v1::Migration>,
 }
 
 /// Final encrypted tiers and SHA-256 checksums of those ciphertext bytes.
@@ -203,6 +209,10 @@ fn build_with_sealer<E>(
     let envelope = request.version.envelope();
     let backend_keys_json = payload::backend_keys(&request.backend_keys)?;
     let mut hashes = vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
+    let migration_pb = request.migration.map(Message::encode_to_vec);
+    if let Some(migration_pb) = &migration_pb {
+        hashes.push(("migration.pb".to_owned(), sha256(migration_pb)));
+    }
     let prepared = envelope.prepare_biometrics(request, rng, seal)?;
     if let Some(prepared) = &prepared {
         hashes.extend(prepared.archives.hashes.iter().cloned());
@@ -236,6 +246,7 @@ fn build_with_sealer<E>(
             hashes_json: &signed.hashes_json,
             hashes_signature: &signed.hashes_signature,
             backend_keys_json: &backend_keys_json,
+            migration_pb: migration_pb.as_deref(),
         },
         biometric_files.as_ref(),
     )?;
@@ -290,9 +301,10 @@ impl Envelope {
         let BiometricPolicy::Included {
             images,
             face_embeddings,
-            daugman,
-            di,
-            ..
+            iris_codes,
+            iris_code_shares,
+            di_embeddings,
+            di_embedding_shares,
         } = &request.biometrics
         else {
             return Ok(None);
@@ -323,8 +335,8 @@ impl Envelope {
             Self::V3 => {}
         }
         let face_embeddings = payload::face_embeddings(face_embeddings)?;
-        let daugman = payload::encode_daugman(daugman)?;
-        let di = payload::encode_di(*di);
+        let daugman = payload::encode_daugman(iris_codes, iris_code_shares)?;
+        let di = payload::encode_di(di_embeddings, di_embedding_shares);
         for (name, bytes) in [
             ("face_embeddings.json", face_embeddings.as_slice()),
             ("iris_codes.json", daugman.codes.as_slice()),
@@ -354,45 +366,21 @@ fn encode_metadata(
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<metadata::EncodedMetadata, metadata::MetadataError> {
-    match &request.biometrics {
-        BiometricPolicy::Redacted => {
-            metadata::encode(&request.info, &metadata::ImageIdPolicy::Redacted, rng)
-        }
-        BiometricPolicy::Included {
-            images,
-            thumbnail_image_id,
-            left_iris_code_aggregate_image_ids,
-            right_iris_code_aggregate_image_ids,
-            ..
-        } => {
-            let left_ids: Vec<_> = images
-                .left
-                .as_ref()
-                .into_iter()
-                .flat_map(|eye| eye.multiframe.iter().map(|frame| frame.image_id))
-                .collect();
-            let right_ids: Vec<_> = images
-                .right
-                .as_ref()
-                .into_iter()
-                .flat_map(|eye| eye.multiframe.iter().map(|frame| frame.image_id))
-                .collect();
-            let images = metadata::ImageIdPolicy::Included(metadata::ImageIds {
-                left: images.left.as_ref().map(|eye| metadata::IrisImageIds {
-                    primary: eye.primary.image_id,
-                    multiframe: &left_ids,
-                }),
-                right: images.right.as_ref().map(|eye| metadata::IrisImageIds {
-                    primary: eye.primary.image_id,
-                    multiframe: &right_ids,
-                }),
-                thumbnail: *thumbnail_image_id,
-                left_iris_code_aggregate: left_iris_code_aggregate_image_ids,
-                right_iris_code_aggregate: right_iris_code_aggregate_image_ids,
-            });
-            metadata::encode(&request.info, &images, rng)
-        }
-    }
+    let images = match &request.biometrics {
+        BiometricPolicy::Redacted => metadata::ImageIdPolicy::Redacted,
+        BiometricPolicy::Included { images, .. } => metadata::ImageIdPolicy::Included {
+            left_multiframe: multiframe_ids(&images.left),
+            right_multiframe: multiframe_ids(&images.right),
+        },
+    };
+    metadata::encode(request.info, images, rng)
+}
+
+fn multiframe_ids<'a>(eye: &Option<archive::IrisEye<'a>>) -> Vec<&'a str> {
+    eye.iter()
+        .flat_map(|eye| eye.multiframe)
+        .map(|frame| frame.image_id)
+        .collect()
 }
 
 fn seal_tier<E>(

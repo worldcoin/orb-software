@@ -1,10 +1,8 @@
-use std::{
-    collections::BTreeSet,
-    time::{Duration, UNIX_EPOCH},
-};
+use std::collections::BTreeSet;
 
-use crate::metadata::{self, ImageIdPolicy, ImageIds, IrisImageIds, PackageInfo};
+use crate::metadata::{self, ImageIdPolicy};
 use data_encoding::HEXLOWER;
+use orb_pcp_defs::v1::Info;
 use rand::{CryptoRng, RngCore, SeedableRng};
 
 // Deterministic test double only, never a production random source.
@@ -40,44 +38,43 @@ impl RngCore for SaltRng {
     }
 }
 
-fn info() -> PackageInfo<'static> {
-    PackageInfo {
-        signup_id: "signup",
-        signup_reason: "reason",
-        orb_id: "orb",
-        operator_id: "operator",
-        capture_start: UNIX_EPOCH + Duration::from_millis(1999),
-        qr_code: "qr",
-        id_commitment: "commitment",
-        software_version: "software",
-        orb_country: "country",
-        orb_public_key_certificate: &[0, 255],
-        device_public_key: None,
+fn info() -> Info {
+    let some = |value: &str| Some(value.to_owned());
+    Info {
+        signup_id: some("signup"),
+        signup_reason: some("reason"),
+        orb_id: some("orb"),
+        operator_id: some("operator"),
+        timestamp: some("1"),
+        qr_code: some("qr"),
+        id_commitment: some("commitment"),
+        software_version: some("software"),
+        orb_country: some("country"),
+        orb_public_key_certificate: some("AP8="),
+        left_ir_image_id: some("left"),
+        right_ir_image_id: some("right"),
+        thumbnail_image_id: some("thumbnail"),
+        left_iris_code_aggregate_image_ids: vec!["la".into()],
+        right_iris_code_aggregate_image_ids: vec!["ra2".into(), "ra1".into()],
+        ..Default::default()
     }
 }
 
-fn image_ids() -> ImageIds<'static> {
-    ImageIds {
-        left: Some(IrisImageIds {
-            primary: "left",
-            multiframe: &["l2", "l1"],
-        }),
-        right: Some(IrisImageIds {
-            primary: "right",
-            multiframe: &[],
-        }),
-        thumbnail: Some("thumbnail"),
-        left_iris_code_aggregate: &["la"],
-        right_iris_code_aggregate: &["ra2", "ra1"],
+fn included() -> ImageIdPolicy<'static> {
+    ImageIdPolicy::Included {
+        left_multiframe: vec!["l2", "l1"],
+        right_multiframe: vec![],
     }
+}
+
+fn json(bytes: &[u8]) -> serde_json::Value {
+    serde_json::from_slice(bytes).unwrap()
 }
 
 #[test]
 fn metadata_has_exact_sorted_bytes_and_salted_hash_coverage() {
     let mut rng = SaltRng::default();
-    let encoded =
-        metadata::encode(&info(), &ImageIdPolicy::Included(image_ids()), &mut rng)
-            .unwrap();
+    let encoded = metadata::encode(&info(), included(), &mut rng).unwrap();
     let salt = "abababababababababababababababab";
     let expected = format!(concat!(
         "{{\"id_commitment\":\"commitment\",\"id_commitment_salt\":\"{s}\",",
@@ -122,17 +119,11 @@ fn metadata_has_exact_sorted_bytes_and_salted_hash_coverage() {
 
 #[test]
 fn redaction_clears_all_image_ids_without_changing_identity_or_hashes() {
-    let full = metadata::encode(
-        &info(),
-        &ImageIdPolicy::Included(image_ids()),
-        &mut SaltRng::default(),
-    )
-    .unwrap();
+    let full = metadata::encode(&info(), included(), &mut SaltRng::default()).unwrap();
     let redacted =
-        metadata::encode(&info(), &ImageIdPolicy::Redacted, &mut SaltRng::default())
+        metadata::encode(&info(), ImageIdPolicy::Redacted, &mut SaltRng::default())
             .unwrap();
-    let mut expected: serde_json::Value =
-        serde_json::from_slice(&full.info_json).unwrap();
+    let mut expected = json(&full.info_json);
     for key in [
         "left_ir_image_id",
         "right_ir_image_id",
@@ -148,23 +139,87 @@ fn redaction_clears_all_image_ids_without_changing_identity_or_hashes() {
     ] {
         expected[key] = serde_json::json!([]);
     }
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&redacted.info_json).unwrap(),
-        expected
-    );
+    assert_eq!(json(&redacted.info_json), expected);
     assert_eq!(redacted.hashes, full.hashes);
+}
+
+#[test]
+fn absent_fields_are_omitted_without_salt_or_hash() {
+    let input = Info {
+        signup_id: Some("signup".into()),
+        ..Default::default()
+    };
+    let mut rng = SaltRng::default();
+    let encoded = metadata::encode(&input, included(), &mut rng).unwrap();
+    assert_eq!(rng.calls, 1);
+    assert_eq!(
+        encoded.hashes.keys().copied().collect::<Vec<_>>(),
+        ["signup_id"]
+    );
+    assert_eq!(
+        json(&encoded.info_json),
+        serde_json::json!({
+            "signup_id": "signup",
+            "signup_id_salt": "abababababababababababababababab",
+            "left_ir_multiframe_image_ids": ["l2", "l1"],
+            "right_ir_multiframe_image_ids": [],
+            "left_iris_code_aggregate_image_ids": [],
+            "right_iris_code_aggregate_image_ids": [],
+        })
+    );
+}
+
+#[test]
+fn caller_salts_and_multiframe_lists_are_replaced_and_other_fields_kept() {
+    let mut input = info();
+    input.signup_id_salt = Some("caller-salt".into());
+    input.qr_code = None;
+    input.qr_code_salt = Some("orphaned-salt".into());
+    input.left_ir_multiframe_image_ids = vec!["stale".into()];
+    input.right_ir_multiframe_image_ids = vec!["stale".into()];
+    let encoded =
+        metadata::encode(&input, included(), &mut SaltRng::default()).unwrap();
+    let output: Info = serde_json::from_slice(&encoded.info_json).unwrap();
+    assert_eq!(
+        output.signup_id_salt.as_deref(),
+        Some("abababababababababababababababab")
+    );
+    assert_eq!(output.qr_code, None);
+    assert_eq!(output.qr_code_salt, None);
+    assert!(!encoded.hashes.contains_key("qr_code"));
+    assert_eq!(output.left_ir_multiframe_image_ids, ["l2", "l1"]);
+    assert!(output.right_ir_multiframe_image_ids.is_empty());
+    let mut expected = input;
+    expected.qr_code_salt = None;
+    expected.left_ir_multiframe_image_ids = output.left_ir_multiframe_image_ids.clone();
+    expected.right_ir_multiframe_image_ids.clear();
+    for (field, salt) in [
+        (&mut expected.signup_id_salt, &output.signup_id_salt),
+        (&mut expected.signup_reason_salt, &output.signup_reason_salt),
+        (&mut expected.orb_id_salt, &output.orb_id_salt),
+        (&mut expected.operator_id_salt, &output.operator_id_salt),
+        (&mut expected.timestamp_salt, &output.timestamp_salt),
+        (&mut expected.id_commitment_salt, &output.id_commitment_salt),
+        (
+            &mut expected.software_version_salt,
+            &output.software_version_salt,
+        ),
+        (&mut expected.orb_country_salt, &output.orb_country_salt),
+    ] {
+        field.clone_from(salt);
+    }
+    assert_eq!(output, expected);
 }
 
 #[test]
 fn device_key_presence_controls_value_salt_hash_and_randomness_together() {
     for key in [None, Some(""), Some("synthetic-device-key")] {
         let mut input = info();
-        input.device_public_key = key;
+        input.device_public_key = key.map(str::to_owned);
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let encoded =
-            metadata::encode(&input, &ImageIdPolicy::Redacted, &mut rng).unwrap();
-        let json: serde_json::Value =
-            serde_json::from_slice(&encoded.info_json).unwrap();
+            metadata::encode(&input, ImageIdPolicy::Redacted, &mut rng).unwrap();
+        let json = json(&encoded.info_json);
         assert_eq!(json.get("device_public_key").is_some(), key.is_some());
         assert_eq!(json.get("device_public_key").and_then(|v| v.as_str()), key);
         assert_eq!(json.get("device_public_key_salt").is_some(), key.is_some());
@@ -199,66 +254,31 @@ fn device_key_presence_controls_value_salt_hash_and_randomness_together() {
 }
 
 #[test]
-fn strings_and_pre_epoch_capture_time_keep_legacy_encoding() {
+fn strings_are_json_escaped_and_hashed_unchanged() {
     let mut input = info();
-    input.signup_id = "\"\\\n\0é";
-    for (time, seconds) in [
-        (UNIX_EPOCH - Duration::from_secs(1), "0"),
-        (UNIX_EPOCH, "0"),
-    ] {
-        input.capture_start = time;
-        let encoded =
-            metadata::encode(&input, &ImageIdPolicy::Redacted, &mut SaltRng::default())
-                .unwrap();
-        let json: serde_json::Value =
-            serde_json::from_slice(&encoded.info_json).unwrap();
-        assert_eq!(json["signup_id"], input.signup_id);
-        assert_eq!(json["timestamp"], seconds);
-        let expected = ring::digest::digest(
-            &ring::digest::SHA256,
-            format!(
-                "{}{}",
-                input.signup_id,
-                json["signup_id_salt"].as_str().unwrap()
-            )
-            .as_bytes(),
-        );
-        assert_eq!(encoded.hashes["signup_id"].as_slice(), expected.as_ref());
-    }
-}
-
-#[test]
-fn missing_included_groups_fail_before_randomness_without_becoming_redacted() {
-    for field in [
-        "left_ir_image_id",
-        "right_ir_image_id",
-        "thumbnail_image_id",
-    ] {
-        let mut ids = image_ids();
-        match field {
-            "left_ir_image_id" => ids.left = None,
-            "right_ir_image_id" => ids.right = None,
-            _ => ids.thumbnail = None,
-        }
-        let mut rng = SaltRng::default();
-        assert!(
-            matches!(metadata::encode(&info(), &ImageIdPolicy::Included(ids), &mut rng),
-            Err(metadata::MetadataError::MissingImageId { field: actual }) if actual == field)
-        );
-        assert_eq!(rng.calls, 0);
-    }
+    input.signup_id = Some("\"\\\n\0é".into());
+    let encoded =
+        metadata::encode(&input, ImageIdPolicy::Redacted, &mut SaltRng::default())
+            .unwrap();
+    let json = json(&encoded.info_json);
+    assert_eq!(json["signup_id"], "\"\\\n\0é");
+    let expected = ring::digest::digest(
+        &ring::digest::SHA256,
+        format!("\"\\\n\0é{}", json["signup_id_salt"].as_str().unwrap()).as_bytes(),
+    );
+    assert_eq!(encoded.hashes["signup_id"].as_slice(), expected.as_ref());
 }
 
 #[test]
 fn entropy_failure_at_any_field_returns_no_result_and_does_not_retry() {
     let mut input = info();
-    input.device_public_key = Some("synthetic-device-key");
+    input.device_public_key = Some("synthetic-device-key".into());
     for fail_at in 0..10 {
         let mut rng = SaltRng {
             calls: 0,
             fail_at: Some(fail_at),
         };
-        let result = metadata::encode(&input, &ImageIdPolicy::Redacted, &mut rng);
+        let result = metadata::encode(&input, ImageIdPolicy::Redacted, &mut rng);
         assert!(matches!(
             result,
             Err(metadata::MetadataError::Randomness(_))
