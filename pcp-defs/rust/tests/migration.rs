@@ -7,7 +7,7 @@ use serde_json::json;
 #[test]
 fn migration_binary_round_trip() {
     let migration = Migration {
-        tee_version: Some("0.1.0-test".into()),
+        tee_software_version: Some("0.1.0-test".into()),
         src_signup_id: Some("test-previous-signup".into()),
         source_pcp_version: Some("2.7".into()),
         migrated_ts: Some(1800000000),
@@ -25,7 +25,7 @@ fn binary_absent_and_present_empty_values_keep_presence() {
     assert!(absent.encode_to_vec().is_empty());
 
     let present = Migration {
-        tee_version: Some(String::new()),
+        tee_software_version: Some(String::new()),
         src_signup_id: Some(String::new()),
         biometric_pipeline_version: Some(String::new()),
         migrated_ts: Some(0),
