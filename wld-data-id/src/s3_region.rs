@@ -84,9 +84,14 @@ impl<'de> Deserialize<'de> for S3Region {
     where
         D: Deserializer<'de>,
     {
-        let value: u8 = Deserialize::deserialize(deserializer)?;
+        u8::deserialize(deserializer).map(Self::from_byte)
+    }
+}
+
+impl S3Region {
+    pub(crate) fn from_byte(value: u8) -> Self {
         // TODO: Consider using a derive macro like https://crates.io/crates/enum-primitive-derive instead
-        Ok(match value {
+        match value {
             0 => S3Region::AfSouth1,
             1 => S3Region::ApEast1,
             2 => S3Region::ApNortheast1,
@@ -112,6 +117,6 @@ impl<'de> Deserialize<'de> for S3Region {
             22 => S3Region::UsWest1,
             23 => S3Region::UsWest2,
             _ => S3Region::Unknown,
-        })
+        }
     }
 }

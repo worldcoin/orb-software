@@ -22,15 +22,34 @@ struct WldDataId {
 }
 
 impl WldDataId {
+    fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0; 16];
+        bytes[0] = self.version;
+        bytes[1] = self.s3_region as u8;
+        bytes[2..12].copy_from_slice(&self.signup_id);
+        bytes[12..16].copy_from_slice(&self.data_id.to_le_bytes());
+        bytes
+    }
+
+    fn from_bytes(bytes: [u8; 16]) -> Self {
+        let mut signup_id = [0; 10];
+        signup_id.copy_from_slice(&bytes[2..12]);
+        Self {
+            version: bytes[0],
+            s3_region: S3Region::from_byte(bytes[1]),
+            signup_id,
+            data_id: u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]),
+        }
+    }
+
     fn to_uuid(&self) -> Uuid {
-        let bytes = bincode::serialize(self).unwrap();
-        Uuid::from_slice(&bytes).unwrap()
+        Uuid::from_bytes(self.to_bytes())
     }
 }
 
 impl From<Uuid> for WldDataId {
     fn from(uuid: Uuid) -> WldDataId {
-        bincode::deserialize(uuid.as_bytes()).unwrap()
+        Self::from_bytes(*uuid.as_bytes())
     }
 }
 

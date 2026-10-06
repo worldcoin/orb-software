@@ -1,6 +1,7 @@
 use orb_wld_data_id::{ImageId, SignupId};
 use serde_json::json;
 use std::path::Path;
+use uuid::Uuid;
 
 const SIGNUP: &str = "00120011223344556677889900000000";
 const IMAGE: &str = "00120011223344556677889978563412";
@@ -22,7 +23,7 @@ fn signup_and_image_wire_format() {
 }
 
 #[test]
-fn serde_json_and_bincode_format() {
+fn serde_json_and_wire_format() {
     let signup: SignupId = SIGNUP.parse().unwrap();
     let expected = json!({
         "version": 0,
@@ -41,8 +42,52 @@ fn serde_json_and_bincode_format() {
         0x00, 0x12, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x78,
         0x56, 0x34, 0x12,
     ];
-    assert_eq!(bincode::serialize(&image).unwrap(), bytes);
-    assert_eq!(bincode::deserialize::<ImageId>(&bytes).unwrap(), image);
+    assert_eq!(
+        Uuid::parse_str(&image.to_string()).unwrap().as_bytes(),
+        &bytes
+    );
+    assert_eq!(
+        Uuid::from_bytes(bytes)
+            .simple()
+            .to_string()
+            .parse::<ImageId>()
+            .unwrap(),
+        image
+    );
+}
+
+#[test]
+fn wire_format_preserves_fields_and_normalizes_unknown_regions() {
+    for version in [0, 1, u8::MAX] {
+        for region in 0..=u8::MAX {
+            for data_id in [0, 0x12345678, u32::MAX] {
+                let mut bytes = [0; 16];
+                bytes[0] = version;
+                bytes[1] = region;
+                bytes[2..12]
+                    .copy_from_slice(&[0, 17, 34, 51, 68, 85, 102, 119, 136, 153]);
+                bytes[12..16].copy_from_slice(&data_id.to_le_bytes());
+
+                let encoded = Uuid::from_bytes(bytes).simple().to_string();
+                let parsed: ImageId = encoded.parse().unwrap();
+                let expected_region = if region < 24 { region } else { u8::MAX };
+                assert_eq!(
+                    serde_json::to_value(&parsed).unwrap(),
+                    json!({
+                        "version": version,
+                        "s3_region": expected_region,
+                        "signup_id": [0, 17, 34, 51, 68, 85, 102, 119, 136, 153],
+                        "data_id": data_id,
+                    }),
+                );
+                bytes[1] = expected_region;
+                assert_eq!(
+                    parsed.to_string(),
+                    Uuid::from_bytes(bytes).simple().to_string(),
+                );
+            }
+        }
+    }
 }
 
 #[test]

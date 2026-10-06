@@ -97,7 +97,6 @@ aws-sdk-s3 = "=1.46.0"
 axum = "0.8.3"
 base64 = "0.22.1"
 bidiff = { version = "1.0.0", features = ["enc"] }
-bincode = "1.3.3"
 bindgen = "0.72.0"
 bip39 = "2.2.2"
 bipatch = "1.0.0"
