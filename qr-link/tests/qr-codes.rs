@@ -1,5 +1,5 @@
 use orb_qr_link::{decode_qr_with_version, encode_static_qr};
-use orb_relay_messages::common::v1::AppAuthenticatedData;
+use orb_relay_messages::common::v1::{AppAuthenticatedData, VerifyError};
 use uuid::Uuid;
 
 #[test]
@@ -18,14 +18,15 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    let hash_app_data = app_data.hash(16);
+    let hash_app_data = app_data.hash(16).unwrap();
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
     let (version, parsed_orb_relay_id, parsed_app_data) =
         decode_qr_with_version(&qr).unwrap();
     assert_eq!(version, 4);
     assert_eq!(parsed_orb_relay_id, orb_relay_id);
-    assert!(app_data.verify(parsed_app_data));
+    app_data.verify(parsed_app_data).unwrap();
 }
 #[test]
 fn test_encode_decode_failure() {
@@ -41,8 +42,9 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    let hash_app_data = app_data.hash(16);
+    let hash_app_data = app_data.hash(16).unwrap();
     let qr = encode_static_qr(&orb_relay_id, hash_app_data);
     let (version, parsed_orb_relay_id, parsed_app_data) =
         decode_qr_with_version(&qr).unwrap();
@@ -55,8 +57,12 @@ MCowBQYDK2VuAyEA2boNBmJX4lGkA9kjthS5crXOBxu2BPycKRMakpzgLG4=
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    assert!(!incorrect_app_data.verify(parsed_app_data));
+    assert_eq!(
+        incorrect_app_data.verify(parsed_app_data),
+        Err(VerifyError::Mismatch)
+    );
 }
 
 #[test]
@@ -78,8 +84,9 @@ fn test_empty_hash_qr_decodes_but_verify_rejects() {
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    assert!(!app_data.verify(hash));
+    assert_eq!(app_data.verify(hash), Err(VerifyError::EmptyHash));
 }
 
 #[test]
@@ -92,8 +99,9 @@ fn test_different_pcp_version_fails_verify() {
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    let hash = app_data.hash(16);
+    let hash = app_data.hash(16).unwrap();
     let qr = encode_static_qr(&orb_relay_id, hash);
     let (_, _, parsed_hash) = decode_qr_with_version(&qr).unwrap();
 
@@ -101,7 +109,10 @@ fn test_different_pcp_version_fails_verify() {
         pcp_version: 99,
         ..app_data
     };
-    assert!(!different_app_data.verify(parsed_hash));
+    assert_eq!(
+        different_app_data.verify(parsed_hash),
+        Err(VerifyError::Mismatch)
+    );
 }
 
 #[test]
@@ -114,12 +125,13 @@ fn test_corrupted_hash_fails_verify() {
         os: "Android".to_string(),
         os_version: "1.2.3".to_string(),
         version: AppAuthenticatedData::VERSION,
+        device_public_key: "device_key".to_string(),
     };
-    let mut hash = app_data.hash(16);
+    let mut hash = app_data.hash(16).unwrap();
     hash[0] ^= 0xFF;
     let qr = encode_static_qr(&orb_relay_id, hash);
     let (_, _, parsed_hash) = decode_qr_with_version(&qr).unwrap();
-    assert!(!app_data.verify(parsed_hash));
+    assert_eq!(app_data.verify(parsed_hash), Err(VerifyError::Mismatch));
 }
 
 #[test]

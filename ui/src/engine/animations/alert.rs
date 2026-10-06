@@ -153,9 +153,7 @@ impl<const N: usize> Animation for Alert<N> {
             }
         }
         if !idle {
-            for led in frame {
-                *led = color;
-            }
+            frame.fill(color);
         }
         self.phase += dt;
 

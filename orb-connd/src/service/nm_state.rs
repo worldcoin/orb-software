@@ -54,10 +54,10 @@ pub(super) async fn allocated_size(root: &Path) -> Result<u64> {
     Ok(allocated_bytes)
 }
 
-pub(super) async fn remove_disposable_files(varlib: &Path) -> Result<()> {
+pub async fn disposable_files(varlib: &Path) -> Result<Vec<PathBuf>> {
     let metadata = match fs::symlink_metadata(varlib).await {
         Ok(metadata) => metadata,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => {
             return Err(e).wrap_err_with(|| {
                 format!("failed to inspect NM lease directory {}", varlib.display())
@@ -100,10 +100,10 @@ pub(super) async fn remove_disposable_files(varlib: &Path) -> Result<()> {
         }
     }
 
-    remove_files(to_delete).await
+    Ok(to_delete)
 }
 
-async fn remove_files(paths: Vec<PathBuf>) -> Result<()> {
+pub async fn remove_files(paths: &Vec<PathBuf>) -> Result<()> {
     let mut first_error = None;
     let mut failed = 0;
     let mut removed = 0;
@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn it_removes_leases_without_seen_bssids_and_preserves_other_state() {
+    async fn it_removes_only_disposable_files_and_preserves_other_state() {
         // Arrange
         let dir = TempDir::new().await.unwrap();
         for name in [
@@ -192,11 +192,14 @@ mod tests {
             .await
             .unwrap();
 
+        let files = disposable_files(dir.as_ref()).await.unwrap();
+        assert_eq!(files, vec![dir.join("old.lease")]);
+
         // Act
-        remove_disposable_files(dir.as_ref()).await.unwrap();
-        remove_disposable_files(dir.as_ref()).await.unwrap();
+        remove_files(&files).await.unwrap();
 
         // Assert
+        assert!(disposable_files(dir.as_ref()).await.unwrap().is_empty());
         assert!(!fs::try_exists(dir.join("old.lease")).await.unwrap());
         for name in ["secret_key", "NetworkManager.state", "timestamps"] {
             assert_eq!(fs::read_to_string(dir.join(name)).await.unwrap(), name);
@@ -212,11 +215,14 @@ mod tests {
 
         // Arrange
         fs::write(dir.join("seen-bssids"), "history").await.unwrap();
+        let files = disposable_files(dir.as_ref()).await.unwrap();
+        assert_eq!(files, vec![dir.join("seen-bssids")]);
 
         // Act
-        remove_disposable_files(dir.as_ref()).await.unwrap();
+        remove_files(&files).await.unwrap();
 
         // Assert
+        assert!(disposable_files(dir.as_ref()).await.unwrap().is_empty());
         assert!(!fs::try_exists(dir.join("seen-bssids")).await.unwrap());
     }
 
@@ -228,14 +234,13 @@ mod tests {
         fs::write(&lease, "lease").await.unwrap();
 
         // Act
-        remove_files(vec![dir.join("already-removed.lease"), lease.clone()])
-            .await
-            .unwrap();
-        remove_disposable_files(&dir.join("missing-varlib"))
-            .await
-            .unwrap();
+        let files = vec![dir.join("already-removed.lease"), lease.clone()];
+        remove_files(&files).await.unwrap();
+        let missing_files =
+            disposable_files(&dir.join("missing-varlib")).await.unwrap();
 
         // Assert
+        assert!(missing_files.is_empty());
         assert!(!fs::try_exists(lease).await.unwrap());
     }
 
@@ -249,9 +254,8 @@ mod tests {
         fs::write(&lease, "lease").await.unwrap();
 
         // Act
-        let error = remove_files(vec![invalid.clone(), lease.clone()])
-            .await
-            .unwrap_err();
+        let files = vec![invalid.clone(), lease.clone()];
+        let error = remove_files(&files).await.unwrap_err();
 
         // Assert
         let error = format!("{error:?}");
@@ -284,7 +288,7 @@ mod tests {
 
         // Act
         let size_result = allocated_size(&link).await;
-        let cleanup_result = remove_disposable_files(&link).await;
+        let cleanup_result = disposable_files(&link).await;
 
         // Assert
         assert!(size_result.is_err());

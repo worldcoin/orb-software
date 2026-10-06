@@ -2,8 +2,6 @@
 Description=Worldcoin Supervisor
 After=worldcoin-dbus.socket
 Wants=worldcoin-dbus.socket
-After=zenohd.service
-Requires=zenohd.service
 StartLimitIntervalSec=0
 
 [Service]
@@ -14,7 +12,6 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/worldcoin_bus_socket
 ExecStart=/usr/local/bin/orb-supervisor
 Restart=always
 RestartSec=3
-SupplementaryGroups=zenohd
 
 [Install]
 WantedBy=multi-user.target

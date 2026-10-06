@@ -78,6 +78,7 @@ impl ConndService {
     const DEFAULT_WIFI_IFACE: &str = "wlan0";
     const MAGIC_QR_TIMESPAN_MIN: i64 = 10;
     const NM_STATE_MAX_SIZE_BYTES: u64 = 1024 * 1024;
+    const NM_MAX_DISPOSABLE_FILES: usize = 16;
     const SECURE_STORAGE_KEY: &str = "nmprofiles";
 
     #[allow(clippy::too_many_arguments)]
@@ -375,37 +376,61 @@ impl ConndService {
         usr_persistent: impl AsRef<Path>,
     ) -> Result<()> {
         let nm_dir = usr_persistent.as_ref().join(Self::NM_FOLDER);
+
+        let disposable_files =
+            nm_state::disposable_files(&nm_dir.join("varlib")).await?;
+
         let allocated_bytes = nm_state::allocated_size(&nm_dir).await?;
+
         // Reclaim oversized local state even when secure storage is unavailable.
         let state_size = if allocated_bytes >= Self::NM_STATE_MAX_SIZE_BYTES {
             allocated_bytes
         } else {
+            // its ok to exit early here in case of error
+            // if secure storage is down, extra lease files are the least of our problems.
             allocated_bytes + self.stored_profile_size().await?
         };
-        if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
-            tracing::trace!(
-                "NM state at {} is below limit ({state_size} bytes < {} bytes); skipping cleanup",
+
+        let exceeded_size = state_size >= Self::NM_STATE_MAX_SIZE_BYTES;
+        let exceeded_disposable_files =
+            disposable_files.len() > Self::NM_MAX_DISPOSABLE_FILES;
+
+        if !exceeded_disposable_files && !exceeded_size {
+            info!(
+                "NM state at {} is below limit ({state_size} bytes < {} bytes); and below max disposable files amount: {}/{} skipping cleanup",
                 nm_dir.display(),
                 Self::NM_STATE_MAX_SIZE_BYTES,
+                disposable_files.len(),
+                Self::NM_MAX_DISPOSABLE_FILES
             );
 
             return Ok(());
         }
 
-        warn!(
-            path = %nm_dir.display(),
-            state_bytes = state_size,
-            max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
-            "NM state at {} exceeds limit ({state_size} bytes >= {} bytes); removing DHCP leases and seen-bssids",
-            nm_dir.display(),
-            Self::NM_STATE_MAX_SIZE_BYTES,
-        );
+        if exceeded_disposable_files {
+            warn!(
+                "NM disposable files exceeded limit. amount: {}, max: {}",
+                disposable_files.len(),
+                Self::NM_MAX_DISPOSABLE_FILES
+            );
+        }
+
+        if exceeded_size {
+            warn!(
+                path = %nm_dir.display(),
+                state_bytes = state_size,
+                max_bytes = Self::NM_STATE_MAX_SIZE_BYTES,
+                "NM state at {} exceeds limit ({state_size} bytes >= {} bytes); removing DHCP leases and seen-bssids",
+                nm_dir.display(),
+                Self::NM_STATE_MAX_SIZE_BYTES,
+            );
+        }
 
         // A partial cleanup must not fall through to deleting saved networks.
-        nm_state::remove_disposable_files(&nm_dir.join("varlib")).await?;
+        nm_state::remove_files(&disposable_files).await?;
         let state_size = self.nm_state_size(&nm_dir).await?;
         if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
-            tracing::trace!(
+            info!(
                 "NM state cleanup at {} succeeded after removing disposable files ({state_size} bytes < {} bytes); keeping saved Wi-Fi profiles",
                 nm_dir.display(),
                 Self::NM_STATE_MAX_SIZE_BYTES,
@@ -429,6 +454,7 @@ impl ConndService {
             .list_wifi_profiles()
             .await
             .wrap_err("failed to list Wi-Fi profiles during NM state cleanup")?;
+
         wifi_profiles.sort_by_key(|p| p.priority);
 
         let profiles_to_keep = 2;
@@ -456,7 +482,7 @@ impl ConndService {
 
         let state_size = self.nm_state_size(&nm_dir).await?;
         if state_size < Self::NM_STATE_MAX_SIZE_BYTES {
-            tracing::trace!(
+            info!(
                 "NM state cleanup at {} succeeded after removing excess Wi-Fi profiles ({state_size} bytes < {} bytes)",
                 nm_dir.display(),
                 Self::NM_STATE_MAX_SIZE_BYTES,

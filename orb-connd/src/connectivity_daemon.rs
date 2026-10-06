@@ -103,6 +103,7 @@ pub async fn program(
         zsender,
         sysfs,
         procfs,
+        cap.bluetooth,
     )
     .await?;
 
