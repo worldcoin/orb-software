@@ -1,0 +1,21 @@
+[package]
+name = "orb-wld-data-id"
+version = "0.0.0"
+description = "Signup and image IDs generation"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+eyre.workspace = true
+rand.workspace = true
+schemars.workspace = true
+serde.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
