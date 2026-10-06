@@ -1,6 +1,5 @@
 use orb_wld_data_id::{ImageId, S3Region, SignupId};
 use serde_json::json;
-use std::path::Path;
 use uuid::Uuid;
 
 const SIGNUP: &str = "00120011223344556677889900000000";
@@ -141,17 +140,7 @@ fn wire_format_preserves_fields_and_normalizes_unknown_regions() {
 }
 
 #[test]
-fn pin_and_path_helpers() {
+fn pin_format() {
     let signup: SignupId = SIGNUP.parse().unwrap();
     assert_eq!(signup.to_pin_string(), "665416");
-    assert_eq!(
-        SignupId::from_signup_dir(Path::new(SIGNUP)).unwrap(),
-        signup
-    );
-    assert_eq!(
-        ImageId::from_image_path(Path::new("00120011223344556677889978563412.png"))
-            .unwrap()
-            .to_string(),
-        IMAGE,
-    );
 }

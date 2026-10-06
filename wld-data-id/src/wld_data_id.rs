@@ -1,10 +1,10 @@
 use crate::s3_region::S3Region;
-use eyre::{eyre, Error, Result};
+use eyre::{Error, Result};
 use rand::prelude::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{fmt, path::Path, str::FromStr};
+use std::{fmt, str::FromStr};
 use uuid::Uuid;
 
 const VERSION: u8 = 0;
@@ -89,14 +89,6 @@ impl SignupId {
         })
     }
 
-    /// Parses a signup id from the signup directory.
-    pub fn from_signup_dir(path: &Path) -> Result<Self> {
-        path.file_name()
-            .ok_or_else(|| eyre!("Invalid path {:?}", path))?
-            .to_string_lossy()
-            .parse()
-    }
-
     /// Converts the signup ID to a 6-digit hex PIN string.
     /// Uses SHA-256 hash of the signup_id bytes to minimize collision probability.
     #[must_use]
@@ -144,14 +136,6 @@ impl ImageId {
         let mut new_id = signup_id.0.clone();
         new_id.data_id = hash;
         Self(new_id)
-    }
-
-    /// Parses an image id from an image path.
-    pub fn from_image_path(path: &Path) -> Result<Self> {
-        path.file_stem()
-            .ok_or_else(|| eyre!("Invalid path {:?}", path))?
-            .to_string_lossy()
-            .parse()
     }
 }
 
