@@ -1,6 +1,9 @@
+use orb_contract_schema::contract;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A snapshot of all currently active network connections on the orb.
+#[contract]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActiveConnections {
     /// The URI used to check if we have internet connectivity.
@@ -10,7 +13,7 @@ pub struct ActiveConnections {
 }
 
 /// A single active network connection.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Connection {
     /// The connection's display name (e.g. "Wired connection 1").
     pub name: String,
@@ -23,13 +26,14 @@ pub struct Connection {
 }
 
 /// The network interface used by this connection
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub enum NetworkInterface {
     Ethernet,
     WiFi,
     Cellular,
 }
 
+#[contract]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CellularStatus {
     pub imei: String,
@@ -48,6 +52,7 @@ pub struct CellularStatus {
     pub snr: Option<f64>,
 }
 
+#[contract]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetStats {
     pub iface: String,
