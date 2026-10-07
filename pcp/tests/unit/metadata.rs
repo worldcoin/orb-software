@@ -5,7 +5,7 @@ use data_encoding::HEXLOWER;
 use orb_pcp_defs::v1::Info;
 use rand::{CryptoRng, RngCore, SeedableRng};
 
-// Deterministic test double only, never a production random source.
+// Deterministic test RNG.
 #[derive(Default)]
 struct SaltRng {
     calls: usize,

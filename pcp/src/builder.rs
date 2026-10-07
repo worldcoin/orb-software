@@ -1,10 +1,7 @@
-//! Synchronous PCP construction from portable inputs.
+//! Synchronous PCP construction.
 //!
 //! PNG encoding, quantization, secret sharing and signer/recipient authorization
-//! belong to the caller. Generated Hyrax commitments use the legacy algorithm;
-//! imported commitments and partial-data wire semantics are not supported here.
-//! This prototype is not an untrusted-package verifier. Call from a blocking
-//! worker in async applications. Plaintext intermediates are not all zeroized.
+//! belong to the caller.
 
 use orb_pcp_defs::{prost::Message, v1};
 use rand::{CryptoRng, RngCore};
@@ -13,19 +10,18 @@ use zeroize::Zeroizing;
 use crate::{archive, crypto, manifest, metadata, payload};
 use manifest::sha256;
 
-/// One privacy decision controls files, manifest hashes and metadata image IDs.
+/// Whether biometric files, their hashes and the image IDs are included.
 pub enum BiometricPolicy<'a> {
     Redacted,
-    /// Consumer-prepared data. Shares are not checked against codes/embeddings.
-    /// Hyrax commitments are generated from the supplied normalized bytes;
-    /// imported commitments are not accepted.
+    /// Messages are written as given. Hyrax commitments are generated from the
+    /// normalized images.
     Included {
         images: &'a archive::PackageImages<'a>,
         face_embeddings: &'a [v1::FaceEmbedding],
         iris_codes: &'a v1::IrisCodes,
         /// Same-index files belong to the same recipient.
         iris_code_shares: &'a [v1::IrisCodeShares; 3],
-        /// Default messages produce the empty DI files of a capture without DI data.
+        /// Default messages produce empty DI files.
         di_embeddings: &'a v1::DiIrisEmbeddings,
         di_embedding_shares: &'a [v1::DiIrisEmbeddingShares; 3],
     },
@@ -36,19 +32,19 @@ pub struct BuildRequest<'a> {
     pub timestamp: u64,
     /// Written as `info.json` as given, except for the builder-owned salts,
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
-    /// fields, including `device_public_key`, are omitted.
+    /// fields are omitted.
     pub info: &'a v1::Info,
     pub user_public_key: &'a [u8; 32],
-    /// Normal builds serialize these same keys and use them for inner encryption.
+    /// Written to `backend_keys.json` and used to encrypt the inner archives.
     pub backend_keys: payload::BackendKeys<'a>,
     pub biometrics: BiometricPolicy<'a>,
-    /// Written verbatim as binary `migration.pb` after `info.json` and hashed in
-    /// `hashes.json`. Set by TEE migrations; Orb captures leave it `None`.
+    /// Written as binary `migration.pb` after `info.json` and hashed in
+    /// `hashes.json`. Set by TEE migrations.
     pub migration: Option<&'a v1::Migration>,
 }
 
-/// Final encrypted tiers and SHA-256 checksums of those ciphertext bytes.
-/// Tiers 1 and 2 are empty archives in PCP 2.8 and are not covered by the manifest.
+/// Encrypted tiers and SHA-256 checksums of their ciphertext. Tiers 1 and 2 are
+/// empty archives.
 pub struct Package {
     pub tier0: Vec<u8>,
     pub tier1: Vec<u8>,
@@ -58,11 +54,9 @@ pub struct Package {
     pub tier2_checksum: [u8; 32],
 }
 
-/// Unencrypted diagnostic gzip tiers. Never upload these as a PCP.
-///
-/// Inner archives are also plaintext and may contain biometrics, shares and
-/// Hyrax blinding factors. Even redacted output retains identity metadata.
-/// The caller must protect and clear these buffers; they are not zeroized on drop.
+/// Plaintext gzip tiers for local diagnostics, including plaintext inner
+/// archives with biometrics, shares and Hyrax blinding factors. Never upload,
+/// publish or log them; the caller must clear these buffers.
 #[cfg(feature = "not-prod-diagnostics")]
 pub struct DiagnosticPackage {
     pub tier0: Vec<u8>,
@@ -93,10 +87,8 @@ pub enum BuildError<E> {
     Signing(#[from] manifest::SigningError<E>),
 }
 
-/// Builds a PCP 2.8 package, invoking the supplied raw-digest signer once.
-/// No successful package is returned on failure. The signer owns its retry and
-/// deadline policy.
-/// This function always encrypts, including when diagnostic features are enabled.
+/// Builds the encrypted package, calling `sign_digest` once with the raw SHA-256
+/// digest of `hashes.json`. The signer owns its retry and deadline policy.
 pub fn build<E>(
     request: &BuildRequest<'_>,
     rng: &mut (impl RngCore + CryptoRng),
@@ -116,14 +108,8 @@ pub fn build<E>(
     })
 }
 
-/// Builds sensitive, unencrypted diagnostics, never a deliverable PCP.
-///
-/// Requires the explicitly enabled `not-prod-diagnostics` feature. Both inner
-/// sealing and outer sealing are skipped, but hashing, signing and gzip remain.
-/// Backend keys are still serialized; recipient keys are not validated or used
-/// for encryption.
-/// This performs no filesystem writes. Never upload, publish or log the output.
-/// Enabling this feature does not change the encrypted behavior of [`build`].
+/// Builds the package like [`build`] but skips inner and outer sealing, for
+/// local diagnostics. Never upload, publish or log the output.
 #[cfg(feature = "not-prod-diagnostics")]
 pub fn build_unencrypted_for_diagnostics<E>(
     request: &BuildRequest<'_>,

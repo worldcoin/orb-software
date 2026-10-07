@@ -1,13 +1,7 @@
 //! Encoding of the shared `pcp-defs` payload messages into package files.
 //!
-//! JSON output is compact UTF-8 with lexicographically sorted object keys and no
-//! trailing newline, matching orb-core; absent optional fields are omitted.
-//!
-//! Messages are written as given: nothing here decodes or validates biometric
-//! data, shares or encrypted keys, generates shares or verifies their
-//! relationship to codes and embeddings. Redaction must bypass biometric
-//! encoding in the higher-level builder. Returned buffers are not automatically
-//! zeroized.
+//! Messages are written as given. JSON is compact UTF-8 with object keys sorted
+//! at every level and no trailing newline; absent optional fields are omitted.
 
 use data_encoding::BASE64;
 use orb_pcp_defs::{
@@ -30,8 +24,8 @@ pub struct BackendKeys<'a> {
     pub tier2: BackendKey<'a>,
 }
 
-/// Compact JSON with object keys sorted at every level, as orb-core writes it.
-/// Sorting is explicit, so it holds even with `serde_json`'s `preserve_order`.
+/// Compact JSON with object keys sorted at every level. Sorting is explicit so it
+/// does not depend on `serde_json`'s `preserve_order` feature.
 pub(crate) fn sorted_json(value: Value) -> Result<Vec<u8>, serde_json::Error> {
     fn sort(value: Value) -> Value {
         match value {
@@ -54,7 +48,7 @@ pub(crate) fn sorted_json(value: Value) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(&sort(value))
 }
 
-/// Encodes an ordered list with sorted object keys. An absent list is `&[]`.
+/// Encodes the list in order, with sorted object keys.
 pub(crate) fn face_embeddings(
     embeddings: &[v1::FaceEmbedding],
 ) -> Result<Vec<u8>, serde_json::Error> {
@@ -104,8 +98,7 @@ pub(crate) struct EncodedDi {
 }
 
 /// Encodes the embedding file and three same-index recipient share files as
-/// binary protobuf. Default messages, as orb-core writes without DI data,
-/// encode to empty files.
+/// binary protobuf. Default messages encode to empty files.
 pub(crate) fn encode_di(
     embeddings: &DiIrisEmbeddings,
     shares: &[DiIrisEmbeddingShares; 3],

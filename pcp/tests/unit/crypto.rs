@@ -131,7 +131,7 @@ mod hyrax {
     use hyrax::iriscode_commit::compute_commitments_binary_outputs;
     use rand::{CryptoRng, RngCore, SeedableRng};
 
-    // Deterministic test double only; never a production entropy source.
+    // Deterministic test RNG.
     struct SeedRng {
         seed: [u8; 32],
         calls: usize,

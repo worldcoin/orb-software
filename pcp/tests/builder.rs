@@ -134,7 +134,7 @@ impl RngCore for FailingRng {
 }
 
 #[test]
-fn device_key_is_optional_and_every_package_is_2_8() {
+fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
     use std::io::Read;
 
     let pair = sealedbox::Keypair::generate().unwrap();
@@ -266,7 +266,7 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
 }
 
 #[test]
-fn migration_pb_is_written_and_hashed_in_a_2_8_package() {
+fn migration_pb_follows_info_and_is_hashed() {
     use orb_pcp_defs::prost::Message;
 
     let pair = sealedbox::Keypair::generate().unwrap();

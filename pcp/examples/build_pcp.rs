@@ -1,9 +1,8 @@
-//! In-memory synthetic package construction and round-trip checks, not an
-//! untrusted-package verifier or a production signer implementation.
+//! Builds synthetic packages, included and redacted, then decrypts them and
+//! verifies their contents, signatures and manifests.
 //!
-//! Run with `cargo run -p orb-pcp --example build_pcp`. Builds and verifies
-//! PCP 2.8 packages with and without a device key, included and redacted.
-//! Everything stays in memory; only case labels and encrypted sizes are printed.
+//! Run with `cargo run -p orb-pcp --example build_pcp`. Everything stays in
+//! memory; only case labels and encrypted sizes are printed.
 
 use std::{collections::BTreeMap, error::Error, io::Read};
 
@@ -27,14 +26,14 @@ type KeyPair = sealedbox::Keypair;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 const TIMESTAMP: u64 = 1_700_000_000;
-// A synthetic 1x1 white grayscale/alpha PNG, never a captured image.
+// A synthetic 1x1 grayscale/alpha PNG.
 const PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
 
 fn main() -> Result<()> {
     run()
 }
 
-/// Also exercised by the integration test without filesystem or service access.
+/// Also run by the `prototype` integration test.
 pub fn run() -> Result<()> {
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
@@ -119,8 +118,6 @@ pub fn run() -> Result<()> {
         embedding_inference_backend: Some("none".into()),
     }];
 
-    // Callers supply their actual metadata; archive, encryption and manifest
-    // choices belong to the builder.
     for device_public_key in [None, Some("synthetic-device-key")] {
         let some = |value: &str| Some(value.to_owned());
         let info = v1::Info {
@@ -189,7 +186,7 @@ pub fn run() -> Result<()> {
                 },
                 migration: None,
             };
-            // P-256 is only this example's caller-owned signer choice.
+            // Any prehash signer works; this example uses P-256.
             let signer = SigningKey::random(&mut OsRng);
             let mut calls = 0;
             let package = pcp::build(&request, &mut OsRng, |hash| {

@@ -1,11 +1,10 @@
-//! Portable Personal Custody Package (PCP 2.8) construction.
+//! Personal Custody Package construction.
 //!
-//! [build] assembles, hashes, signs and encrypts consumer-prepared inputs.
-//! Callers supply encoded PNGs, the shared [v1] messages for metadata and
-//! biometric payloads, authorized recipient keys and a callback signing the raw
-//! SHA-256 digest. Call from a blocking worker in async applications. This is
-//! not an untrusted-package verifier.
-//! Plaintext intermediates are not all automatically zeroized.
+//! [build] assembles, hashes, signs and encrypts caller-prepared inputs: encoded
+//! PNGs, the shared [v1] messages for metadata and biometric payloads, recipient
+//! keys and a callback signing the raw SHA-256 manifest digest. Construction is
+//! synchronous; call it from a blocking worker in async applications.
+//! Zeroization of intermediate buffers is best-effort.
 //!
 //! Building requires protoc and libsodium discoverable through pkg-config.
 

@@ -1,12 +1,9 @@
-//! `info.json` encoding and salted hashes for the current PCP wire format.
+//! `info.json` encoding and salted hashes.
 //!
 //! The caller's `Info` is written as given, except for the fields the builder
 //! owns: every `*_salt`, the multiframe image ID lists and, under redaction, all
-//! image IDs. Absent fields are omitted. Image identifiers and the certificate
-//! are not covered by salted hashes, and `info.json` is not hashed as a whole.
-//! Inputs must come from an authorized source; this encoder does not
-//! authenticate them. Returned buffers and temporary metadata are not
-//! automatically zeroized.
+//! image IDs. Absent fields are omitted. Of `info.json`, only the salted values
+//! are hashed in `hashes.json`.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +14,7 @@ use ring::digest::{Context, SHA256};
 
 use crate::payload::sorted_json;
 
-/// The higher-level builder must derive this choice from its single package
-/// redaction decision, together with payload and manifest inclusion.
+/// Image ID handling, following the package's redaction decision.
 pub(crate) enum ImageIdPolicy<'a> {
     /// Image IDs become empty strings and lists.
     Redacted,
@@ -31,7 +27,7 @@ pub(crate) enum ImageIdPolicy<'a> {
 
 pub(crate) struct EncodedMetadata {
     pub info_json: Vec<u8>,
-    /// Salted identity metadata only; no image IDs or certificate digest.
+    /// Hashes of the salted values, keyed by field name.
     pub hashes: BTreeMap<&'static str, [u8; 32]>,
 }
 
@@ -44,10 +40,8 @@ pub enum MetadataError {
 }
 
 /// Encodes sorted, compact JSON and hashes each present salted value followed by
-/// its lowercase-hex salt (not the raw salt bytes). Each salt uses 16 fresh
-/// random bytes and replaces any salt the caller supplied; an absent value gets
-/// no salt and no hash. The caller supplies a cryptographically secure RNG;
-/// failures return no encoded result. No retries occur here.
+/// its lowercase-hex salt string. Each salt is 16 fresh random bytes and
+/// replaces any salt the caller supplied; absent values get neither.
 pub(crate) fn encode(
     info: &Info,
     images: ImageIdPolicy<'_>,
@@ -82,7 +76,7 @@ pub(crate) fn encode(
         }
     }
     let mut hashes = BTreeMap::new();
-    // Salt generation order is part of deterministic compatibility with seeded callers.
+    // Salts draw randomness in this order, so seeded RNGs reproduce them.
     for (name, value, salt) in [
         ("signup_id", &info.signup_id, &mut info.signup_id_salt),
         (

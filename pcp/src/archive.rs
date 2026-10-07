@@ -1,7 +1,5 @@
-//! In-memory tar and gzip encoding for PCP payloads and tiers.
-//!
-//! Owned archive buffers are zeroized on drop. Compression does not protect
-//! confidentiality; caller-owned inputs and codec-internal copies are not wiped.
+//! In-memory tar and gzip encoding for PCP payloads and tiers. Owned archive
+//! buffers are zeroized on drop.
 
 use std::io::Write;
 
@@ -29,9 +27,8 @@ pub enum ArchiveError {
 /// are borrowed; the returned archive owns a copy of their bytes.
 ///
 /// Names must be nonempty single components, at most 100 UTF-8 bytes, without
-/// `/`, `\`, `:`, or control characters; `.` and `..` are rejected. The package
-/// manifest validates duplicate names. This helper only encodes the supplied
-/// order and does not enforce a complete package layout.
+/// `/`, `\`, `:`, or control characters; `.` and `..` are rejected. The manifest
+/// rejects duplicate names.
 pub(crate) fn encode_tar<'a>(
     timestamp: u64,
     entries: impl IntoIterator<Item = (&'a str, &'a [u8])>,
@@ -40,7 +37,7 @@ pub(crate) fn encode_tar<'a>(
     let mut archive = tar::Builder::new(&mut *bytes);
     for (name, data) in entries {
         validate_name(name)?;
-        // Preserve the GNU header's NUL regular-file type for byte compatibility.
+        // The GNU header's NUL regular-file type is part of the package bytes.
         let mut header = tar::Header::new_gnu();
         header.set_path(name)?;
         header.set_size(data.len() as u64);
@@ -60,10 +57,9 @@ pub(crate) fn encode_tar<'a>(
 /// Gzip-encodes bytes at the best compression level with explicit header metadata.
 ///
 /// The timestamp is seconds since the Unix epoch and must fit in `u32`.
-/// The filename follows the same rules as [`encode_tar`]. PCP tier filenames
-/// are `tier0.tar.gz`, `tier1.tar.gz`, and `tier2.tar.gz`; inner archives remain
-/// uncompressed. Compressed bytes may vary with the compression backend/version;
-/// the header metadata and decompressed bytes are the compatibility contract.
+/// The filename follows the same rules as [`encode_tar`]. Compressed bytes depend
+/// on the compression backend; the header metadata and decompressed bytes are
+/// stable.
 pub(crate) fn compress(
     data: &[u8],
     timestamp: u64,
@@ -133,20 +129,17 @@ pub struct FraudImages<'a> {
     pub right_depth_png: Option<&'a [u8]>,
 }
 
-/// Consumer-encoded PNGs and normalized bytes; image encoding stays with the caller.
-/// Both eyes are required by the current wire profile. Optional fields
-/// distinguish unavailable data from redaction; they do not enable the future
-/// partial-package format.
+/// Encoded PNGs and normalized bytes. Both eyes are required.
 pub struct PackageImages<'a> {
     pub left: Option<IrisEye<'a>>,
     pub right: Option<IrisEye<'a>>,
-    /// Absence preserves an empty `thumbnail.png`, rather than omitting the file.
+    /// `None` writes an empty `thumbnail.png`.
     pub thumbnail_png: Option<&'a [u8]>,
-    /// Absent modalities are omitted from their inner archive; the archive remains.
+    /// `None` leaves the file out of `face_ir_and_thermal.tar`.
     pub face_ir_png: Option<&'a [u8]>,
-    /// Absent modalities are omitted from their inner archive; the archive remains.
+    /// `None` leaves the file out of `face_ir_and_thermal.tar`.
     pub thermal_png: Option<&'a [u8]>,
-    /// Absence omits the entire fraud archive.
+    /// `None` leaves out `fraud.tar`.
     pub fraud: Option<FraudImages<'a>>,
 }
 
@@ -172,11 +165,7 @@ pub enum InnerArchiveError {
     Commitment(#[from] crypto::CommitmentError),
 }
 
-/// Builds legacy inner archives and hashes their individual files.
-///
-/// Both eyes are currently required. Optional fields prepare the input shape for
-/// partial packages without changing the current wire format. An absent thumbnail
-/// is an empty `thumbnail.png`; absent modalities yield an empty tar archive.
+/// Builds the inner archives and hashes their individual files.
 pub(crate) fn encode_inner(
     timestamp: u64,
     images: &PackageImages<'_>,
@@ -208,7 +197,7 @@ pub(crate) fn encode_inner(
     )?;
 
     let mut normalized_files = Vec::new();
-    // Generation order is part of deterministic compatibility with seeded callers.
+    // Commitments draw randomness in this order, so seeded RNGs reproduce them.
     for resized in [false, true] {
         for (prefix, frame) in [("left", left_normalized), ("right", right_normalized)]
         {
@@ -330,7 +319,7 @@ fn encode_archive<'a>(
     Ok(archive)
 }
 
-/// Backend-encrypted inner archives. This structure does not validate encryption.
+/// Backend-encrypted inner archives.
 pub(crate) struct BiometricArchives<'a> {
     pub iris_sealed: &'a [u8],
     pub normalized_iris_sealed: &'a [u8],
@@ -339,10 +328,8 @@ pub(crate) struct BiometricArchives<'a> {
     pub face_ir_and_thermal_sealed: &'a [u8],
 }
 
-/// The complete set of biometric entries, including already-serialized payloads.
-///
-/// Empty protobuf bytes remain present as empty files; absence of the whole
-/// bundle is the only way to omit all biometric entries.
+/// All biometric entries, including serialized payloads. Empty payloads are
+/// written as empty files.
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
     pub face_embeddings_json: &'a [u8],
@@ -350,8 +337,8 @@ pub(crate) struct PreparedBiometricFiles<'a> {
     pub di: &'a EncodedDi,
 }
 
-/// Pre-encoded files present in tier 0 whether or not biometric entries are included.
-/// The signature must correspond to the exact `hashes_json` bytes; this is not checked here.
+/// Files written to tier 0 with or without biometrics. `hashes_signature` signs
+/// the exact `hashes_json` bytes.
 pub(crate) struct Tier0Files<'a> {
     pub info_json: &'a [u8],
     pub hashes_json: &'a [u8],
@@ -361,11 +348,8 @@ pub(crate) struct Tier0Files<'a> {
     pub migration_pb: Option<&'a [u8]>,
 }
 
-/// Encodes tier 0 after manifest construction and signing.
-///
-/// The inner archives and biometric JSON/protobuf entries are included only when
-/// `biometrics` is `Some`. The result still needs gzip compression and user
-/// encryption; it is not a deliverable PCP.
+/// Encodes the tier 0 tar. The inner archives and biometric payloads are
+/// included when `biometrics` is `Some`.
 pub(crate) fn tier0(
     timestamp: u64,
     files: Tier0Files<'_>,
