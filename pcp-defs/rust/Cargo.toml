@@ -15,7 +15,11 @@ prost = { version = "0.14.1", default-features = false, features = ["std", "deri
 serde.workspace = true
 
 [dev-dependencies]
+flate2.workspace = true
+hex.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
 
 [build-dependencies]
 pbjson-build = "0.9.0"
