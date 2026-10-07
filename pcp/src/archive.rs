@@ -3,6 +3,7 @@
 
 use std::io::Write;
 
+use orb_wld_data_id::ImageId;
 use zeroize::Zeroizing;
 
 use crate::{
@@ -98,21 +99,27 @@ pub struct NormalizedIrisFrame<'a> {
     pub mask_resized: &'a [u8],
 }
 
-/// Written as `left_ir.png`/`right_ir.png`; its image ID belongs in `info.json`.
+/// Written as `left_ir.png`/`right_ir.png`, with its normalization as
+/// `{left,right}_normalized_*.bin`. Its image ID is the eye's `*_ir_image_id`
+/// in `info.json`.
 pub struct PrimaryIrisFrame<'a> {
     pub ir_png: &'a [u8],
     pub normalized: NormalizedIrisFrame<'a>,
 }
 
-/// An extra capture, named after its image ID, which also fills the eye's
-/// multiframe ID list in `info.json`.
+/// An additional IR capture of the eye, written as `{image_id}.png` and listed in
+/// the eye's `*_ir_multiframe_image_ids` in `info.json`.
 pub struct IrisFrame<'a> {
-    pub image_id: &'a str,
+    pub image_id: &'a ImageId,
     pub ir_png: &'a [u8],
-    /// Extra captures may have no normalized output.
+    /// This frame's own normalization from the multiframe iris pipeline, written
+    /// as `{image_id}_normalized_*.bin`; `None` when there is none.
     pub normalized: Option<NormalizedIrisFrame<'a>>,
 }
 
+/// One eye's IR captures: the primary frame and any multiframe captures, in
+/// capture order. The `*_iris_code_aggregate_image_ids` in `info.json` name the
+/// frames an aggregated iris code was computed from and are written as given.
 pub struct IrisEye<'a> {
     pub primary: PrimaryIrisFrame<'a>,
     pub multiframe: &'a [IrisFrame<'a>],
@@ -129,10 +136,10 @@ pub struct FraudImages<'a> {
     pub right_depth_png: Option<&'a [u8]>,
 }
 
-/// Encoded PNGs and normalized bytes. Both eyes are required.
+/// Encoded PNGs and normalized bytes.
 pub struct PackageImages<'a> {
-    pub left: Option<IrisEye<'a>>,
-    pub right: Option<IrisEye<'a>>,
+    pub left: IrisEye<'a>,
+    pub right: IrisEye<'a>,
     /// `None` writes an empty `thumbnail.png`.
     pub thumbnail_png: Option<&'a [u8]>,
     /// `None` leaves the file out of `face_ir_and_thermal.tar`.
@@ -155,10 +162,6 @@ pub(crate) struct InnerArchives {
 
 #[derive(Debug, thiserror::Error)]
 pub enum InnerArchiveError {
-    #[error("left eye is required by the current package format")]
-    MissingLeftEye,
-    #[error("right eye is required by the current package format")]
-    MissingRightEye,
     #[error("inner archive encoding failed")]
     Archive(#[from] ArchiveError),
     #[error("normalized iris commitment generation failed")]
@@ -171,14 +174,7 @@ pub(crate) fn encode_inner(
     images: &PackageImages<'_>,
     rng: &mut (impl rand::RngCore + rand::CryptoRng),
 ) -> Result<InnerArchives, InnerArchiveError> {
-    let left = images
-        .left
-        .as_ref()
-        .ok_or(InnerArchiveError::MissingLeftEye)?;
-    let right = images
-        .right
-        .as_ref()
-        .ok_or(InnerArchiveError::MissingRightEye)?;
+    let (left, right) = (&images.left, &images.right);
     let left_normalized = &left.primary.normalized;
     let right_normalized = &right.primary.normalized;
     let mut hashes = Vec::new();
@@ -208,13 +204,10 @@ pub(crate) fn encode_inner(
         let Some(normalized) = &frame.normalized else {
             continue;
         };
+        let prefix = frame.image_id.to_string();
         for resized in [false, true] {
-            normalized_files.extend(normalized_pair(
-                frame.image_id,
-                normalized,
-                resized,
-                rng,
-            )?);
+            normalized_files
+                .extend(normalized_pair(&prefix, normalized, resized, rng)?);
         }
     }
     let normalized_iris = encode_archive(

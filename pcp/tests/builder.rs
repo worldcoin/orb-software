@@ -90,8 +90,8 @@ fn images() -> pcp::PackageImages<'static> {
         multiframe: &[],
     };
     pcp::PackageImages {
-        left: Some(eye()),
-        right: Some(eye()),
+        left: eye(),
+        right: eye(),
         thumbnail_png: Some(b"synthetic-thumbnail"),
         face_ir_png: None,
         thermal_png: None,
@@ -322,13 +322,14 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     }
 
     let pair = sealedbox::Keypair::generate().unwrap();
+    let extra_id: pcp::ImageId = "00ff0000000000000000000000000001".parse().unwrap();
     let extra = [pcp::IrisFrame {
-        image_id: "extra",
+        image_id: &extra_id,
         ir_png: b"synthetic-ir",
         normalized: Some(normalized()),
     }];
     let mut images = images();
-    images.left.as_mut().unwrap().multiframe = &extra;
+    images.left.multiframe = &extra;
     let iris_codes = v1::IrisCodes {
         iris_version: Some("synthetic-iris".into()),
         left_iris_code: Some("left".into()),
@@ -386,11 +387,12 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         .filter(|name| !known.contains_key(*name))
         .cloned()
         .collect();
-    let mut per_frame = BTreeSet::from(["extra.png".to_owned()]);
+    let mut per_frame = BTreeSet::from([format!("{extra_id}.png")]);
     for kind in ["image", "mask"] {
         for part in ["", "_commitment", "_blinding_factors"] {
             for resized in ["", "_resized"] {
-                per_frame.insert(format!("extra_normalized_{kind}{part}{resized}.bin"));
+                per_frame
+                    .insert(format!("{extra_id}_normalized_{kind}{part}{resized}.bin"));
             }
         }
     }

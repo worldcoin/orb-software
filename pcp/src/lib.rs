@@ -29,4 +29,6 @@ pub use manifest::{ManifestError, SigningError};
 pub use metadata::MetadataError;
 /// The shared PCP schema used for `info.json`, the payload files and `migration.pb`.
 pub use orb_pcp_defs::v1;
+/// Image IDs of multiframe captures, which name their files in the package.
+pub use orb_wld_data_id::ImageId;
 pub use payload::{BackendKey, BackendKeys};

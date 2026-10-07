@@ -15,13 +15,13 @@ use ring::digest::{Context, SHA256};
 use crate::payload::sorted_json;
 
 /// Image ID handling, following the package's redaction decision.
-pub(crate) enum ImageIdPolicy<'a> {
+pub(crate) enum ImageIdPolicy {
     /// Image IDs become empty strings and lists.
     Redacted,
     /// Multiframe IDs in archive order, replacing the caller's lists.
     Included {
-        left_multiframe: Vec<&'a str>,
-        right_multiframe: Vec<&'a str>,
+        left_multiframe: Vec<String>,
+        right_multiframe: Vec<String>,
     },
 }
 
@@ -44,7 +44,7 @@ pub enum MetadataError {
 /// replaces any salt the caller supplied; absent values get neither.
 pub(crate) fn encode(
     info: &Info,
-    images: ImageIdPolicy<'_>,
+    images: ImageIdPolicy,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<EncodedMetadata, MetadataError> {
     let mut info = info.clone();
@@ -70,9 +70,8 @@ pub(crate) fn encode(
             left_multiframe,
             right_multiframe,
         } => {
-            let owned = |ids: Vec<&str>| ids.into_iter().map(str::to_owned).collect();
-            info.left_ir_multiframe_image_ids = owned(left_multiframe);
-            info.right_ir_multiframe_image_ids = owned(right_multiframe);
+            info.left_ir_multiframe_image_ids = left_multiframe;
+            info.right_ir_multiframe_image_ids = right_multiframe;
         }
     }
     let mut hashes = BTreeMap::new();

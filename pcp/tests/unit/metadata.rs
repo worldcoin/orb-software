@@ -60,9 +60,9 @@ fn info() -> Info {
     }
 }
 
-fn included() -> ImageIdPolicy<'static> {
+fn included() -> ImageIdPolicy {
     ImageIdPolicy::Included {
-        left_multiframe: vec!["l2", "l1"],
+        left_multiframe: vec!["l2".into(), "l1".into()],
         right_multiframe: vec![],
     }
 }

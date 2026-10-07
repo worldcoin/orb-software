@@ -17,6 +17,7 @@ data-encoding.workspace = true
 flate2.workspace = true
 hyrax = { git = "https://github.com/worldcoin/hyrax-pcs-commit.git", rev = "ec5f1120e394643ad09990a34815dd11e9122366" }
 orb-pcp-defs = { path = "../pcp-defs/rust" }
+orb-wld-data-id.workspace = true
 rand.workspace = true
 ring.workspace = true
 serde_json.workspace = true

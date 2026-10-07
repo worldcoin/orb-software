@@ -7819,6 +7819,7 @@ dependencies = [
  "flate2",
  "hyrax",
  "orb-pcp-defs",
+ "orb-wld-data-id",
  "p256 0.13.2",
  "rand 0.8.7",
  "ring",

@@ -28,6 +28,10 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const TIMESTAMP: u64 = 1_700_000_000;
 // A synthetic 1x1 grayscale/alpha PNG.
 const PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+const MULTIFRAME_IDS: [&str; 2] = [
+    "00ff0000000000000000000000000001",
+    "00ff0000000000000000000000000002",
+];
 
 fn main() -> Result<()> {
     run()
@@ -37,25 +41,27 @@ fn main() -> Result<()> {
 pub fn run() -> Result<()> {
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
+    let [left_id, right_id] =
+        MULTIFRAME_IDS.map(|id| id.parse::<pcp::ImageId>().expect("valid image ID"));
     let extra_left = [pcp::IrisFrame {
-        image_id: "synthetic-extra-left",
+        image_id: &left_id,
         ir_png: &png,
         normalized: None,
     }];
     let extra_right = [pcp::IrisFrame {
-        image_id: "synthetic-extra-right",
+        image_id: &right_id,
         ir_png: &png,
         normalized: None,
     }];
     let images = pcp::PackageImages {
-        left: Some(pcp::IrisEye {
+        left: pcp::IrisEye {
             primary: primary(&png, &normalized),
             multiframe: &extra_left,
-        }),
-        right: Some(pcp::IrisEye {
+        },
+        right: pcp::IrisEye {
             primary: primary(&png, &normalized),
             multiframe: &extra_right,
-        }),
+        },
         thumbnail_png: Some(&png),
         face_ir_png: Some(&png),
         thermal_png: Some(&png),
@@ -438,11 +444,11 @@ fn verify(
         assert_eq!(info["thumbnail_image_id"], "synthetic-thumbnail");
         assert_eq!(
             info["left_ir_multiframe_image_ids"],
-            serde_json::json!(["synthetic-extra-left"])
+            serde_json::json!([MULTIFRAME_IDS[0]])
         );
         assert_eq!(
             info["right_ir_multiframe_image_ids"],
-            serde_json::json!(["synthetic-extra-right"])
+            serde_json::json!([MULTIFRAME_IDS[1]])
         );
         assert_eq!(tier0.len(), 18);
         let archives = &tier0;
@@ -455,7 +461,7 @@ fn verify(
             let inner = files(&open(&archives[name], key)?)?;
             if name == "iris.tar" {
                 assert_eq!(inner.len(), 4);
-                for id in ["synthetic-extra-left", "synthetic-extra-right"] {
+                for id in MULTIFRAME_IDS {
                     assert_eq!(inner[&format!("{id}.png")], inner["left_ir.png"]);
                 }
             }
@@ -463,7 +469,7 @@ fn verify(
                 assert_eq!(inner.len(), 24);
                 assert!(inner
                     .keys()
-                    .all(|name| !name.starts_with("synthetic-extra")));
+                    .all(|name| !MULTIFRAME_IDS.iter().any(|id| name.starts_with(id))));
             }
             for (name, bytes) in inner {
                 if name.contains("commitment") || name.contains("blinding_factors") {

@@ -278,10 +278,10 @@ fn encode_metadata(
     metadata::encode(request.info, images, rng)
 }
 
-fn multiframe_ids<'a>(eye: &Option<archive::IrisEye<'a>>) -> Vec<&'a str> {
-    eye.iter()
-        .flat_map(|eye| eye.multiframe)
-        .map(|frame| frame.image_id)
+fn multiframe_ids(eye: &archive::IrisEye<'_>) -> Vec<String> {
+    eye.multiframe
+        .iter()
+        .map(|frame| frame.image_id.to_string())
         .collect()
 }
 

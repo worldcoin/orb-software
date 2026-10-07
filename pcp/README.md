@@ -31,6 +31,9 @@ a signer callback receiving the exact 32-byte SHA-256 digest.
 - The builder owns every `*_salt` field and the multiframe image ID lists in
   `info.json`; caller values there are replaced. Each present salted value gets
   a fresh salt and a salted hash in `hashes.json`.
+- Multiframe captures are additional IR frames of an eye. Their `ImageId`s name
+  their files (`{image_id}.png` and, with per-frame normalization,
+  `{image_id}_normalized_*.bin`) and fill the multiframe ID lists.
 - Choose `BiometricPolicy::Included` or `Redacted`. Redaction removes the
   biometric files and their hashes and blanks all image IDs. `info.json`,
   `backend_keys.json`, the salted metadata hashes and the `backend_keys.json`

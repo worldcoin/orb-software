@@ -159,8 +159,13 @@ mod inner_archives {
         },
         crypto, manifest,
     };
+    use orb_wld_data_id::ImageId;
     use rand::{rngs::StdRng, SeedableRng};
     use ring::digest::{digest, SHA256};
+
+    fn id(n: u32) -> ImageId {
+        format!("{n:032x}").parse().unwrap()
+    }
 
     fn normalized() -> NormalizedIrisFrame<'static> {
         NormalizedIrisFrame {
@@ -171,9 +176,9 @@ mod inner_archives {
         }
     }
 
-    fn frame(id: &str) -> IrisFrame<'_> {
+    fn frame(image_id: &ImageId) -> IrisFrame<'_> {
         IrisFrame {
-            image_id: id,
+            image_id,
             ir_png: b"synthetic-png",
             normalized: Some(normalized()),
         }
@@ -191,14 +196,14 @@ mod inner_archives {
         right: &'a [IrisFrame<'a>],
     ) -> PackageImages<'a> {
         PackageImages {
-            left: Some(IrisEye {
+            left: IrisEye {
                 primary: primary(),
                 multiframe: left,
-            }),
-            right: Some(IrisEye {
+            },
+            right: IrisEye {
                 primary: primary(),
                 multiframe: right,
-            }),
+            },
             thumbnail_png: None,
             face_ir_png: None,
             thermal_png: None,
@@ -223,8 +228,9 @@ mod inner_archives {
 
     #[test]
     fn archives_preserve_order_and_hash_every_file() {
-        let left = [frame("extra-left-0"), frame("extra-left-1")];
-        let right = [frame("extra-right")];
+        let ids = [id(1), id(2), id(3)];
+        let left = [frame(&ids[0]), frame(&ids[1])];
+        let right = [frame(&ids[2])];
         let input = images(&left, &right);
         let encoded =
             archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(3)).unwrap();
@@ -234,11 +240,11 @@ mod inner_archives {
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
             [
-                "left_ir.png",
-                "right_ir.png",
-                "extra-left-0.png",
-                "extra-left-1.png",
-                "extra-right.png"
+                "left_ir.png".to_owned(),
+                "right_ir.png".to_owned(),
+                format!("{}.png", ids[0]),
+                format!("{}.png", ids[1]),
+                format!("{}.png", ids[2]),
             ]
         );
 
@@ -252,7 +258,8 @@ mod inner_archives {
             ("right", false, true),
             ("right", true, true),
         ];
-        for id in ["extra-left-0", "extra-left-1", "extra-right"] {
+        let names = ids.each_ref().map(ToString::to_string);
+        for id in names.iter().map(String::as_str) {
             groups.extend([
                 (id, false, false),
                 (id, true, false),
@@ -308,9 +315,10 @@ mod inner_archives {
     ) {
         use rand::RngCore;
 
-        let mut extra_left = frame("extra-left");
+        let ids = [id(1), id(2)];
+        let mut extra_left = frame(&ids[0]);
         extra_left.normalized = None;
-        let mut extra_right = frame("extra-right");
+        let mut extra_right = frame(&ids[1]);
         extra_right.normalized = None;
         let mut rng = StdRng::seed_from_u64(7);
         let mut primary_rng = rng.clone();
@@ -327,7 +335,7 @@ mod inner_archives {
         assert_eq!(encoded.normalized_iris, primary.normalized_iris);
         assert_eq!(rng.next_u64(), primary_rng.next_u64());
         let mut expected_hashes: BTreeMap<_, _> = primary.hashes.into_iter().collect();
-        for id in ["extra-left", "extra-right"] {
+        for id in &ids {
             let name = format!("{id}.png");
             assert!(entries(&encoded.iris)
                 .contains(&(name.clone(), b"synthetic-png".to_vec())));
@@ -346,7 +354,7 @@ mod inner_archives {
     }
 
     #[test]
-    fn absent_thumbnail_and_modalities_keep_legacy_empty_entries() {
+    fn absent_thumbnail_and_modalities_keep_empty_entries() {
         let encoded = archive::encode_inner(
             123,
             &images(&[], &[]),
@@ -408,39 +416,10 @@ mod inner_archives {
     }
 
     #[test]
-    fn missing_eyes_fail_without_consuming_randomness() {
-        use rand::RngCore;
-        for left_missing in [true, false] {
-            let mut input = images(&[], &[]);
-            if left_missing {
-                input.left = None;
-            } else {
-                input.right = None;
-            }
-            let mut rng = StdRng::seed_from_u64(0);
-            let error = archive::encode_inner(123, &input, &mut rng).err().unwrap();
-            assert!(matches!(
-                (left_missing, error),
-                (true, archive::InnerArchiveError::MissingLeftEye)
-                    | (false, archive::InnerArchiveError::MissingRightEye)
-            ));
-            assert_eq!(rng.next_u64(), StdRng::seed_from_u64(0).next_u64());
-        }
-    }
-
-    #[test]
-    fn duplicate_derived_names_are_rejected_by_manifest_before_signing() {
-        for id in ["left_ir", "left", "thumbnail", "face_ir"] {
-            let extra = [frame(id)];
-            let mut input = images(&extra, &[]);
-            input.face_ir_png = Some(b"face ir");
-            let encoded =
-                archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(0))
-                    .unwrap();
-            assert_duplicate_manifest(&encoded);
-        }
-        let left = [frame("same")];
-        let right = [frame("same")];
+    fn duplicate_image_ids_are_rejected_by_manifest_before_signing() {
+        let same = id(1);
+        let left = [frame(&same)];
+        let right = [frame(&same)];
         let encoded = archive::encode_inner(
             123,
             &images(&left, &right),
@@ -463,21 +442,6 @@ mod inner_archives {
             ),
             Err(manifest::SigningError::Manifest(
                 manifest::ManifestError::DuplicateEntry
-            ))
-        ));
-    }
-
-    #[test]
-    fn unsafe_derived_names_fail_archive_validation() {
-        let extra = [frame("../escape")];
-        assert!(matches!(
-            archive::encode_inner(
-                123,
-                &images(&extra, &[]),
-                &mut StdRng::seed_from_u64(0)
-            ),
-            Err(archive::InnerArchiveError::Archive(
-                archive::ArchiveError::InvalidName
             ))
         ));
     }
