@@ -112,8 +112,9 @@ pub struct PrimaryIrisFrame<'a> {
 pub struct IrisFrame<'a> {
     pub image_id: &'a ImageId,
     pub ir_png: &'a [u8],
-    /// This frame's own normalization from the multiframe iris pipeline, written
-    /// as `{image_id}_normalized_*.bin`; `None` when there is none.
+    /// Normalization of this frame from the multiframe iris pipeline, written with
+    /// its Hyrax commitments as `{image_id}_normalized_*.bin`. Without it, only
+    /// `{image_id}.png` is written.
     pub normalized: Option<NormalizedIrisFrame<'a>>,
 }
 
