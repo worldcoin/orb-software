@@ -453,8 +453,6 @@ mod inner_archives {
     fn assert_duplicate_manifest(encoded: &archive::InnerArchives) {
         assert!(matches!(
             manifest::encode_and_sign(
-                "2.8",
-                manifest::TierEntries::None,
                 encoded
                     .hashes
                     .iter()
@@ -489,7 +487,6 @@ mod tier_layout {
     use std::io::Read;
 
     use crate::archive::{self, BiometricArchives, PreparedBiometricFiles, Tier0Files};
-    use crate::builder::Envelope;
     use crate::payload::{EncodedDaugman, EncodedDi};
 
     fn payloads() -> (EncodedDaugman, EncodedDi) {
@@ -518,7 +515,7 @@ mod tier_layout {
                 normalized_iris_sealed: b"normalized-ciphertext",
                 face_sealed: b"face-ciphertext",
                 fraud_sealed: fraud.then_some(b"fraud-ciphertext".as_slice()),
-                face_ir_and_thermal: b"modality-archive",
+                face_ir_and_thermal_sealed: b"modality-ciphertext",
             },
             face_embeddings_json: b"face-json",
             daugman,
@@ -560,16 +557,11 @@ mod tier_layout {
     }
 
     #[test]
-    fn v2_places_all_archives_in_tier0_before_payloads() {
+    fn archives_precede_payloads_in_tier0() {
         for fraud in [false, true] {
             let (daugman, di) = payloads();
             let bio = biometrics(fraud, &daugman, &di);
-            let auxiliary =
-                archive::auxiliary_tiers(Envelope::V2, 123, Some(&bio)).unwrap();
-            assert_eq!(auxiliary.tier1.as_slice(), &[0; 1024]);
-            assert_eq!(auxiliary.tier2.as_slice(), &[0; 1024]);
-            let bytes =
-                archive::tier0(Envelope::V2, 123, common_files(), Some(&bio)).unwrap();
+            let bytes = archive::tier0(123, common_files(), Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
                 ("iris.tar", b"iris-ciphertext"),
                 ("normalized_iris.tar", b"normalized-ciphertext"),
@@ -578,90 +570,52 @@ mod tier_layout {
             if fraud {
                 expected.push(("fraud.tar", b"fraud-ciphertext"));
             }
-            expected.push(("face_ir_and_thermal.tar", b"modality-archive"));
+            expected.push(("face_ir_and_thermal.tar", b"modality-ciphertext"));
             expected.extend(full_tier0_remainder());
             assert_entries(&bytes, &expected);
         }
     }
 
     #[test]
-    fn v3_routes_archives_to_auxiliary_tiers_without_changing_bytes() {
-        for fraud in [false, true] {
-            let (daugman, di) = payloads();
-            let bio = biometrics(fraud, &daugman, &di);
-            let auxiliary =
-                archive::auxiliary_tiers(Envelope::V3, 123, Some(&bio)).unwrap();
-            let mut expected: Vec<(&str, &[u8])> = vec![
-                ("iris.tar", b"iris-ciphertext"),
-                ("normalized_iris.tar", b"normalized-ciphertext"),
-                ("face.tar", b"face-ciphertext"),
-            ];
-            if fraud {
-                expected.push(("fraud.tar", b"fraud-ciphertext"));
-            }
-            assert_entries(&auxiliary.tier1, &expected);
-            assert_entries(
-                &auxiliary.tier2,
-                &[("face_ir_and_thermal.tar", b"modality-archive")],
-            );
-            let tier0 =
-                archive::tier0(Envelope::V3, 123, common_files(), Some(&bio)).unwrap();
-            assert_entries(&tier0, &full_tier0_remainder());
-        }
-    }
-
-    #[test]
-    fn omitted_biometrics_leave_only_four_tier0_files_and_empty_auxiliary_tiers() {
-        for format in [Envelope::V2, Envelope::V3] {
-            let auxiliary = archive::auxiliary_tiers(format, 123, None).unwrap();
-            assert_eq!(auxiliary.tier1.as_slice(), &[0; 1024]);
-            assert_eq!(auxiliary.tier2.as_slice(), &[0; 1024]);
-            let tier0 = archive::tier0(format, 123, common_files(), None).unwrap();
-            assert_entries(
-                &tier0,
-                &[
-                    ("info.json", b"info-json"),
-                    ("hashes.sign", b"signature"),
-                    ("hashes.json", b"hashes-json"),
-                    ("backend_keys.json", b"backend-keys-json"),
-                ],
-            );
-        }
+    fn omitted_biometrics_leave_only_four_tier0_files() {
+        let tier0 = archive::tier0(123, common_files(), None).unwrap();
+        assert_entries(
+            &tier0,
+            &[
+                ("info.json", b"info-json"),
+                ("hashes.sign", b"signature"),
+                ("hashes.json", b"hashes-json"),
+                ("backend_keys.json", b"backend-keys-json"),
+            ],
+        );
     }
 
     #[test]
     fn empty_di_and_share_payloads_are_present_not_omitted() {
-        for format in [Envelope::V2, Envelope::V3] {
-            let (daugman, _) = payloads();
-            let di = EncodedDi {
-                embeddings: Vec::new(),
-                shares: std::array::from_fn(|_| Vec::new()),
-            };
-            let bio = biometrics(false, &daugman, &di);
-            let tier0 =
-                archive::tier0(format, 123, common_files(), Some(&bio)).unwrap();
-            let entries = entries(&tier0);
-            let di_files: Vec<_> = entries
-                .iter()
-                .filter(|(name, _)| name.starts_with("di_iris_embeddings"))
-                .collect();
-            assert_eq!(di_files.len(), 4);
-            assert!(di_files.iter().all(|(_, bytes)| bytes.is_empty()));
-        }
+        let (daugman, _) = payloads();
+        let di = EncodedDi {
+            embeddings: Vec::new(),
+            shares: std::array::from_fn(|_| Vec::new()),
+        };
+        let bio = biometrics(false, &daugman, &di);
+        let tier0 = archive::tier0(123, common_files(), Some(&bio)).unwrap();
+        let entries = entries(&tier0);
+        let di_files: Vec<_> = entries
+            .iter()
+            .filter(|(name, _)| name.starts_with("di_iris_embeddings"))
+            .collect();
+        assert_eq!(di_files.len(), 4);
+        assert!(di_files.iter().all(|(_, bytes)| bytes.is_empty()));
     }
 
     #[test]
-    fn migration_pb_follows_info_in_every_envelope() {
-        for (envelope, included) in [
-            (Envelope::V2, true),
-            (Envelope::V3, true),
-            (Envelope::V2, false),
-        ] {
+    fn migration_pb_follows_info_with_and_without_biometrics() {
+        for included in [true, false] {
             let (daugman, di) = payloads();
             let bio = included.then(|| biometrics(false, &daugman, &di));
             let mut files = common_files();
             files.migration_pb = Some(b"migration-protobuf");
-            let tier0 = archive::tier0(envelope, 123, files, bio.as_ref()).unwrap();
+            let tier0 = archive::tier0(123, files, bio.as_ref()).unwrap();
             let names: Vec<_> =
                 entries(&tier0).into_iter().map(|(name, _)| name).collect();
             let info = names.iter().position(|name| name == "info.json").unwrap();

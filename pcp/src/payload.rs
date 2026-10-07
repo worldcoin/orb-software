@@ -1,8 +1,7 @@
 //! Encoding of the shared `pcp-defs` payload messages into package files.
 //!
 //! JSON output is compact UTF-8 with lexicographically sorted object keys and no
-//! trailing newline, matching orb-core; absent optional fields are omitted. These
-//! payload formats are shared by PCP 2.7, 2.8 and 3.0.
+//! trailing newline, matching orb-core; absent optional fields are omitted.
 //!
 //! Messages are written as given: nothing here decodes or validates biometric
 //! data, shares or encrypted keys, generates shares or verifies their

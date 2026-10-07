@@ -13,57 +13,6 @@ use zeroize::Zeroizing;
 use crate::{archive, crypto, manifest, metadata, payload};
 use manifest::sha256;
 
-/// Coupled archive placement, inner protection and manifest tier coverage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Envelope {
-    V2,
-    V3,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PcpVersion {
-    V2_7,
-    V2_8,
-    V3_0,
-}
-
-impl PcpVersion {
-    fn validate_input<E>(
-        self,
-        request: &BuildRequest<'_>,
-    ) -> Result<(), BuildError<E>> {
-        match self {
-            Self::V2_7 => {
-                if request.info.device_public_key.is_some() {
-                    return Err(BuildError::DeviceKeyVersionMismatch);
-                }
-            }
-            Self::V2_8 => {
-                if request.info.device_public_key.is_none() {
-                    return Err(BuildError::DeviceKeyVersionMismatch);
-                }
-            }
-            Self::V3_0 => {}
-        }
-        Ok(())
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::V2_7 => "2.7",
-            Self::V2_8 => "2.8",
-            Self::V3_0 => "3.0",
-        }
-    }
-
-    fn envelope(self) -> Envelope {
-        match self {
-            Self::V2_7 | Self::V2_8 => Envelope::V2,
-            Self::V3_0 => Envelope::V3,
-        }
-    }
-}
-
 /// One privacy decision controls files, manifest hashes and metadata image IDs.
 pub enum BiometricPolicy<'a> {
     Redacted,
@@ -83,12 +32,11 @@ pub enum BiometricPolicy<'a> {
 }
 
 pub struct BuildRequest<'a> {
-    pub version: PcpVersion,
     /// Whole Unix seconds used for archive and gzip headers.
     pub timestamp: u64,
     /// Written as `info.json` as given, except for the builder-owned salts,
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
-    /// fields are omitted.
+    /// fields, including `device_public_key`, are omitted.
     pub info: &'a v1::Info,
     pub user_public_key: &'a [u8; 32],
     /// Normal builds serialize these same keys and use them for inner encryption.
@@ -100,6 +48,7 @@ pub struct BuildRequest<'a> {
 }
 
 /// Final encrypted tiers and SHA-256 checksums of those ciphertext bytes.
+/// Tiers 1 and 2 are empty archives in PCP 2.8 and are not covered by the manifest.
 pub struct Package {
     pub tier0: Vec<u8>,
     pub tier1: Vec<u8>,
@@ -130,8 +79,6 @@ type Sealer = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, crypto::SealingError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError<E> {
-    #[error("device key presence does not match the requested PCP version")]
-    DeviceKeyVersionMismatch,
     #[error("metadata construction failed")]
     Metadata(#[from] metadata::MetadataError),
     #[error("inner archive construction failed")]
@@ -146,10 +93,9 @@ pub enum BuildError<E> {
     Signing(#[from] manifest::SigningError<E>),
 }
 
-/// Builds all three tiers, invoking the supplied raw-digest signer once.
+/// Builds a PCP 2.8 package, invoking the supplied raw-digest signer once.
 /// No successful package is returned on failure. The signer owns its retry and
-/// deadline policy. V2.7 requires no device key; V2.8 requires one; V3 accepts
-/// either. Version negotiation remains a consumer responsibility.
+/// deadline policy.
 /// This function always encrypts, including when diagnostic features are enabled.
 pub fn build<E>(
     request: &BuildRequest<'_>,
@@ -174,7 +120,6 @@ pub fn build<E>(
 ///
 /// Requires the explicitly enabled `not-prod-diagnostics` feature. Both inner
 /// sealing and outer sealing are skipped, but hashing, signing and gzip remain.
-/// V3 tier hashes cover these diagnostic gzip bytes, not encrypted tier bytes.
 /// Backend keys are still serialized; recipient keys are not validated or used
 /// for encryption.
 /// This performs no filesystem writes. Never upload, publish or log the output.
@@ -202,29 +147,23 @@ fn build_with_sealer<E>(
     sign_digest: impl FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
     seal: Sealer,
 ) -> Result<BuiltTiers, BuildError<E>> {
-    request.version.validate_input(request)?;
     if request.timestamp > u64::from(u32::MAX) {
         return Err(archive::ArchiveError::TimestampOutOfRange.into());
     }
-    let envelope = request.version.envelope();
     let backend_keys_json = payload::backend_keys(&request.backend_keys)?;
     let mut hashes = vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
     let migration_pb = request.migration.map(Message::encode_to_vec);
     if let Some(migration_pb) = &migration_pb {
         hashes.push(("migration.pb".to_owned(), sha256(migration_pb)));
     }
-    let prepared = envelope.prepare_biometrics(request, rng, seal)?;
+    let prepared = prepare_biometrics(request, rng, seal)?;
     if let Some(prepared) = &prepared {
         hashes.extend(prepared.archives.hashes.iter().cloned());
     }
     let biometric_files = prepared.as_ref().map(Prepared::layout);
-    let auxiliary = archive::auxiliary_tiers(
-        envelope,
-        request.timestamp,
-        biometric_files.as_ref(),
-    )?;
-    let tier1 = seal_tier(&auxiliary.tier1, request, "tier1.tar.gz", seal)?;
-    let tier2 = seal_tier(&auxiliary.tier2, request, "tier2.tar.gz", seal)?;
+    let empty = archive::encode_tar(request.timestamp, std::iter::empty())?;
+    let tier1 = seal_tier(&empty, request, "tier1.tar.gz", seal)?;
+    let tier2 = seal_tier(&empty, request, "tier2.tar.gz", seal)?;
     let tier1_checksum = sha256(&tier1);
     let tier2_checksum = sha256(&tier2);
 
@@ -233,13 +172,10 @@ fn build_with_sealer<E>(
         hashes.push((name.to_owned(), hash));
     }
     let signed = manifest::encode_and_sign(
-        request.version.label(),
-        envelope.manifest_tier_entries([tier1_checksum, tier2_checksum]),
         hashes.iter().map(|(name, hash)| (name.as_str(), *hash)),
         sign_digest,
     )?;
     let tier0 = archive::tier0(
-        envelope,
         request.timestamp,
         archive::Tier0Files {
             info_json: &info.info_json,
@@ -272,7 +208,7 @@ impl Prepared {
                 normalized_iris_sealed: &self.archives.normalized_iris,
                 face_sealed: &self.archives.face,
                 fraud_sealed: self.archives.fraud.as_ref().map(|tar| tar.as_slice()),
-                face_ir_and_thermal: &self.archives.face_ir_and_thermal,
+                face_ir_and_thermal_sealed: &self.archives.face_ir_and_thermal,
             },
             face_embeddings_json: &self.face_embeddings,
             daugman: &self.daugman,
@@ -281,85 +217,65 @@ impl Prepared {
     }
 }
 
-impl Envelope {
-    fn manifest_tier_entries(
-        self,
-        [tier_1, tier_2]: [[u8; 32]; 2],
-    ) -> manifest::TierEntries {
-        match self {
-            Self::V2 => manifest::TierEntries::None,
-            Self::V3 => manifest::TierEntries::Present { tier_1, tier_2 },
-        }
+fn prepare_biometrics<E>(
+    request: &BuildRequest<'_>,
+    rng: &mut (impl RngCore + CryptoRng),
+    seal: Sealer,
+) -> Result<Option<Prepared>, BuildError<E>> {
+    let BiometricPolicy::Included {
+        images,
+        face_embeddings,
+        iris_codes,
+        iris_code_shares,
+        di_embeddings,
+        di_embedding_shares,
+    } = &request.biometrics
+    else {
+        return Ok(None);
+    };
+    let mut archives = archive::encode_inner(request.timestamp, images, rng)?;
+    archives.iris =
+        Zeroizing::new(seal(&archives.iris, request.backend_keys.iris.public_key)?);
+    archives.normalized_iris = Zeroizing::new(seal(
+        &archives.normalized_iris,
+        request.backend_keys.normalized_iris.public_key,
+    )?);
+    archives.face =
+        Zeroizing::new(seal(&archives.face, request.backend_keys.face.public_key)?);
+    archives.fraud = archives
+        .fraud
+        .as_deref()
+        .map(|tar| seal(tar, request.backend_keys.face.public_key).map(Zeroizing::new))
+        .transpose()?;
+    archives.face_ir_and_thermal = Zeroizing::new(seal(
+        &archives.face_ir_and_thermal,
+        request.backend_keys.tier2.public_key,
+    )?);
+    let face_embeddings = payload::face_embeddings(face_embeddings)?;
+    let daugman = payload::encode_daugman(iris_codes, iris_code_shares)?;
+    let di = payload::encode_di(di_embeddings, di_embedding_shares);
+    for (name, bytes) in [
+        ("face_embeddings.json", face_embeddings.as_slice()),
+        ("iris_codes.json", daugman.codes.as_slice()),
+        ("di_iris_embeddings.pb", di.embeddings.as_slice()),
+    ] {
+        archives.hashes.push((name.to_owned(), sha256(bytes)));
     }
-
-    fn prepare_biometrics<E>(
-        self,
-        request: &BuildRequest<'_>,
-        rng: &mut (impl RngCore + CryptoRng),
-        seal: Sealer,
-    ) -> Result<Option<Prepared>, BuildError<E>> {
-        let BiometricPolicy::Included {
-            images,
-            face_embeddings,
-            iris_codes,
-            iris_code_shares,
-            di_embeddings,
-            di_embedding_shares,
-        } = &request.biometrics
-        else {
-            return Ok(None);
-        };
-        let mut archives = archive::encode_inner(request.timestamp, images, rng)?;
-        archives.iris =
-            Zeroizing::new(seal(&archives.iris, request.backend_keys.iris.public_key)?);
-        archives.normalized_iris = Zeroizing::new(seal(
-            &archives.normalized_iris,
-            request.backend_keys.normalized_iris.public_key,
-        )?);
-        archives.face =
-            Zeroizing::new(seal(&archives.face, request.backend_keys.face.public_key)?);
-        archives.fraud = archives
-            .fraud
-            .as_deref()
-            .map(|tar| {
-                seal(tar, request.backend_keys.face.public_key).map(Zeroizing::new)
-            })
-            .transpose()?;
-        match self {
-            Self::V2 => {
-                archives.face_ir_and_thermal = Zeroizing::new(seal(
-                    &archives.face_ir_and_thermal,
-                    request.backend_keys.tier2.public_key,
-                )?);
-            }
-            Self::V3 => {}
-        }
-        let face_embeddings = payload::face_embeddings(face_embeddings)?;
-        let daugman = payload::encode_daugman(iris_codes, iris_code_shares)?;
-        let di = payload::encode_di(di_embeddings, di_embedding_shares);
-        for (name, bytes) in [
-            ("face_embeddings.json", face_embeddings.as_slice()),
-            ("iris_codes.json", daugman.codes.as_slice()),
-            ("di_iris_embeddings.pb", di.embeddings.as_slice()),
-        ] {
-            archives.hashes.push((name.to_owned(), sha256(bytes)));
-        }
-        for (i, share) in daugman.shares.iter().enumerate() {
-            archives
-                .hashes
-                .push((format!("iris_code_shares_{i}.json"), sha256(share)));
-            archives.hashes.push((
-                format!("di_iris_embeddings_shares_{i}.pb"),
-                sha256(&di.shares[i]),
-            ));
-        }
-        Ok(Some(Prepared {
-            archives,
-            face_embeddings,
-            daugman,
-            di,
-        }))
+    for (i, share) in daugman.shares.iter().enumerate() {
+        archives
+            .hashes
+            .push((format!("iris_code_shares_{i}.json"), sha256(share)));
+        archives.hashes.push((
+            format!("di_iris_embeddings_shares_{i}.pb"),
+            sha256(&di.shares[i]),
+        ));
     }
+    Ok(Some(Prepared {
+        archives,
+        face_embeddings,
+        daugman,
+        di,
+    }))
 }
 
 fn encode_metadata(

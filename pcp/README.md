@@ -1,8 +1,8 @@
 # orb-pcp
 
-Builds Personal Custody Packages for versions 2.7, 2.8 and 3.0: payload encoding,
-Hyrax commitments, archive layout, hashing, signing, compression and
-alkali/libsodium sealed-box encryption.
+Builds Personal Custody Packages (PCP 2.8): payload encoding, Hyrax
+commitments, archive layout, hashing, signing, compression and alkali/libsodium
+sealed-box encryption.
 
 ## Build and example
 
@@ -16,7 +16,7 @@ cargo test -p orb-pcp --all-features --all-targets
 ```
 
 [examples/build_pcp.rs](examples/build_pcp.rs) builds and decrypts all supported
-version/device-key/redaction combinations and verifies signatures and manifests.
+device-key/redaction combinations and verifies signatures and manifests.
 It uses synthetic data and in-memory keys; no packages or keys are written to disk.
 
 ## Usage
@@ -37,9 +37,12 @@ a signer callback receiving the exact 32-byte SHA-256 digest.
   biometric files and their hashes and blanks all image IDs. `info.json`,
   `backend_keys.json`, the salted metadata hashes and the `backend_keys.json`
   hash remain.
-- PCP 2.7 forbids a device key, 2.8 requires one, and 3.0 accepts either.
+- Every package is stamped 2.8: `pcp.v1` evolves additively, so new optional
+  fields and files do not change the version. `device_public_key` is optional
+  like any other `info` field. Tiers 1 and 2 are empty archives outside the
+  manifest.
 - TEE migrations set `BuildRequest::migration`; it is written as binary
-  `migration.pb` and hashed in `hashes.json`. The PCP version is unchanged.
+  `migration.pb` and hashed in `hashes.json`.
 - The builder does not verify that shares reconstruct the supplied codes or
   embeddings.
 

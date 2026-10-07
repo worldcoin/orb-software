@@ -1,4 +1,4 @@
-//! Portable Personal Custody Package construction.
+//! Portable Personal Custody Package (PCP 2.8) construction.
 //!
 //! [build] assembles, hashes, signs and encrypts consumer-prepared inputs.
 //! Callers supply encoded PNGs, the shared [v1] messages for metadata and
@@ -22,9 +22,7 @@ pub use archive::{
     ArchiveError, FraudImages, InnerArchiveError, IrisEye, IrisFrame,
     NormalizedIrisFrame, PackageImages, PrimaryIrisFrame,
 };
-pub use builder::{
-    build, BiometricPolicy, BuildError, BuildRequest, Package, PcpVersion,
-};
+pub use builder::{build, BiometricPolicy, BuildError, BuildRequest, Package};
 #[cfg(feature = "not-prod-diagnostics")]
 pub use builder::{build_unencrypted_for_diagnostics, DiagnosticPackage};
 pub use crypto::{CommitmentError, SealingError};

@@ -1,7 +1,7 @@
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use orb_pcp::{
     self as pcp, v1, BackendKey, BackendKeys, BiometricPolicy, BuildError,
-    BuildRequest, MetadataError, PcpVersion,
+    BuildRequest, MetadataError,
 };
 use rand::{CryptoRng, RngCore};
 
@@ -42,7 +42,6 @@ fn request<'a>(key: &'a [u8; 32], info: &'a v1::Info) -> BuildRequest<'a> {
         encrypted_private_key: "synthetic-envelope",
     };
     BuildRequest {
-        version: PcpVersion::V2_8,
         timestamp: 1,
         info,
         user_public_key: key,
@@ -135,57 +134,27 @@ impl RngCore for FailingRng {
 }
 
 #[test]
-fn version_device_binding_mismatches_fail_before_signing() {
-    for version in [PcpVersion::V2_7, PcpVersion::V2_8] {
-        let info = capture_info((version == PcpVersion::V2_7).then_some("device"));
-        let mut input = request(&[0; 32], &info);
-        input.version = version;
-        let result = pcp::build(
-            &input,
-            &mut FailingRng,
-            |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-        );
-        assert!(matches!(result, Err(BuildError::DeviceKeyVersionMismatch)));
-    }
-}
-
-#[test]
-fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
+fn device_key_is_optional_and_every_package_is_2_8() {
     use std::io::Read;
 
     let pair = sealedbox::Keypair::generate().unwrap();
-    for (version, label, device) in [
-        (PcpVersion::V2_7, "2.7", None),
-        (PcpVersion::V2_8, "2.8", Some("device")),
-        (PcpVersion::V2_8, "2.8", Some("")),
-        (PcpVersion::V3_0, "3.0", None),
-        (PcpVersion::V3_0, "3.0", Some("device")),
-        (PcpVersion::V3_0, "3.0", Some("")),
-    ] {
+    for device in [None, Some("device"), Some("")] {
         let info = capture_info(device);
-        let mut input = request(&pair.public_key, &info);
-        input.version = version;
-        let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-            Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-        })
+        let output = pcp::build(
+            &request(&pair.public_key, &info),
+            &mut rand::rngs::OsRng,
+            |_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()),
+        )
         .unwrap();
-        let gzip = open(&output.tier0, &pair);
-        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(&gzip[..]));
-        let mut files = std::collections::BTreeMap::new();
-        for entry in archive.entries().unwrap() {
-            let mut entry = entry.unwrap();
-            let name = entry.path().unwrap().into_owned();
-            let mut bytes = Vec::new();
-            entry.read_to_end(&mut bytes).unwrap();
-            assert!(files.insert(name, bytes).is_none());
-        }
+        let files: std::collections::BTreeMap<_, _> =
+            tier0(&output, &pair).into_iter().collect();
         assert_eq!(files.len(), 4);
         let json = |name: &str| -> serde_json::Value {
-            serde_json::from_slice(&files[std::path::Path::new(name)]).unwrap()
+            serde_json::from_slice(&files[name]).unwrap()
         };
         let info = json("info.json");
         let manifest = json("hashes.json");
-        assert_eq!(manifest["version"], label);
+        assert_eq!(manifest["version"], "2.8");
         assert_eq!(
             info.get("device_public_key").and_then(|x| x.as_str()),
             device
@@ -198,43 +167,37 @@ fn version_device_matrix_preserves_metadata_and_manifest_contracts() {
             manifest.get("device_public_key").is_some(),
             device.is_some()
         );
-        for (name, bytes) in [("tier_1", &output.tier1), ("tier_2", &output.tier2)] {
-            if label == "3.0" {
-                let digest = ring::digest::digest(&ring::digest::SHA256, bytes);
-                assert_eq!(
-                    manifest[name],
-                    data_encoding::HEXLOWER.encode(digest.as_ref())
-                );
-            } else {
-                assert!(manifest.get(name).is_none());
-            }
-        }
-        for name in ["tier_3", "tier_4", "tier_5"] {
-            if label == "3.0" {
-                assert_eq!(manifest[name], "0".repeat(64));
-            } else {
-                assert!(manifest.get(name).is_none());
-            }
+        assert!(manifest
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|name| !name.starts_with("tier_")));
+        for (tier, name) in [
+            (&output.tier1, "tier1.tar.gz"),
+            (&output.tier2, "tier2.tar.gz"),
+        ] {
+            let gzip = open(tier, &pair);
+            let mut decoder = flate2::read::GzDecoder::new(gzip.as_slice());
+            assert_eq!(decoder.header().unwrap().filename(), Some(name.as_bytes()));
+            let mut tar = Vec::new();
+            decoder.read_to_end(&mut tar).unwrap();
+            assert_eq!(tar, [0; 1024]);
         }
     }
 }
 
 #[test]
-fn invalid_user_key_fails_before_metadata_randomness_for_every_version() {
-    for version in [PcpVersion::V2_7, PcpVersion::V2_8, PcpVersion::V3_0] {
-        let info = capture_info((version != PcpVersion::V2_7).then_some("device"));
-        let mut input = request(&[0; 32], &info);
-        input.version = version;
-        let result = pcp::build(
-            &input,
-            &mut FailingRng,
-            |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-        );
-        assert!(matches!(
-            result,
-            Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
-        ));
-    }
+fn invalid_user_key_fails_before_metadata_randomness() {
+    let info = capture_info(Some("device"));
+    let result = pcp::build(
+        &request(&[0; 32], &info),
+        &mut FailingRng,
+        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
+    );
+    assert!(matches!(
+        result,
+        Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
+    ));
 }
 
 #[test]
@@ -303,7 +266,7 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
 }
 
 #[test]
-fn migration_pb_is_written_and_hashed_without_changing_the_version() {
+fn migration_pb_is_written_and_hashed_in_a_2_8_package() {
     use orb_pcp_defs::prost::Message;
 
     let pair = sealedbox::Keypair::generate().unwrap();
@@ -315,37 +278,33 @@ fn migration_pb_is_written_and_hashed_without_changing_the_version() {
         migrated_ts: Some(1_800_000_000),
         biometric_pipeline_version: Some("synthetic-pipeline".into()),
     };
-    for (version, label) in [(PcpVersion::V2_8, "2.8"), (PcpVersion::V3_0, "3.0")] {
-        let mut input = request(&pair.public_key, &info);
-        input.version = version;
-        input.migration = Some(&migration);
-        let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-            Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-        })
-        .unwrap();
-        let files = tier0(&output, &pair);
-        let names: Vec<_> = files.iter().map(|(name, _)| name.as_str()).collect();
-        assert_eq!(
-            names,
-            [
-                "info.json",
-                "migration.pb",
-                "hashes.sign",
-                "hashes.json",
-                "backend_keys.json"
-            ]
-        );
-        let files: std::collections::BTreeMap<_, _> = files.into_iter().collect();
-        assert_eq!(files["migration.pb"], migration.encode_to_vec());
-        let hashes: v1::Hashes = serde_json::from_slice(&files["hashes.json"]).unwrap();
-        assert_eq!(hashes.version.as_deref(), Some(label));
-        let digest =
-            ring::digest::digest(&ring::digest::SHA256, &files["migration.pb"]);
-        assert_eq!(
-            hashes.migration_pb,
-            Some(data_encoding::HEXLOWER.encode(digest.as_ref()))
-        );
-    }
+    let mut input = request(&pair.public_key, &info);
+    input.migration = Some(&migration);
+    let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
+        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
+    })
+    .unwrap();
+    let files = tier0(&output, &pair);
+    let names: Vec<_> = files.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "info.json",
+            "migration.pb",
+            "hashes.sign",
+            "hashes.json",
+            "backend_keys.json"
+        ]
+    );
+    let files: std::collections::BTreeMap<_, _> = files.into_iter().collect();
+    assert_eq!(files["migration.pb"], migration.encode_to_vec());
+    let hashes: v1::Hashes = serde_json::from_slice(&files["hashes.json"]).unwrap();
+    assert_eq!(hashes.version.as_deref(), Some("2.8"));
+    let digest = ring::digest::digest(&ring::digest::SHA256, &files["migration.pb"]);
+    assert_eq!(
+        hashes.migration_pb,
+        Some(data_encoding::HEXLOWER.encode(digest.as_ref()))
+    );
 }
 
 /// Every tier 0 JSON file decodes into the shared `pcp-defs` types without
@@ -471,11 +430,10 @@ mod diagnostics {
     }
 
     #[test]
-    fn diagnostic_redacted_tiers_are_gzip_for_all_versions() {
-        for version in [PcpVersion::V2_7, PcpVersion::V2_8, PcpVersion::V3_0] {
-            let info = capture_info((version != PcpVersion::V2_7).then_some("device"));
-            let mut input = request(&[0; 32], &info);
-            input.version = version;
+    fn diagnostic_redacted_tiers_are_gzip() {
+        for device in [None, Some("device")] {
+            let info = capture_info(device);
+            let input = request(&[0; 32], &info);
             let mut calls = 0;
             let output: pcp::DiagnosticPackage =
                 pcp::build_unencrypted_for_diagnostics(
@@ -494,23 +452,16 @@ mod diagnostics {
             assert!(tier(&output.tier2).is_empty());
             let manifest: serde_json::Value =
                 serde_json::from_slice(&tier0["hashes.json"]).unwrap();
+            assert_eq!(manifest["version"], "2.8");
             assert_eq!(
-                manifest["version"],
-                match version {
-                    PcpVersion::V2_7 => "2.7",
-                    PcpVersion::V2_8 => "2.8",
-                    PcpVersion::V3_0 => "3.0",
-                }
+                manifest["backend_keys.json"],
+                hash(&tier0["backend_keys.json"])
             );
-            if version == PcpVersion::V3_0 {
-                assert_eq!(manifest["tier_1"], hash(&output.tier1));
-                assert_eq!(manifest["tier_2"], hash(&output.tier2));
-            }
         }
     }
 
     #[test]
-    fn diagnostic_included_inner_archives_are_plaintext_for_all_versions() {
+    fn diagnostic_included_inner_archives_are_plaintext() {
         let mut images = images();
         images.face_ir_png = Some(b"synthetic-face-ir");
         images.thermal_png = Some(b"synthetic-thermal");
@@ -527,10 +478,9 @@ mod diagnostics {
         let iris_codes = v1::IrisCodes::default();
         let iris_code_shares = iris_code_shares();
         let (di_embeddings, di_embedding_shares) = no_di();
-        for version in [PcpVersion::V2_7, PcpVersion::V2_8, PcpVersion::V3_0] {
-            let info = capture_info((version != PcpVersion::V2_7).then_some("device"));
+        for device in [None, Some("device")] {
+            let info = capture_info(device);
             let mut input = request(&[0; 32], &info);
-            input.version = version;
             input.biometrics = BiometricPolicy::Included {
                 images: &images,
                 face_embeddings: &[],
@@ -545,8 +495,9 @@ mod diagnostics {
                 |_| Ok::<_, SignerError>(Vec::new()),
             )
             .unwrap();
-            let tiers = [&output.tier0, &output.tier1, &output.tier2].map(|x| tier(x));
-            let archives = &tiers[usize::from(version == PcpVersion::V3_0)];
+            let archives = tier(&output.tier0);
+            assert!(tier(&output.tier1).is_empty());
+            assert!(tier(&output.tier2).is_empty());
             assert_eq!(
                 entries(&archives["iris.tar"])["left_ir.png"],
                 b"synthetic-ir"
@@ -563,8 +514,7 @@ mod diagnostics {
                 entries(&archives["fraud.tar"])["scc_rgb.png"],
                 b"synthetic-scc"
             );
-            let modalities = &tiers[if version == PcpVersion::V3_0 { 2 } else { 0 }];
-            let modalities = entries(&modalities["face_ir_and_thermal.tar"]);
+            let modalities = entries(&archives["face_ir_and_thermal.tar"]);
             assert_eq!(modalities["face_ir.png"], b"synthetic-face-ir");
             assert_eq!(modalities["thermal.png"], b"synthetic-thermal");
         }

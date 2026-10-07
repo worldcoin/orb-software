@@ -2,7 +2,7 @@
 //! untrusted-package verifier or a production signer implementation.
 //!
 //! Run with `cargo run -p orb-pcp --example build_pcp`. Builds and verifies
-//! 2.7, 2.8, and 3.0 (with and without a device key), included and redacted.
+//! PCP 2.8 packages with and without a device key, included and redacted.
 //! Everything stays in memory; only case labels and encrypted sizes are printed.
 
 use std::{collections::BTreeMap, error::Error, io::Read};
@@ -119,14 +119,9 @@ pub fn run() -> Result<()> {
         embedding_inference_backend: Some("none".into()),
     }];
 
-    // Callers select the exact version and supply their actual metadata.
-    // Archive/encryption/manifest choices belong to the builder, not the caller.
-    for (version, device_public_key) in [
-        (pcp::PcpVersion::V2_7, None),
-        (pcp::PcpVersion::V2_8, Some("synthetic-device-key")),
-        (pcp::PcpVersion::V3_0, None),
-        (pcp::PcpVersion::V3_0, Some("synthetic-device-key")),
-    ] {
+    // Callers supply their actual metadata; archive, encryption and manifest
+    // choices belong to the builder.
+    for device_public_key in [None, Some("synthetic-device-key")] {
         let some = |value: &str| Some(value.to_owned());
         let info = v1::Info {
             signup_id: some("synthetic-signup"),
@@ -171,7 +166,6 @@ pub fn run() -> Result<()> {
                 })
                 .collect::<Result<_>>()?;
             let request = pcp::BuildRequest {
-                version,
                 timestamp: TIMESTAMP,
                 info: &info,
                 user_public_key: &user.public_key,
@@ -206,7 +200,6 @@ pub fn run() -> Result<()> {
             assert_eq!(calls, 1);
             verify(
                 &package,
-                version,
                 device_public_key,
                 redacted,
                 &user,
@@ -214,7 +207,7 @@ pub fn run() -> Result<()> {
                 &signer,
             )?;
             println!(
-                "{version:?} device_key={} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
+                "device_key={} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
                 device_public_key.is_some(), package.tier0.len(), package.tier1.len(), package.tier2.len()
             );
         }
@@ -286,7 +279,6 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
 
 fn verify(
     package: &pcp::Package,
-    version: pcp::PcpVersion,
     device_public_key: Option<&str>,
     redacted: bool,
     user: &KeyPair,
@@ -370,26 +362,14 @@ fn verify(
         "backend_keys.json".to_owned(),
         hash(&tier0["backend_keys.json"]),
     );
-    let wire_version = match version {
-        pcp::PcpVersion::V2_7 => "2.7",
-        pcp::PcpVersion::V2_8 => "2.8",
-        pcp::PcpVersion::V3_0 => {
-            expected.insert("tier_1".to_owned(), hash(&package.tier1));
-            expected.insert("tier_2".to_owned(), hash(&package.tier2));
-            for name in ["tier_3", "tier_4", "tier_5"] {
-                expected.insert(name.to_owned(), HEXLOWER.encode(&[0; 32]));
-            }
-            "3.0"
-        }
-    };
-    expected.insert("version".to_owned(), wire_version.to_owned());
+    expected.insert("version".to_owned(), "2.8".to_owned());
+    assert!(tier1.is_empty() && tier2.is_empty());
     assert_eq!(
         info.get("device_public_key"),
         device_public_key.map(serde_json::Value::from).as_ref()
     );
     if redacted {
         assert_eq!(tier0.len(), 4);
-        assert!(tier1.is_empty() && tier2.is_empty());
         for name in [
             "left_ir_image_id",
             "right_ir_image_id",
@@ -467,16 +447,8 @@ fn verify(
             info["right_ir_multiframe_image_ids"],
             serde_json::json!(["synthetic-extra-right"])
         );
-        let archives = if version == pcp::PcpVersion::V3_0 {
-            assert_eq!(tier0.len(), 13);
-            assert_eq!(tier1.len(), 4);
-            assert_eq!(tier2.len(), 1);
-            &tier1
-        } else {
-            assert_eq!(tier0.len(), 18);
-            assert!(tier1.is_empty() && tier2.is_empty());
-            &tier0
-        };
+        assert_eq!(tier0.len(), 18);
+        let archives = &tier0;
         for (name, key) in [
             ("iris.tar", &backends[0]),
             ("normalized_iris.tar", &backends[1]),
@@ -509,11 +481,8 @@ fn verify(
                 );
             }
         }
-        let modalities = if version == pcp::PcpVersion::V3_0 {
-            files(&tier2["face_ir_and_thermal.tar"])?
-        } else {
-            files(&open(&tier0["face_ir_and_thermal.tar"], &backends[3])?)?
-        };
+        let modalities =
+            files(&open(&tier0["face_ir_and_thermal.tar"], &backends[3])?)?;
         assert_eq!(modalities.len(), 2);
         for (name, bytes) in modalities {
             assert!(

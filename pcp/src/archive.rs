@@ -8,7 +8,6 @@ use std::io::Write;
 use zeroize::Zeroizing;
 
 use crate::{
-    builder::Envelope,
     crypto, manifest,
     payload::{EncodedDaugman, EncodedDi},
 };
@@ -331,18 +330,13 @@ fn encode_archive<'a>(
     Ok(archive)
 }
 
-/// Encoded inner archives in their required encryption state.
-///
-/// Names ending in `sealed` require backend-encrypted bytes. This structure does
-/// not validate encryption. The face-IR/thermal archive is the version-dependent
-/// exception described on its field.
+/// Backend-encrypted inner archives. This structure does not validate encryption.
 pub(crate) struct BiometricArchives<'a> {
     pub iris_sealed: &'a [u8],
     pub normalized_iris_sealed: &'a [u8],
     pub face_sealed: &'a [u8],
     pub fraud_sealed: Option<&'a [u8]>,
-    /// Backend-tier2-encrypted tar for V2; plain tar for V3.
-    pub face_ir_and_thermal: &'a [u8],
+    pub face_ir_and_thermal_sealed: &'a [u8],
 }
 
 /// The complete set of biometric entries, including already-serialized payloads.
@@ -367,56 +361,30 @@ pub(crate) struct Tier0Files<'a> {
     pub migration_pb: Option<&'a [u8]>,
 }
 
-pub(crate) struct AuxiliaryTiers {
-    pub tier1: Zeroizing<Vec<u8>>,
-    pub tier2: Zeroizing<Vec<u8>>,
-}
-
-/// Encodes tiers 1 and 2 before their compression/encryption and manifest hashing.
-///
-/// V2 always produces two empty tar archives. V3 places biometric archives in
-/// these tiers, or produces empty archives when `biometrics` is `None`.
-/// For V3, compress and user-encrypt these outputs before computing the tier
-/// digests supplied to [`crate::manifest::TierEntries::Present`].
-pub(crate) fn auxiliary_tiers(
-    format: Envelope,
-    timestamp: u64,
-    biometrics: Option<&PreparedBiometricFiles<'_>>,
-) -> Result<AuxiliaryTiers, ArchiveError> {
-    let (tier1, tier2) = match (format, biometrics) {
-        (Envelope::V3, Some(biometrics)) => (
-            main_archives(&biometrics.archives),
-            vec![(
-                "face_ir_and_thermal.tar",
-                biometrics.archives.face_ir_and_thermal,
-            )],
-        ),
-        _ => (Vec::new(), Vec::new()),
-    };
-    Ok(AuxiliaryTiers {
-        tier1: encode_tar(timestamp, tier1)?,
-        tier2: encode_tar(timestamp, tier2)?,
-    })
-}
-
 /// Encodes tier 0 after manifest construction and signing.
 ///
-/// Use the same format, timestamp and biometric bundle as for [`auxiliary_tiers`].
-/// V2 includes the inner archives here; V3 does not. Both include biometric
-/// JSON/protobuf entries only when `biometrics` is `Some`. The result still needs
-/// gzip compression and user encryption; it is not a deliverable PCP.
+/// The inner archives and biometric JSON/protobuf entries are included only when
+/// `biometrics` is `Some`. The result still needs gzip compression and user
+/// encryption; it is not a deliverable PCP.
 pub(crate) fn tier0(
-    format: Envelope,
     timestamp: u64,
     files: Tier0Files<'_>,
     biometrics: Option<&PreparedBiometricFiles<'_>>,
 ) -> Result<Zeroizing<Vec<u8>>, ArchiveError> {
     let mut entries = Vec::new();
-    if let (Envelope::V2, Some(biometrics)) = (format, biometrics) {
-        entries.extend(main_archives(&biometrics.archives));
+    if let Some(biometrics) = biometrics {
+        let archives = &biometrics.archives;
+        entries.extend([
+            ("iris.tar", archives.iris_sealed),
+            ("normalized_iris.tar", archives.normalized_iris_sealed),
+            ("face.tar", archives.face_sealed),
+        ]);
+        if let Some(fraud) = archives.fraud_sealed {
+            entries.push(("fraud.tar", fraud));
+        }
         entries.push((
             "face_ir_and_thermal.tar",
-            biometrics.archives.face_ir_and_thermal,
+            archives.face_ir_and_thermal_sealed,
         ));
     }
     entries.push(("info.json", files.info_json));
@@ -452,20 +420,6 @@ pub(crate) fn tier0(
         ("backend_keys.json", files.backend_keys_json),
     ]);
     encode_tar(timestamp, entries)
-}
-
-fn main_archives<'a>(
-    archives: &BiometricArchives<'a>,
-) -> Vec<(&'static str, &'a [u8])> {
-    let mut entries = vec![
-        ("iris.tar", archives.iris_sealed),
-        ("normalized_iris.tar", archives.normalized_iris_sealed),
-        ("face.tar", archives.face_sealed),
-    ];
-    if let Some(fraud) = archives.fraud_sealed {
-        entries.push(("fraud.tar", fraud));
-    }
-    entries
 }
 
 #[cfg(test)]
