@@ -19,6 +19,14 @@ PCP versions.
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
 
+## Deep-identifier models
+
+From PCP 2.9, `di_iris_embeddings.pb` and each `di_iris_embeddings_shares_N.pb`
+hold one `per_model` entry per live model, at most one per `model_version`.
+The singular `embedding_v1` / `share_v1` fields are how 2.8 and earlier carry
+their single model; 2.9 writers leave them unset, readers keep reading them
+for older packages.
+
 ## Migration artifacts
 
 - `migration.pb` (binary protobuf `Migration`): TEE software and biometric
@@ -51,6 +59,8 @@ Changes that need a new package because they change the signed bytes:
   moved in 2.7. Iris code shares can then share a layout with the
   deep-identifier shares, still one file per share.
 - Carry binary payloads as `bytes`, not base64 or hex strings.
+- Drop `share_v1` / `embedding_v1` and the `DiIrisEmbeddingShareV1` /
+  `DiIrisEmbeddingV1` types; `per_model` is the only deep-identifier field.
 - Model each salted value as one `{value, salt}` type, not two sibling
   entries.
 
