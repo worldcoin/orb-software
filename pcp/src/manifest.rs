@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use data_encoding::HEXLOWER;
 
-/// The `version` written to every manifest.
-pub(crate) const VERSION: &str = "2.8";
+/// The PCP version written to the `version` field of every manifest.
+pub const PCP_VERSION: &str = "2.8";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ManifestError {
@@ -71,7 +71,7 @@ pub(crate) fn encode<'a>(
             return Err(ManifestError::DuplicateEntry);
         }
     }
-    fields.insert("version", VERSION.to_owned());
+    fields.insert("version", PCP_VERSION.to_owned());
     Ok(serde_json::to_vec(&fields)?)
 }
 

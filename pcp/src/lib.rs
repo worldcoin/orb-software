@@ -25,7 +25,7 @@ pub use builder::{build, BiometricPolicy, BuildError, BuildRequest, Package};
 #[cfg(feature = "not-prod-diagnostics")]
 pub use builder::{build_unencrypted_for_diagnostics, DiagnosticPackage};
 pub use crypto::{CommitmentError, SealingError};
-pub use manifest::{ManifestError, SigningError};
+pub use manifest::{ManifestError, SigningError, PCP_VERSION};
 pub use metadata::MetadataError;
 /// The shared PCP schema used for `info.json`, the payload files and `migration.pb`.
 pub use orb_pcp_defs::v1;

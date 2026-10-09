@@ -40,6 +40,7 @@ a signer callback receiving the exact 32-byte SHA-256 digest.
   hash remain.
 - TEE migrations set `BuildRequest::migration`; it is written as binary
   `migration.pb` and hashed in `hashes.json`.
+- Every manifest is stamped `orb_pcp::PCP_VERSION`.
 
 The result contains three encrypted tiers, of which tiers 1 and 2 are empty
 archives, and their SHA-256 checksums.
