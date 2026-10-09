@@ -126,10 +126,11 @@ pub struct IrisEye<'a> {
     pub multiframe: &'a [IrisFrame<'a>],
 }
 
+/// Images written to `fraud.tar`; each `None` image is left out.
 pub struct FraudImages<'a> {
-    pub scc_rgb_png: &'a [u8],
-    pub left_rgb_png: &'a [u8],
-    pub right_rgb_png: &'a [u8],
+    pub scc_rgb_png: Option<&'a [u8]>,
+    pub left_rgb_png: Option<&'a [u8]>,
+    pub right_rgb_png: Option<&'a [u8]>,
     pub left_thermal_png: Option<&'a [u8]>,
     pub right_thermal_png: Option<&'a [u8]>,
     pub scc_depth_png: Option<&'a [u8]>,
@@ -234,9 +235,9 @@ pub(crate) fn encode_inner(
             encode_archive(
                 timestamp,
                 [
-                    ("scc_rgb.png", Some(fraud.scc_rgb_png)),
-                    ("left_rgb.png", Some(fraud.left_rgb_png)),
-                    ("right_rgb.png", Some(fraud.right_rgb_png)),
+                    ("scc_rgb.png", fraud.scc_rgb_png),
+                    ("left_rgb.png", fraud.left_rgb_png),
+                    ("right_rgb.png", fraud.right_rgb_png),
                     ("left_thermal.png", fraud.left_thermal_png),
                     ("right_thermal.png", fraud.right_thermal_png),
                     ("scc_depth.png", fraud.scc_depth_png),

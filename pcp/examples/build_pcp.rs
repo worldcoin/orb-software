@@ -66,9 +66,9 @@ pub fn run() -> Result<()> {
         face_ir_png: Some(&png),
         thermal_png: Some(&png),
         fraud: Some(pcp::FraudImages {
-            scc_rgb_png: &png,
-            left_rgb_png: &png,
-            right_rgb_png: &png,
+            scc_rgb_png: Some(&png),
+            left_rgb_png: Some(&png),
+            right_rgb_png: Some(&png),
             left_thermal_png: Some(&png),
             right_thermal_png: Some(&png),
             scc_depth_png: Some(&png),

@@ -376,9 +376,9 @@ mod inner_archives {
         input.face_ir_png = Some(b"face ir");
         input.thermal_png = Some(b"thermal");
         input.fraud = Some(archive::FraudImages {
-            scc_rgb_png: b"scc",
-            left_rgb_png: b"left",
-            right_rgb_png: b"right",
+            scc_rgb_png: Some(b"scc"),
+            left_rgb_png: None,
+            right_rgb_png: Some(b"right"),
             left_thermal_png: None,
             right_thermal_png: Some(b"right thermal"),
             scc_depth_png: Some(b"scc depth"),
@@ -395,7 +395,6 @@ mod inner_archives {
                 .collect::<Vec<_>>(),
             [
                 "scc_rgb.png",
-                "left_rgb.png",
                 "right_rgb.png",
                 "right_thermal.png",
                 "scc_depth.png",

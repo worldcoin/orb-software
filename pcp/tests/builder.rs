@@ -510,9 +510,9 @@ mod diagnostics {
         images.face_ir_png = Some(b"synthetic-face-ir");
         images.thermal_png = Some(b"synthetic-thermal");
         images.fraud = Some(pcp::FraudImages {
-            scc_rgb_png: b"synthetic-scc",
-            left_rgb_png: b"synthetic-left",
-            right_rgb_png: b"synthetic-right",
+            scc_rgb_png: Some(b"synthetic-scc"),
+            left_rgb_png: Some(b"synthetic-left"),
+            right_rgb_png: Some(b"synthetic-right"),
             left_thermal_png: None,
             right_thermal_png: None,
             scc_depth_png: None,
