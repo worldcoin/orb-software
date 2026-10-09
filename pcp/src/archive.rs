@@ -323,7 +323,7 @@ pub(crate) struct BiometricArchives<'a> {
 }
 
 /// All biometric entries, including serialized payloads. Empty payloads are
-/// written as empty files.
+/// written as empty files; iris code files that were not supplied are left out.
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
     pub face_embeddings_json: &'a [u8],
@@ -371,7 +371,9 @@ pub(crate) fn tier0(
     }
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
-        entries.push(("iris_codes.json", biometrics.daugman.codes.as_slice()));
+        if let Some(codes) = &biometrics.daugman.codes {
+            entries.push(("iris_codes.json", codes.as_slice()));
+        }
         entries.extend(
             [
                 "iris_code_shares_0.json",
@@ -379,7 +381,8 @@ pub(crate) fn tier0(
                 "iris_code_shares_2.json",
             ]
             .into_iter()
-            .zip(biometrics.daugman.shares.iter().map(Vec::as_slice)),
+            .zip(&biometrics.daugman.shares)
+            .filter_map(|(name, share)| Some((name, share.as_deref()?))),
         );
         entries.push(("di_iris_embeddings.pb", biometrics.di.embeddings.as_slice()));
         entries.extend(

@@ -456,9 +456,9 @@ mod tier_layout {
     fn payloads() -> (EncodedDaugman, EncodedDi) {
         (
             EncodedDaugman {
-                codes: b"iris-json".to_vec(),
+                codes: Some(b"iris-json".to_vec()),
                 shares: [b"iris-share-0", b"iris-share-1", b"iris-share-2"]
-                    .map(|x| x.to_vec()),
+                    .map(|x| Some(x.to_vec())),
             },
             EncodedDi {
                 embeddings: b"di-protobuf".to_vec(),

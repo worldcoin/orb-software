@@ -307,6 +307,48 @@ fn migration_pb_follows_info_and_is_hashed() {
     );
 }
 
+#[test]
+fn absent_iris_code_files_are_left_out_with_their_hashes() {
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(Some("device"));
+    let images = images();
+    let shares = iris_code_shares();
+    let (di_embeddings, di_embedding_shares) = no_di();
+    let mut input = request(&pair.public_key, &info);
+    input.biometrics = BiometricPolicy::Included {
+        images: &images,
+        face_embeddings: &[],
+        iris_codes: None,
+        iris_code_shares: [None, Some(&shares[1]), None],
+        di_embeddings: &di_embeddings,
+        di_embedding_shares: &di_embedding_shares,
+    };
+    let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
+        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
+    })
+    .unwrap();
+    let files: std::collections::BTreeMap<_, _> =
+        tier0(&output, &pair).into_iter().collect();
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&files["hashes.json"]).unwrap();
+    for name in [
+        "iris_codes.json",
+        "iris_code_shares_0.json",
+        "iris_code_shares_2.json",
+    ] {
+        assert!(!files.contains_key(name), "{name}");
+        assert!(manifest.get(name).is_none(), "{name}");
+    }
+    let share = &files["iris_code_shares_1.json"];
+    let decoded: v1::IrisCodeShares = serde_json::from_slice(share).unwrap();
+    assert_eq!(decoded, shares[1]);
+    let digest = ring::digest::digest(&ring::digest::SHA256, share);
+    assert_eq!(
+        manifest["iris_code_shares_1.json"],
+        data_encoding::HEXLOWER.encode(digest.as_ref())
+    );
+}
+
 /// Every tier 0 JSON file decodes into the shared `pcp-defs` types without
 /// losing a key or value. Only per-frame manifest keys fall outside `Hashes`.
 #[test]
@@ -351,8 +393,8 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     input.biometrics = BiometricPolicy::Included {
         images: &images,
         face_embeddings: &face_embeddings,
-        iris_codes: &iris_codes,
-        iris_code_shares: &iris_code_shares,
+        iris_codes: Some(&iris_codes),
+        iris_code_shares: iris_code_shares.each_ref().map(Some),
         di_embeddings: &di_embeddings,
         di_embedding_shares: &di_embedding_shares,
     };
@@ -486,8 +528,8 @@ mod diagnostics {
             input.biometrics = BiometricPolicy::Included {
                 images: &images,
                 face_embeddings: &[],
-                iris_codes: &iris_codes,
-                iris_code_shares: &iris_code_shares,
+                iris_codes: Some(&iris_codes),
+                iris_code_shares: iris_code_shares.each_ref().map(Some),
                 di_embeddings: &di_embeddings,
                 di_embedding_shares: &di_embedding_shares,
             };
