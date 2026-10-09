@@ -24,7 +24,7 @@ uuid = { version = "1.4.1", features = ["v4"] }
 [dev-dependencies.orb-relay-messages]
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "50301bd41e9ece98c4c0f73a274207d5683793ae"
+rev = "7a289f899fc409481b93cfbf530f29b100754633"
 
 [[test]]
 name = "qr-codes"
