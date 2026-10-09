@@ -5,13 +5,20 @@ use hpke::{
     OpModeR, OpModeS, Serializable,
 };
 pub use orb_relay_messages::common::v1::IpcpHpkePayload as EncryptedPayload;
+use orb_relay_messages::common::v1::{AppAuthenticatedData, HashError};
 use zeroize::Zeroizing;
 
 type Profile = X25519HkdfSha256;
 
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
+const AAD_LEN: usize = 32;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
+
+/// Binds the iPCP to `app_data`, so altering any field of it fails decryption.
+fn aad(app_data: &AppAuthenticatedData) -> Result<Vec<u8>, Error> {
+    Ok(app_data.hash(AAD_LEN)?)
+}
 
 pub struct PairingKey {
     sk: <Profile as Kem>::PrivateKey,
@@ -31,6 +38,22 @@ impl PairingKey {
     }
 
     pub fn decrypt(
+        &self,
+        encrypted_payload: &EncryptedPayload,
+        app_data: &AppAuthenticatedData,
+    ) -> Result<Zeroizing<Vec<u8>>, Error> {
+        self.open(encrypted_payload, &aad(app_data)?)
+    }
+
+    pub fn encrypt(
+        recipient_pk: &RecipientPublicKey,
+        plaintext: Zeroizing<Vec<u8>>,
+        app_data: &AppAuthenticatedData,
+    ) -> Result<EncryptedPayload, Error> {
+        Self::seal(recipient_pk, plaintext, &aad(app_data)?)
+    }
+
+    fn open(
         &self,
         encrypted_payload: &EncryptedPayload,
         aad: &[u8],
@@ -55,7 +78,7 @@ impl PairingKey {
         .map_err(|_| Error::Decryption)
     }
 
-    pub fn encrypt(
+    fn seal(
         recipient_pk: &RecipientPublicKey,
         plaintext: Zeroizing<Vec<u8>>,
         aad: &[u8],
@@ -108,6 +131,8 @@ pub enum Error {
     Encryption,
     #[error("HPKE decryption failed")]
     Decryption,
+    #[error("Invalid app data: {0}")]
+    InvalidAppData(#[from] HashError),
 }
 
 #[cfg(test)]
