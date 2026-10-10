@@ -15,7 +15,6 @@ default = ["linux-collectors"]
 linux-collectors = [
 	"dep:orb-backend-status-dbus",
 	"dep:orb-connd-dbus",
-	"dep:orb-endpoints",
 	"dep:orb-messages",
 	"orb-telemetry/zbus-tracing",
 	"dep:orb-update-agent-dbus",
@@ -41,7 +40,7 @@ oes.workspace = true
 orb-backend-status-dbus = { workspace = true, optional = true }
 orb-build-info.workspace = true
 orb-connd-dbus = { workspace = true, optional = true }
-orb-endpoints = { workspace = true, optional = true }
+orb-endpoints.workspace = true
 orb-messages = { workspace = true, optional = true }
 orb-info = { workspace = true, features = [
 	"async",

@@ -5,17 +5,17 @@ use color_eyre::{
     Result,
 };
 use orb_backend_status::{collectors, BUILD_INFO};
+use orb_endpoints::{v2::Endpoints, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
-use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(version = BUILD_INFO.version, about = "Forward Android OES events to the backend")]
 pub struct Args {
-    /// Full backend status URL.
+    /// Backend environment: prod, staging, or analysis.
     #[arg(long)]
-    endpoint: Url,
+    backend: Backend,
     /// File containing the temporary backend authentication token.
     #[arg(long)]
     token_file: PathBuf,
@@ -47,6 +47,11 @@ fn zenoh_config(socket: &Path) -> Result<zenorb::zenoh::Config> {
 }
 
 pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
+    ensure!(
+        args.backend != Backend::Local,
+        "local backend is not supported; use prod, staging, or analysis"
+    );
+    let endpoint = Endpoints::new(args.backend, &orb_id).status;
     let zenoh = zenoh_config(&args.zenoh_socket)?;
     let metrics_socket = args
         .metrics_socket
@@ -74,7 +79,7 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         orb_name: OrbName::read_unfallable().await,
         orb_jabil_id: OrbJabilId("unknown".to_owned()),
         orb_os_version: args.orb_os_version,
-        endpoint: args.endpoint,
+        endpoint,
         zenoh,
         collectors: collectors::Config { token },
         metrics_socket: Some(metrics_socket),
