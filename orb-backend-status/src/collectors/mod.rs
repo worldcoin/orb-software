@@ -1,24 +1,37 @@
-pub mod connectivity;
-pub mod core_signups;
-pub mod front_als;
-pub mod hardware_states;
-pub mod net_stats;
-pub mod oes_collector;
-pub mod token;
-pub mod update_progress;
+#[cfg(not(any(feature = "linux-collectors", feature = "android-collectors")))]
+compile_error!("enable linux-collectors or android-collectors");
 
-use crate::{dbus::intf_impl::BackendStatusImpl, orb_event_stream::OrbEventStream};
-use connectivity::GlobalConnectivity;
-use hardware_states::HardwareState;
-use orb_messages::main::AmbientLight;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::watch;
+#[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+pub mod android;
+#[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+pub use android::{Collectors, Config};
 
-#[derive(Clone)]
-pub(crate) struct ZenorbCtx {
-    pub backend_status: BackendStatusImpl,
-    pub connectivity_tx: watch::Sender<GlobalConnectivity>,
-    pub hardware_states: Arc<tokio::sync::Mutex<HashMap<String, HardwareState>>>,
-    pub front_als: Arc<tokio::sync::Mutex<Option<AmbientLight>>>,
-    pub oes: OrbEventStream,
+#[cfg(feature = "linux-collectors")]
+pub mod linux;
+
+#[cfg(feature = "linux-collectors")]
+pub use linux::{
+    connectivity, core_signups, front_als, hardware_states, net_stats, token,
+    update_progress,
+};
+#[cfg(feature = "linux-collectors")]
+pub use linux::{Collectors, Config};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GlobalConnectivity {
+    Connected { ssid: Option<String> },
+    NotConnected,
+}
+
+impl GlobalConnectivity {
+    pub fn is_connected(&self) -> bool {
+        matches!(self, Self::Connected { .. })
+    }
+
+    pub fn ssid(&self) -> Option<&str> {
+        match self {
+            Self::Connected { ssid } => ssid.as_deref(),
+            Self::NotConnected => None,
+        }
+    }
 }

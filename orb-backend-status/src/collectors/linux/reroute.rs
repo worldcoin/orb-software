@@ -1,4 +1,5 @@
-use crate::{collectors::ZenorbCtx, orb_event_stream::Payload};
+use super::ZenorbCtx;
+use crate::orb_event_stream::Payload;
 use std::time::Duration;
 use zenorb::Receiver;
 
