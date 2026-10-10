@@ -42,22 +42,6 @@ impl PairingKey {
         encrypted_payload: &EncryptedPayload,
         app_data: &AppAuthenticatedData,
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
-        self.open(encrypted_payload, &aad(app_data)?)
-    }
-
-    pub fn encrypt(
-        recipient_pk: &RecipientPublicKey,
-        plaintext: Zeroizing<Vec<u8>>,
-        app_data: &AppAuthenticatedData,
-    ) -> Result<EncryptedPayload, Error> {
-        Self::seal(recipient_pk, plaintext, &aad(app_data)?)
-    }
-
-    fn open(
-        &self,
-        encrypted_payload: &EncryptedPayload,
-        aad: &[u8],
-    ) -> Result<Zeroizing<Vec<u8>>, Error> {
         if encrypted_payload.enc.len() != KEY_LEN
             || encrypted_payload.ciphertext.len() < TAG_LEN
         {
@@ -72,16 +56,16 @@ impl PairingKey {
             &ephemeral_public_key,
             &[],
             &encrypted_payload.ciphertext,
-            aad,
+            &aad(app_data)?,
         )
         .map(Zeroizing::new)
         .map_err(|_| Error::Decryption)
     }
 
-    fn seal(
+    pub fn encrypt(
         recipient_pk: &RecipientPublicKey,
         plaintext: Zeroizing<Vec<u8>>,
-        aad: &[u8],
+        app_data: &AppAuthenticatedData,
     ) -> Result<EncryptedPayload, Error> {
         let (ephemeral_public_key, ciphertext) =
             hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
@@ -89,7 +73,7 @@ impl PairingKey {
                 &recipient_pk.0,
                 &[],
                 &plaintext,
-                aad,
+                &aad(app_data)?,
             )
             .map_err(|_| Error::Encryption)?;
         Ok(EncryptedPayload {

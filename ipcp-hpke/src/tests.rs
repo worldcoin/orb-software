@@ -156,7 +156,7 @@ fn ipcp_image_fixture_matches_decryption() {
         assert_eq!(f[field].as_u64(), Some(expected), "{field}");
     }
     assert!(bytes(&f, "info").is_empty());
-    assert!(bytes(&f, "aad").is_empty());
+    assert_eq!(bytes(&f, "aad"), app_data().hash(32).unwrap());
     let ipcp_image = bytes(&f, "pt");
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     assert_eq!(
@@ -170,7 +170,7 @@ fn ipcp_image_fixture_matches_decryption() {
     );
     assert_eq!(
         pairing_key_from_fixture(&f)
-            .open(&encrypted_ipcp_image_payload, &[])
+            .decrypt(&encrypted_ipcp_image_payload, &app_data())
             .unwrap()
             .as_slice(),
         ipcp_image
@@ -185,7 +185,7 @@ fn published_cfrg_vector_with_nonempty_context_is_rejected() {
     assert!(!bytes(&f, "info").is_empty());
     assert!(!bytes(&f, "aad").is_empty());
     assert!(matches!(
-        pairing_key.open(&encrypted_test_payload, &[]),
+        pairing_key.decrypt(&encrypted_test_payload, &app_data()),
         Err(Error::Decryption)
     ));
 }
@@ -199,20 +199,20 @@ fn truncated_and_extended_payloads_are_rejected() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.enc.truncate(length);
         assert!(matches!(
-            pairing_key.open(&truncated, &[]),
+            pairing_key.decrypt(&truncated, &app_data()),
             Err(Error::InvalidPayload)
         ));
     }
     let mut extended = encrypted_ipcp_image_payload.clone();
     extended.enc.push(0);
     assert!(matches!(
-        pairing_key.open(&extended, &[]),
+        pairing_key.decrypt(&extended, &app_data()),
         Err(Error::InvalidPayload)
     ));
     for length in 0..encrypted_ipcp_image_payload.ciphertext.len() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.ciphertext.truncate(length);
-        let result = pairing_key.open(&truncated, &[]);
+        let result = pairing_key.decrypt(&truncated, &app_data());
         assert!(
             if length < TAG_LEN {
                 matches!(result, Err(Error::InvalidPayload))
@@ -225,7 +225,7 @@ fn truncated_and_extended_payloads_are_rejected() {
     let mut extended = encrypted_ipcp_image_payload;
     extended.ciphertext.push(0);
     assert!(matches!(
-        pairing_key.open(&extended, &[]),
+        pairing_key.decrypt(&extended, &app_data()),
         Err(Error::Decryption)
     ));
 }
@@ -248,7 +248,7 @@ fn moving_bytes_across_payload_field_boundary_is_rejected() {
             original_field_bytes
         );
         assert!(matches!(
-            pairing_key.open(&malformed, &[]),
+            pairing_key.decrypt(&malformed, &app_data()),
             Err(Error::InvalidPayload)
         ));
     }
@@ -270,7 +270,7 @@ fn decrypted_ipcp_image_uses_zeroizing_guard() {
     fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
     let f = ipcp_image_fixture();
     let mut decrypted_ipcp_image_bytes = pairing_key_from_fixture(&f)
-        .open(&encrypted_ipcp_image_payload_from_fixture(&f), &[])
+        .decrypt(&encrypted_ipcp_image_payload_from_fixture(&f), &app_data())
         .unwrap();
     assert_drop_guard(&decrypted_ipcp_image_bytes);
     assert!(!decrypted_ipcp_image_bytes.is_empty());
