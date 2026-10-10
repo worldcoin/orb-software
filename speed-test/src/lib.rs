@@ -116,7 +116,8 @@ pub async fn run_speed_test(test_size_bytes: usize) -> Result<SpeedTestResults> 
     })
 }
 
-fn assess_connectivity_quality(speed_mbps: f64) -> ConnectivityQuality {
+/// Classifies throughput in decimal megabits per second.
+pub fn assess_connectivity_quality(speed_mbps: f64) -> ConnectivityQuality {
     if speed_mbps >= EXCELLENT_UPLOAD_THRESHOLD {
         ConnectivityQuality::Excellent
     } else if speed_mbps >= GOOD_UPLOAD_THRESHOLD {

@@ -67,6 +67,7 @@ members = [
 	"update-agent/core",
 	"update-verifier",
 	"verity-tree-calc",
+	"wld-data-id",
 	"wpa-supplicant",
 	"wt-video",
 	"xtask",
@@ -155,6 +156,7 @@ ring = "0.17.2"
 rkyv = "0.8.17"
 rustix = "0.38.37"
 rustls = { version = "0.23.45", default-features = false, features = ["ring"] }
+schemars = "0.8.12"
 secrecy = "0.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1"
@@ -226,6 +228,7 @@ orb-telemetry = { path = "telemetry", default-features = false }
 orb-update-agent.path = "update-agent"
 orb-update-agent-core.path = "update-agent/core"
 orb-update-agent-dbus.path = "update-agent/dbus"
+orb-wld-data-id.path = "wld-data-id"
 orb-zbus-proxies.path = "zbus-proxies"
 prelude = { path = "prelude", default-features = false }
 seek-camera.path = "seek-camera/wrapper"

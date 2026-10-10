@@ -13,11 +13,29 @@ number and name as `reserved` so neither is ever reused.
 
 Adding a field is not a new package version. New fields are `optional` or
 `repeated`, and consumers (oxide, backends) must treat an absent field as not
-set and ignore fields they don't know. That is how a single `pcp.v1` covers
-both 2.7 and 2.8.
+set and ignore fields they don't know. A single `pcp.v1` can cover multiple
+PCP versions.
 
 `hashes.sign` covers the original `hashes.json` bytes. Verify against those
 bytes, never against a re-encoded message.
+
+## Migration artifacts
+
+- `migration.pb` (binary protobuf `Migration`): TEE software and biometric
+  pipeline versions, source signup ID and PCP version, and migration timestamp.
+  `migrated_ts` is uint64 Unix seconds.
+- `Migration.src_signup_id`: the source package's `Info.signup_id`.
+  The new package's `Info.signup_id` identifies the new signup.
+- `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
+  Hash and verify the exact emitted `migration.pb` bytes,
+  never a decoded and re-encoded message.
+
+These additions are optional for ordinary captures. The migration builder must
+require `migration.pb` and its hash in `hashes.json`.
+
+The TEE verifies the source manifest and signature before processing the
+package, then produces a new `hashes.json` and `hashes.sign` covering the
+migrated package.
 
 ## Next breaking version
 
@@ -35,3 +53,17 @@ Changes that need a new package because they change the signed bytes:
 - Carry binary payloads as `bytes`, not base64 or hex strings.
 - Model each salted value as one `{value, salt}` type, not two sibling
   entries.
+
+## Checking a real package
+
+`cargo run -p orb-pcp-defs --example check_tier0 -- <tier0.tar.gz>`
+checks an unencrypted tier0 exported by orb-core (`not-prod-pcp-export` and
+`not-prod-pcp-no-encrypt`):
+
+- every JSON and `.pb` file decodes into its `v1` type and re-encodes to the
+  same bytes. Decoding ignores unknown fields, so this is what catches a key
+  the orb writes but the protos lack.
+- `hashes.json` has a matching digest for every file, and for every salted
+  `info.json` field.
+
+The packages hold raw biometrics, so keep them out of git.

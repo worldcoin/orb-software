@@ -26,7 +26,7 @@ zeroize = "1.8.2"
 [dependencies.orb-relay-messages]
 features = ["client"]
 git = "https://github.com/worldcoin/orb-relay-messages.git"
-rev = "50301bd41e9ece98c4c0f73a274207d5683793ae"
+rev = "7495ecd1f1faaa0edf715628a2119bdcf76d9a6c"
 
 [dev-dependencies]
 hex = "0.4.3"
