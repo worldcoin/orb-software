@@ -48,21 +48,17 @@ pub(crate) fn sorted_json(value: Value) -> Result<Vec<u8>, serde_json::Error> {
     serde_json::to_vec(&sort(value))
 }
 
-/// Encodes the list in order, with sorted object keys.
 pub(crate) fn face_embeddings(
     embeddings: &[v1::FaceEmbedding],
 ) -> Result<Vec<u8>, serde_json::Error> {
     sorted_json(serde_json::to_value(embeddings)?)
 }
 
-/// Encoded iris code files; `None` where no message was supplied.
 pub(crate) struct EncodedDaugman {
     pub codes: Option<Vec<u8>>,
     pub shares: [Option<Vec<u8>>; 3],
 }
 
-/// Encodes `iris_codes.json` and the three same-index recipient share files,
-/// each only when its message is supplied.
 pub(crate) fn encode_daugman(
     codes: Option<&IrisCodes>,
     shares: [Option<&IrisCodeShares>; 3],
@@ -80,7 +76,6 @@ pub(crate) fn encode_daugman(
     })
 }
 
-/// Encodes all four roles with sorted keys at both object levels.
 pub(crate) fn backend_keys(
     keys: &BackendKeys<'_>,
 ) -> Result<Vec<u8>, serde_json::Error> {
@@ -103,8 +98,7 @@ pub(crate) struct EncodedDi {
     pub shares: [Option<Vec<u8>>; 3],
 }
 
-/// Encodes the embedding file and three same-index recipient share files as
-/// binary protobuf, each only when supplied. Default messages encode to empty files.
+/// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
     embeddings: Option<&DiIrisEmbeddings>,
     shares: [Option<&DiIrisEmbeddingShares>; 3],

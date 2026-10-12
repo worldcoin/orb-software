@@ -15,20 +15,16 @@ pub enum BiometricPolicy<'a> {
     Redacted,
     /// Messages are written as given. Hyrax commitments are generated from the
     /// normalized images.
+    ///
+    /// For iris codes, DI embeddings and their shares, `None` omits the file and
+    /// its hash; `Some` includes both, even for empty messages. Share array
+    /// indices identify recipients and remain fixed when other shares are absent.
     Included {
         images: &'a archive::PackageImages<'a>,
         face_embeddings: &'a [v1::FaceEmbedding],
-        /// `None` leaves out the file and its hash. `Some` writes the message,
-        /// including an empty message.
         iris_codes: Option<&'a v1::IrisCodes>,
-        /// Same-index files belong to the same recipient. `None` leaves out that
-        /// share file and its hash.
         iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
-        /// `None` leaves out the file and its hash. `Some` writes the message,
-        /// including an empty message (a zero-byte protobuf file).
         di_embeddings: Option<&'a v1::DiIrisEmbeddings>,
-        /// Same-index files belong to the same recipient. `None` leaves out that
-        /// share file and its hash.
         di_embedding_shares: [Option<&'a v1::DiIrisEmbeddingShares>; 3],
     },
 }

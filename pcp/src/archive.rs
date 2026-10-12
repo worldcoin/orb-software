@@ -139,14 +139,14 @@ pub struct FraudImages<'a> {
 }
 
 /// Encoded PNGs and normalized bytes.
+/// Optional face IR and thermal images are written to `face_ir_and_thermal.tar`
+/// only when supplied.
 pub struct PackageImages<'a> {
     pub left: IrisEye<'a>,
     pub right: IrisEye<'a>,
     /// `None` writes an empty `thumbnail.png`.
     pub thumbnail_png: Option<&'a [u8]>,
-    /// `None` leaves the file out of `face_ir_and_thermal.tar`.
     pub face_ir_png: Option<&'a [u8]>,
-    /// `None` leaves the file out of `face_ir_and_thermal.tar`.
     pub thermal_png: Option<&'a [u8]>,
     /// `None` leaves out `fraud.tar`.
     pub fraud: Option<FraudImages<'a>>,
@@ -323,8 +323,6 @@ pub(crate) struct BiometricArchives<'a> {
     pub face_ir_and_thermal_sealed: &'a [u8],
 }
 
-/// All biometric entries, including serialized payloads. Supplied empty payloads
-/// are written as empty files; absent iris code and DI files are left out.
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
     pub face_embeddings_json: &'a [u8],
@@ -332,8 +330,6 @@ pub(crate) struct PreparedBiometricFiles<'a> {
     pub di: &'a EncodedDi,
 }
 
-/// Files written to tier 0 with or without biometrics. `hashes_signature` signs
-/// the exact `hashes_json` bytes.
 pub(crate) struct Tier0Files<'a> {
     pub info_json: &'a [u8],
     pub hashes_json: &'a [u8],
@@ -343,8 +339,6 @@ pub(crate) struct Tier0Files<'a> {
     pub migration_pb: Option<&'a [u8]>,
 }
 
-/// Encodes the tier 0 tar. The inner archives and biometric payloads are
-/// included when `biometrics` is `Some`.
 pub(crate) fn tier0(
     timestamp: u64,
     files: Tier0Files<'_>,
