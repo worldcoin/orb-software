@@ -160,9 +160,9 @@ mod di {
                 right_mirror_share: vec![],
             }),
         });
-        let output = payload::encode_di(&embeddings, &shares);
+        let output = payload::encode_di(Some(&embeddings), shares.each_ref().map(Some));
         assert_eq!(
-            output.embeddings,
+            output.embeddings.unwrap(),
             [
                 0x0a, 0x31, 0x0a, 1, b'm', 0x12, 1, b'b', 0x1a, 1, b'v', 0x22, 5, 0xff,
                 1, 0, 0xfe, 1, 0x2a, 1, 1, 0x32, 1, 2, 0x3a, 1, 3, 0x42, 4, 0, 0, 0x80,
@@ -172,7 +172,7 @@ mod di {
         );
         for (i, bytes) in output.shares.iter().enumerate() {
             assert_eq!(
-                bytes,
+                bytes.as_deref().unwrap(),
                 &[
                     0x0a, 0x0c, 0x0a, 1, b'm', 0x12, 1, b's', 0x1a, 1, b'v', 0x22, 1,
                     i as u8
@@ -184,10 +184,13 @@ mod di {
     #[test]
     fn default_messages_produce_empty_files() {
         let output = payload::encode_di(
-            &DiIrisEmbeddings::default(),
-            &std::array::from_fn(|_| DiIrisEmbeddingShares::default()),
+            Some(&DiIrisEmbeddings::default()),
+            [Some(&DiIrisEmbeddingShares::default()); 3],
         );
-        assert!(output.embeddings.is_empty());
-        assert!(output.shares.iter().all(Vec::is_empty));
+        assert_eq!(output.embeddings.as_deref(), Some([].as_slice()));
+        assert!(output
+            .shares
+            .iter()
+            .all(|share| share.as_deref() == Some(&[])));
     }
 }

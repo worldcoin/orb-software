@@ -18,15 +18,18 @@ pub enum BiometricPolicy<'a> {
     Included {
         images: &'a archive::PackageImages<'a>,
         face_embeddings: &'a [v1::FaceEmbedding],
-        /// `None` leaves out `iris_codes.json` and its hash, as for a migrated
-        /// package whose source lacks it.
+        /// `None` leaves out the file and its hash. `Some` writes the message,
+        /// including an empty message.
         iris_codes: Option<&'a v1::IrisCodes>,
         /// Same-index files belong to the same recipient. `None` leaves out that
         /// share file and its hash.
         iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
-        /// Default messages produce empty DI files.
-        di_embeddings: &'a v1::DiIrisEmbeddings,
-        di_embedding_shares: &'a [v1::DiIrisEmbeddingShares; 3],
+        /// `None` leaves out the file and its hash. `Some` writes the message,
+        /// including an empty message (a zero-byte protobuf file).
+        di_embeddings: Option<&'a v1::DiIrisEmbeddings>,
+        /// Same-index files belong to the same recipient. `None` leaves out that
+        /// share file and its hash.
+        di_embedding_shares: [Option<&'a v1::DiIrisEmbeddingShares>; 3],
     },
 }
 
@@ -242,11 +245,11 @@ fn prepare_biometrics<E>(
     )?);
     let face_embeddings = payload::face_embeddings(face_embeddings)?;
     let daugman = payload::encode_daugman(*iris_codes, *iris_code_shares)?;
-    let di = payload::encode_di(di_embeddings, di_embedding_shares);
+    let di = payload::encode_di(*di_embeddings, *di_embedding_shares);
     for (name, bytes) in [
         ("face_embeddings.json", Some(face_embeddings.as_slice())),
         ("iris_codes.json", daugman.codes.as_deref()),
-        ("di_iris_embeddings.pb", Some(di.embeddings.as_slice())),
+        ("di_iris_embeddings.pb", di.embeddings.as_deref()),
     ] {
         if let Some(bytes) = bytes {
             archives.hashes.push((name.to_owned(), sha256(bytes)));
@@ -258,10 +261,13 @@ fn prepare_biometrics<E>(
                 .hashes
                 .push((format!("iris_code_shares_{i}.json"), sha256(share)));
         }
-        archives.hashes.push((
-            format!("di_iris_embeddings_shares_{i}.pb"),
-            sha256(&di.shares[i]),
-        ));
+    }
+    for (i, share) in di.shares.iter().enumerate() {
+        if let Some(share) = share {
+            archives
+                .hashes
+                .push((format!("di_iris_embeddings_shares_{i}.pb"), sha256(share)));
+        }
     }
     Ok(Some(Prepared {
         archives,

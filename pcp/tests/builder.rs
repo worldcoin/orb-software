@@ -320,8 +320,8 @@ fn absent_iris_code_files_are_left_out_with_their_hashes() {
         face_embeddings: &[],
         iris_codes: None,
         iris_code_shares: [None, Some(&shares[1]), None],
-        di_embeddings: &di_embeddings,
-        di_embedding_shares: &di_embedding_shares,
+        di_embeddings: Some(&di_embeddings),
+        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
     };
     let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
         Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -347,6 +347,82 @@ fn absent_iris_code_files_are_left_out_with_their_hashes() {
         manifest["iris_code_shares_1.json"],
         data_encoding::HEXLOWER.encode(digest.as_ref())
     );
+}
+
+#[test]
+fn iris_and_di_file_presence_is_explicit_and_independent() {
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(None);
+    let images = images();
+    let iris_codes = v1::IrisCodes::default();
+    let iris_share = v1::IrisCodeShares::default();
+    let (di_embeddings, di_shares) = no_di();
+
+    for mask in 0..16 {
+        let iris_present: [bool; 4] = std::array::from_fn(|i| mask & (1 << i) != 0);
+        let di_present = iris_present.map(|present| !present);
+        let mut input = request(&pair.public_key, &info);
+        input.biometrics = BiometricPolicy::Included {
+            images: &images,
+            face_embeddings: &[],
+            iris_codes: iris_present[0].then_some(&iris_codes),
+            iris_code_shares: std::array::from_fn(|i| {
+                iris_present[i + 1].then_some(&iris_share)
+            }),
+            di_embeddings: di_present[0].then_some(&di_embeddings),
+            di_embedding_shares: std::array::from_fn(|i| {
+                di_present[i + 1].then_some(&di_shares[i])
+            }),
+        };
+        let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
+            Ok::<_, SignerError>(b"synthetic-signature".to_vec())
+        })
+        .unwrap();
+        let files: std::collections::BTreeMap<_, _> =
+            tier0(&output, &pair).into_iter().collect();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&files["hashes.json"]).unwrap();
+        for (names, present, bytes) in [
+            (
+                [
+                    "iris_codes.json",
+                    "iris_code_shares_0.json",
+                    "iris_code_shares_1.json",
+                    "iris_code_shares_2.json",
+                ],
+                iris_present,
+                b"{}".as_slice(),
+            ),
+            (
+                [
+                    "di_iris_embeddings.pb",
+                    "di_iris_embeddings_shares_0.pb",
+                    "di_iris_embeddings_shares_1.pb",
+                    "di_iris_embeddings_shares_2.pb",
+                ],
+                di_present,
+                b"".as_slice(),
+            ),
+        ] {
+            for (name, present) in names.into_iter().zip(present) {
+                assert_eq!(
+                    files.get(name).map(Vec::as_slice),
+                    present.then_some(bytes),
+                    "{name}"
+                );
+                let expected_hash = present.then(|| {
+                    data_encoding::HEXLOWER.encode(
+                        ring::digest::digest(&ring::digest::SHA256, bytes).as_ref(),
+                    )
+                });
+                assert_eq!(
+                    manifest.get(name).and_then(serde_json::Value::as_str),
+                    expected_hash.as_deref(),
+                    "{name}"
+                );
+            }
+        }
+    }
 }
 
 /// Every tier 0 JSON file decodes into the shared `pcp-defs` types without
@@ -395,8 +471,8 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         face_embeddings: &face_embeddings,
         iris_codes: Some(&iris_codes),
         iris_code_shares: iris_code_shares.each_ref().map(Some),
-        di_embeddings: &di_embeddings,
-        di_embedding_shares: &di_embedding_shares,
+        di_embeddings: Some(&di_embeddings),
+        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
     };
     let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
         Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -530,8 +606,8 @@ mod diagnostics {
                 face_embeddings: &[],
                 iris_codes: Some(&iris_codes),
                 iris_code_shares: iris_code_shares.each_ref().map(Some),
-                di_embeddings: &di_embeddings,
-                di_embedding_shares: &di_embedding_shares,
+                di_embeddings: Some(&di_embeddings),
+                di_embedding_shares: di_embedding_shares.each_ref().map(Some),
             };
             let output = pcp::build_unencrypted_for_diagnostics(
                 &input,

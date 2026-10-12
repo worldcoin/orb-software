@@ -99,19 +99,19 @@ pub(crate) fn backend_keys(
 }
 
 pub(crate) struct EncodedDi {
-    pub embeddings: Vec<u8>,
-    pub shares: [Vec<u8>; 3],
+    pub embeddings: Option<Vec<u8>>,
+    pub shares: [Option<Vec<u8>>; 3],
 }
 
 /// Encodes the embedding file and three same-index recipient share files as
-/// binary protobuf. Default messages encode to empty files.
+/// binary protobuf, each only when supplied. Default messages encode to empty files.
 pub(crate) fn encode_di(
-    embeddings: &DiIrisEmbeddings,
-    shares: &[DiIrisEmbeddingShares; 3],
+    embeddings: Option<&DiIrisEmbeddings>,
+    shares: [Option<&DiIrisEmbeddingShares>; 3],
 ) -> EncodedDi {
     EncodedDi {
-        embeddings: embeddings.encode_to_vec(),
-        shares: shares.each_ref().map(Message::encode_to_vec),
+        embeddings: embeddings.map(Message::encode_to_vec),
+        shares: shares.map(|share| share.map(Message::encode_to_vec)),
     }
 }
 

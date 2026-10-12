@@ -186,8 +186,8 @@ pub fn run() -> Result<()> {
                         face_embeddings: &face_embeddings,
                         iris_codes: Some(&iris_codes),
                         iris_code_shares: iris_code_shares.each_ref().map(Some),
-                        di_embeddings: &di_embeddings,
-                        di_embedding_shares: &di_embedding_shares,
+                        di_embeddings: Some(&di_embeddings),
+                        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
                     }
                 },
                 migration: None,

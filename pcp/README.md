@@ -40,8 +40,12 @@ a signer callback receiving the exact 32-byte SHA-256 digest.
   hash remain.
 - TEE migrations set `BuildRequest::migration`; it is written as binary
   `migration.pb` and hashed in `hashes.json`.
-- `iris_codes` and each iris code share are optional: `None` leaves out that
-  file and its hash, for a migrated package whose source lacks it.
+- Iris codes, DI embeddings and each of their recipient shares have the same
+  presence rules: `None` omits the file and its hash; `Some(message)` writes the
+  message and its hash, even when empty. A default iris message produces `{}`;
+  a default DI message produces a zero-byte protobuf file. Callers that require
+  empty files must supply `Some(&default_message)` explicitly. Share indices stay
+  fixed when other shares are absent.
 - Every manifest is stamped `orb_pcp::PCP_VERSION`.
 
 The result contains three encrypted tiers, of which tiers 1 and 2 are empty

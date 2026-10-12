@@ -460,9 +460,9 @@ mod tier_layout {
                     .map(|x| Some(x.to_vec())),
             },
             EncodedDi {
-                embeddings: b"di-protobuf".to_vec(),
+                embeddings: Some(b"di-protobuf".to_vec()),
                 shares: [b"di-share-0", b"di-share-1", b"di-share-2"]
-                    .map(|x| x.to_vec()),
+                    .map(|x| Some(x.to_vec())),
             },
         )
     }
@@ -557,8 +557,8 @@ mod tier_layout {
     fn empty_di_and_share_payloads_are_present_not_omitted() {
         let (daugman, _) = payloads();
         let di = EncodedDi {
-            embeddings: Vec::new(),
-            shares: std::array::from_fn(|_| Vec::new()),
+            embeddings: Some(Vec::new()),
+            shares: std::array::from_fn(|_| Some(Vec::new())),
         };
         let bio = biometrics(false, &daugman, &di);
         let tier0 = archive::tier0(123, common_files(), Some(&bio)).unwrap();
