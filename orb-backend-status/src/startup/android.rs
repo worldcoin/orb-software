@@ -25,7 +25,7 @@ pub struct Args {
     #[arg(long, default_value = "/dev/socket/zenohd.sock")]
     zenoh_socket: PathBuf,
     /// Socket exposed by the local DogStatsD agent.
-    #[arg(long, default_value = "/dev/socket/datadog.socket")]
+    #[arg(long, default_value = "/data/vendor/datadog-agent-tfh/run/dsd.socket")]
     metrics_socket: PathBuf,
 }
 

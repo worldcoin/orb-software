@@ -2,7 +2,9 @@
 name = "orb-backend-status"
 version = "0.0.1"
 description = "Systemd service that receives orb status and periodicallyprovides it to the Orb backend"
-authors = ["Paul Quinn <paulquinn00@users.noreply.github.com>"]
+authors = [
+	"Philipp Popov <pophilpo@users.noreply.github.com>, Paul Quinn <paulquinn00@users.noreply.github.com>",
+]
 publish = false
 
 edition.workspace = true
