@@ -1,20 +1,40 @@
-use crate::cmd::cmd;
 use crate::cmd::target::unsupported_packages;
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use crate::cmd::{args, cmd};
+use cargo_metadata::{semver::Version, Metadata, MetadataCommand, Package};
 use clap::Args as ClapArgs;
 use color_eyre::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub(crate) const TARGET: &str = "aarch64-linux-android";
 pub(crate) const DEFAULT_APEX_OUT_DIR: &str = "target/android-apex";
+pub(crate) const ZENOHD_VERSION: &str = "1.7.2";
+
+#[derive(Debug, Clone)]
+pub enum BuildPackage {
+    Workspace(Box<Package>),
+    Zenohd,
+}
+
+pub(crate) struct BuiltPackage {
+    pub name: String,
+    pub version: Version,
+    pub binaries: Vec<(String, PathBuf)>,
+}
+
+fn parse_build_package(name: &str) -> std::result::Result<BuildPackage, String> {
+    match name {
+        "zenohd" => Ok(BuildPackage::Zenohd),
+        _ => parse_package(name).map(|pkg| BuildPackage::Workspace(Box::new(pkg))),
+    }
+}
 
 /// Shared by `android-build`/`android-apex`/`android-deploy`
 #[derive(ClapArgs, Debug, Clone)]
 pub struct BuildArgs {
-    /// Crate to build/package/install. If omitted, applies to every
-    /// Android-supported crate in the workspace.
-    #[arg(value_parser = parse_package)]
-    pub pkg: Option<Package>,
+    /// Workspace crate or upstream `zenohd` to build/package/install.
+    /// If omitted, applies only to Android-supported workspace crates.
+    #[arg(value_parser = parse_build_package)]
+    pub pkg: Option<BuildPackage>,
     /// Build in release mode.
     #[arg(long)]
     pub release: bool,
@@ -59,8 +79,77 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 /// instead of shelling out to `cargo metadata` again - shared with
 /// [`crate::cmd::apex::run_apex`], which needs a fresh build of the same
 /// target before staging APEX payloads.
-pub(crate) fn run_build_with(md: &Metadata, args: BuildArgs) -> Result<Vec<Package>> {
-    build_with(md, args.pkg, args.release, &["build"], &[])
+pub(crate) fn run_build_with(
+    md: &Metadata,
+    args: BuildArgs,
+) -> Result<Vec<BuiltPackage>> {
+    let pkg = match args.pkg {
+        Some(BuildPackage::Zenohd) => {
+            return build_zenohd(md.target_directory.as_std_path(), args.release)
+                .map(|pkg| vec![pkg]);
+        }
+        Some(BuildPackage::Workspace(pkg)) => Some(*pkg),
+        None => None,
+    };
+    let profile = if args.release { "release" } else { "debug" };
+    let binary_dir = md.target_directory.join(TARGET).join(profile);
+    Ok(build_with(md, pkg, args.release, &["build"], &[])?
+        .into_iter()
+        .map(|pkg| BuiltPackage {
+            name: pkg.name.to_string(),
+            version: pkg.version,
+            binaries: pkg
+                .targets
+                .iter()
+                .filter(|target| target.is_bin())
+                .map(|target| {
+                    (target.name.clone(), binary_dir.join(&target.name).into())
+                })
+                .collect(),
+        })
+        .collect())
+}
+
+fn zenohd_install_root(target_dir: &Path, release: bool) -> PathBuf {
+    target_dir
+        .join("android-tools/zenohd")
+        .join(ZENOHD_VERSION)
+        .join(if release { "release" } else { "debug" })
+}
+
+fn build_zenohd(target_dir: &Path, release: bool) -> Result<BuiltPackage> {
+    let install_root = zenohd_install_root(target_dir, release);
+    let build_dir = target_dir.join("android-tools/zenohd/build");
+    let mut command = args![
+        "cargo",
+        "install",
+        "zenohd",
+        "--version",
+        ZENOHD_VERSION,
+        "--locked",
+        "--no-default-features",
+        "--features",
+        "zenoh/transport_unixsock-stream",
+        "--target",
+        TARGET,
+        "--target-dir",
+        &build_dir,
+        "--root",
+        &install_root,
+        "--force",
+    ]
+    .to_vec();
+    if !release {
+        command.push("--debug".as_ref());
+    }
+    cmd(&command)?;
+    let binary = install_root.join("bin/zenohd");
+    println!("Android zenohd: {}", binary.display());
+    Ok(BuiltPackage {
+        name: "zenohd".to_owned(),
+        version: ZENOHD_VERSION.parse()?,
+        binaries: vec![("zenohd".to_owned(), binary)],
+    })
 }
 
 /// CLI args for `android-test` - same as [`BuildArgs`] minus `out_dir`,
@@ -111,40 +200,191 @@ fn build_with(
 ) -> Result<Vec<Package>> {
     let excludes = unsupported_packages(md, TARGET);
 
-    let mut cmd_args = vec!["cargo"];
-    cmd_args.extend_from_slice(subcmd);
-    cmd_args.push("--target");
-    cmd_args.push(TARGET);
-    if release {
-        cmd_args.push("--release");
-    }
-
-    let built: Vec<Package> = match &pkg {
-        Some(pkg) => {
-            cmd_args.push("-p");
-            cmd_args.push(pkg.name.as_str());
-            vec![pkg.clone()]
-        }
-        None => {
-            cmd_args.push("--workspace");
-            for pkg in &excludes {
-                cmd_args.push("--exclude");
-                cmd_args.push(pkg);
-            }
-            md.workspace_packages()
-                .into_iter()
-                .filter(|p| !excludes.contains(p.name.as_str()))
-                .cloned()
-                .collect()
-        }
+    let built: Vec<Package> = match pkg {
+        Some(pkg) => vec![pkg],
+        None => md
+            .workspace_packages()
+            .into_iter()
+            .filter(|p| !excludes.contains(p.name.as_str()))
+            .cloned()
+            .collect(),
     };
+    let packages: Vec<(&str, &str)> = built
+        .iter()
+        .map(|p| (p.name.as_str(), p.id.repr.as_str()))
+        .collect();
+    for command in build_commands(&packages, release, subcmd, trailing_args) {
+        cmd(&command)?;
+    }
+    Ok(built)
+}
 
-    if !trailing_args.is_empty() {
-        cmd_args.push("--");
-        cmd_args.extend_from_slice(trailing_args);
+fn build_commands(
+    packages: &[(&str, &str)],
+    release: bool,
+    subcmd: &[&str],
+    trailing_args: &[&str],
+) -> Vec<Vec<String>> {
+    // Separate invocations keep Linux defaults from being unified into the
+    // Android service without disabling defaults for unrelated packages.
+    let (backend_status, others): (Vec<_>, Vec<_>) = packages
+        .iter()
+        .copied()
+        .partition(|(name, _)| *name == "orb-backend-status");
+    let mut commands = Vec::new();
+    for (group, android_collectors) in [(others, false), (backend_status, true)] {
+        if group.is_empty() {
+            continue;
+        }
+        let mut args = vec!["cargo"];
+        args.extend_from_slice(subcmd);
+        args.extend(["--target", TARGET]);
+        if release {
+            args.push("--release");
+        }
+        for (_, package_id) in group {
+            // Names can also occur in dependencies from another source.
+            args.extend(["-p", package_id]);
+        }
+        if android_collectors {
+            args.extend(["--no-default-features", "--features", "android-collectors"]);
+        }
+        if !trailing_args.is_empty() {
+            args.push("--");
+            args.extend_from_slice(trailing_args);
+        }
+        commands.push(args.into_iter().map(str::to_owned).collect());
+    }
+    commands
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BACKEND_STATUS_ID: &str =
+        "path+file:///workspace/orb-backend-status#orb-backend-status@0.0.1";
+    const SECURITY_UTILS_ID: &str =
+        "path+file:///workspace/security-utils#orb-security-utils@0.0.0";
+
+    #[test]
+    fn android_service_features_apply_to_build_test_and_clippy() {
+        for (subcmd, trailing) in [
+            (vec!["build"], vec![]),
+            (vec!["build", "--tests"], vec![]),
+            (vec!["clippy", "--all-targets"], vec!["-D", "warnings"]),
+        ] {
+            let mut expected = vec!["cargo"];
+            expected.extend_from_slice(&subcmd);
+            expected.extend([
+                "--target",
+                TARGET,
+                "--release",
+                "-p",
+                BACKEND_STATUS_ID,
+                "--no-default-features",
+                "--features",
+                "android-collectors",
+            ]);
+            if !trailing.is_empty() {
+                expected.push("--");
+                expected.extend_from_slice(&trailing);
+            }
+            assert_eq!(
+                build_commands(
+                    &[("orb-backend-status", BACKEND_STATUS_ID)],
+                    true,
+                    &subcmd,
+                    &trailing,
+                ),
+                vec![expected],
+            );
+        }
     }
 
-    cmd(&cmd_args)?;
+    #[test]
+    fn workspace_build_isolates_android_service_and_preserves_other_defaults() {
+        assert_eq!(
+            build_commands(
+                &[
+                    ("orb-security-utils", SECURITY_UTILS_ID),
+                    ("orb-backend-status", BACKEND_STATUS_ID),
+                ],
+                false,
+                &["build"],
+                &[]
+            ),
+            vec![
+                vec![
+                    "cargo",
+                    "build",
+                    "--target",
+                    TARGET,
+                    "-p",
+                    SECURITY_UTILS_ID
+                ],
+                vec![
+                    "cargo",
+                    "build",
+                    "--target",
+                    TARGET,
+                    "-p",
+                    BACKEND_STATUS_ID,
+                    "--no-default-features",
+                    "--features",
+                    "android-collectors"
+                ],
+            ],
+        );
+    }
 
-    Ok(built)
+    #[test]
+    fn unrelated_package_does_not_build_backend_status() {
+        assert_eq!(
+            build_commands(
+                &[("orb-security-utils", SECURITY_UTILS_ID)],
+                false,
+                &["build"],
+                &[]
+            ),
+            vec![vec![
+                "cargo",
+                "build",
+                "--target",
+                TARGET,
+                "-p",
+                SECURITY_UTILS_ID
+            ]],
+        );
+        assert!(build_commands(&[], false, &["build"], &[]).is_empty());
+    }
+
+    #[test]
+    fn recognizes_upstream_router_without_workspace_membership() {
+        assert!(matches!(
+            parse_build_package("zenohd"),
+            Ok(BuildPackage::Zenohd)
+        ));
+    }
+
+    #[test]
+    fn router_version_matches_workspace_lock() {
+        let lock = include_str!("../../../Cargo.lock");
+        assert!(
+            lock.contains(&format!("name = \"zenoh\"\nversion = \"{ZENOHD_VERSION}\""))
+        );
+    }
+
+    #[test]
+    fn router_install_is_isolated_by_version_and_profile() {
+        let target = Path::new("/tmp/target");
+        assert_eq!(
+            zenohd_install_root(target, false),
+            target.join("android-tools/zenohd/1.7.2/debug")
+        );
+        assert_eq!(
+            zenohd_install_root(target, true),
+            target.join("android-tools/zenohd/1.7.2/release")
+        );
+    }
 }

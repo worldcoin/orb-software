@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{trace, warn};
 use zenorb::zenoh;
 
+pub type ComponentName = String;
+
 /// The zenoh key expression for hardware status.
 pub const HARDWARE_STATUS_KEY_EXPR: &str = "hardware/status/**";
 
@@ -54,7 +56,7 @@ pub(crate) async fn handle_hardware_state_event(
 /// Extracts the component name from a zenoh key.
 ///
 /// For example, "bfd00a01/hardware/status/pwr_supply" -> "pwr_supply"
-fn extract_component_name(key: &str) -> String {
+fn extract_component_name(key: &str) -> ComponentName {
     key.rsplit('/').next().unwrap_or(key).to_string()
 }
 
