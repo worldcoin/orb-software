@@ -21,13 +21,14 @@ linux-collectors = [
 	"dep:zbus",
 	"orb-info/orb-token",
 ]
-android-collectors = ["dep:clap"]
+android-collectors = ["dep:clap", "dep:android_system_properties"]
 
 [[bin]]
 name = "orb-backend-status"
 path = "src/main.rs"
 
 [dependencies]
+android_system_properties = {version = "0.1.5", optional = true}
 bon.workspace = true
 clap = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }

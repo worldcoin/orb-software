@@ -1,4 +1,5 @@
 use super::Config;
+use android_system_properties::AndroidSystemProperties;
 use clap::Parser;
 use color_eyre::{
     eyre::{ensure, eyre, Context},
@@ -9,6 +10,7 @@ use orb_endpoints::{v2::Endpoints, Backend};
 use orb_info::{OrbId, OrbJabilId, OrbName};
 use secrecy::{ExposeSecret, SecretString};
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 #[derive(Parser)]
 #[command(version = BUILD_INFO.version, about = "Forward Android OES events to the backend")]
@@ -25,9 +27,6 @@ pub struct Args {
     /// Socket exposed by the local DogStatsD agent.
     #[arg(long, default_value = "/dev/socket/datadog.socket")]
     metrics_socket: PathBuf,
-    /// Platform version to report to the backend.
-    #[arg(long, default_value = "unknown")]
-    orb_os_version: String,
 }
 
 fn zenoh_config(socket: &Path) -> Result<zenorb::zenoh::Config> {
@@ -51,6 +50,18 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         args.backend != Backend::Local,
         "local backend is not supported; use prod, staging, or analysis"
     );
+
+    let orb_os_version = tokio::task::spawn_blocking(|| {
+        AndroidSystemProperties::new().get("ro.build.fingerprint")
+    })
+    .await
+    .wrap_err("Android property reader task failed")?
+    .filter(|version| !version.trim().is_empty())
+    .unwrap_or_else(|| {
+        warn!("Android build fingerprint unavailable or empty. Using [unknown]");
+        String::from("unknown")
+    });
+
     let endpoint = Endpoints::new(args.backend, &orb_id).status;
     let zenoh = zenoh_config(&args.zenoh_socket)?;
     let metrics_socket = args
@@ -78,7 +89,7 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         orb_id,
         orb_name: OrbName::read_unfallable().await,
         orb_jabil_id: OrbJabilId("unknown".to_owned()),
-        orb_os_version: args.orb_os_version,
+        orb_os_version,
         endpoint,
         zenoh,
         collectors: collectors::Config { token },
