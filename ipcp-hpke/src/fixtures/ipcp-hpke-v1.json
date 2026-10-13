@@ -1,5 +1,5 @@
 {
-  "description": "Public deterministic test keys only. Synthetic 1x1 grayscale PNG; never biometric data.",
+  "description": "Public deterministic test keys only. Synthetic 1x1 grayscale PNG; never biometric data. aad is AppAuthenticatedData::hash(32) of app_data.",
   "mode": 0,
   "kem_id": 32,
   "kdf_id": 1,
@@ -7,11 +7,16 @@
   "ikmE": "2cd7c601cefb3d42a62b04b7a9041494c06c7843818e0ce28a8f704ae7ab20f9",
   "skRm": "497b4502664cfea5d5af0b39934dac72242a74f8480451e1aee7d6a53320333d",
   "info": "",
-  "aad": "",
+  "aad": "92b06a62120b684b83b633cca9be6ed0811f9536db28390d132a51e187163ac1",
   "pt": "89504e470d0a1a0a0000000d49484452000000010000000108000000003a7e9b550000000a49444154789c63f80f0001010100b138f6140000000049454e44ae426082",
   "pkRm": "430f4b9859665145a6b1ba274024487bd66f03a2dd577d7753c68d7d7d00c00c",
   "enc": "6c93e09869df3402d7bf231bf540fadd35cd56be14f97178f0954db94b7fc256",
-  "ct": "6dd12cb0207ac9d74923ee7c693a3700aa4d56c76381cc712cad6e2511ffd175a5ccbab4f36026dfec28450d601a392673ab54a8c6d5c0b4454eaea73ded13d552aaee376fa3b7b371cc4947b9562ba121b5c5",
+  "ct": "6dd12cb0207ac9d74923ee7c693a3700aa4d56c76381cc712cad6e2511ffd175a5ccbab4f36026dfec28450d601a392673ab54a8c6d5c0b4454eaea73ded13d552aaee36e5ce2ae4f1256ef8ac451a9cc430e6",
   "ciphertext": "6dd12cb0207ac9d74923ee7c693a3700aa4d56c76381cc712cad6e2511ffd175a5ccbab4f36026dfec28450d601a392673ab54a8c6d5c0b4454eaea73ded13d552aaee",
-  "tag": "376fa3b7b371cc4947b9562ba121b5c5"
+  "tag": "36e5ce2ae4f1256ef8ac451a9cc430e6",
+  "app_data": {
+    "identity_commitment": "0xabcd",
+    "device_public_key": "device-key",
+    "version": 2
+  }
 }
