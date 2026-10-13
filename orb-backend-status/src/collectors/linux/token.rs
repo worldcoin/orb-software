@@ -1,4 +1,5 @@
 use orb_info::TokenTaskHandle;
+use secrecy::SecretString;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -15,7 +16,7 @@ impl TokenWatcher {
     pub async fn spawn(
         connection: Connection,
         shutdown_token: CancellationToken,
-    ) -> watch::Receiver<String> {
+    ) -> watch::Receiver<SecretString> {
         // Try to get initial token before spawning background task
         let initial_token = match TokenTaskHandle::spawn(&connection, &shutdown_token)
             .await
@@ -27,7 +28,8 @@ impl TokenWatcher {
             }
         };
 
-        let (token_sender, token_receiver) = watch::channel(initial_token);
+        let (token_sender, token_receiver) =
+            watch::channel(SecretString::new(initial_token));
 
         tokio::spawn(async move {
             let mut backoff = Duration::from_secs(1);
@@ -57,7 +59,8 @@ impl TokenWatcher {
                 let mut token_recv = token_task.token_recv.clone();
 
                 // Forward the current token immediately
-                let current_token = token_recv.borrow_and_update().clone();
+                let current_token =
+                    SecretString::new(token_recv.borrow_and_update().clone());
                 let _ = token_sender.send(current_token);
 
                 loop {
@@ -68,7 +71,7 @@ impl TokenWatcher {
                                 break;
                             }
 
-                            let token = token_recv.borrow().clone();
+                            let token = SecretString::new(token_recv.borrow().clone());
                             let _ = token_sender.send(token);
                         }
                     }
