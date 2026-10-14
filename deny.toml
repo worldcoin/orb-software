@@ -36,7 +36,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0348", reason = "rustls memory exhaustion requires the non-default brotli feature and a malicious peer; impact is DoS" },
 	{ id = "RUSTSEC-2026-0349", reason = "rustls key exchange downgrade affects post-quantum confidentiality and depends on server policy; no key compromise or authentication bypass" },
 ]
-unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
+unmaintained = "workspace" # fail for direct workspace dependencies, not transitive ones
 version = 2
 
 [bans]
