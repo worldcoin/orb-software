@@ -1109,6 +1109,16 @@ impl EventHandler for Runner<DIAMOND_RING_LED_COUNT, DIAMOND_CENTER_LED_COUNT> {
             Event::BatteryIsCharging { is_charging } => {
                 self.operator_idle.battery_charging(*is_charging);
             }
+            Event::Pause => {
+                if let UiState::Running(mode) = &self.state {
+                    self.state = UiState::Paused(*mode);
+                }
+            }
+            Event::Resume => {
+                if let UiState::Paused(mode) = &self.state {
+                    self.state = UiState::Running(*mode);
+                }
+            }
 
             Event::AmbientLightSample { duration_ms } => {
                 self.ambient_light_blackout_until = (*duration_ms > 0).then(|| {

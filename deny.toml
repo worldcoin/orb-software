@@ -31,6 +31,10 @@ ignore = [
 	# and rcgen. Reconciling all of those is out of proportion to this
 	# advisory's severity, so we accept it instead.
 	{ id = "RUSTSEC-2026-0258", reason = "aws-sdk-s3's legacy hyper 0.14 connector pulls unpatched h2 0.3.x; the fix (switching to the hyper-1.x connector) hardcodes a crypto backend that conflicts with several unrelated deps (quinn/iroh, wtransport, tokio-websockets, hyper-rustls, rcgen) that hardcode a different one, causing a runtime panic; low severity (DoS only), reconciling the backends is out of proportion" },
+	{ id = "RUSTSEC-2026-0346", reason = "rustls session secret disclosure requires a custom ClientSessionStore logging session values with Debug; ordinary connection and built-in session cache Debug output is unaffected" },
+	{ id = "RUSTSEC-2026-0347", reason = "rustls data disclosure requires ECH enabled, application data buffered before handshake completion, and ECH rejection; data is sent to the authenticated outer server" },
+	{ id = "RUSTSEC-2026-0348", reason = "rustls memory exhaustion requires the non-default brotli feature and a malicious peer; impact is DoS" },
+	{ id = "RUSTSEC-2026-0349", reason = "rustls key exchange downgrade affects post-quantum confidentiality and depends on server policy; no key compromise or authentication bypass" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
