@@ -1,22 +1,24 @@
 {
   "description": "Public deterministic test keys only. Synthetic 1x1 grayscale PNG; never biometric data. aad is AppAuthenticatedData::hash(32) of app_data.",
-  "mode": 0,
+  "mode": 2,
   "kem_id": 32,
   "kdf_id": 1,
   "aead_id": 2,
-  "ikmE": "2cd7c601cefb3d42a62b04b7a9041494c06c7843818e0ce28a8f704ae7ab20f9",
   "skRm": "497b4502664cfea5d5af0b39934dac72242a74f8480451e1aee7d6a53320333d",
+  "skSm": "0707070707070707070707070707070707070707070707070707070707070707",
   "info": "",
-  "aad": "92b06a62120b684b83b633cca9be6ed0811f9536db28390d132a51e187163ac1",
+  "aad": "5257ef0db795059180bc2dd20a0df757b5e01fb3b56a8e6b111ecb2a444a7448",
   "pt": "89504e470d0a1a0a0000000d49484452000000010000000108000000003a7e9b550000000a49444154789c63f80f0001010100b138f6140000000049454e44ae426082",
   "pkRm": "430f4b9859665145a6b1ba274024487bd66f03a2dd577d7753c68d7d7d00c00c",
-  "enc": "6c93e09869df3402d7bf231bf540fadd35cd56be14f97178f0954db94b7fc256",
-  "ct": "6dd12cb0207ac9d74923ee7c693a3700aa4d56c76381cc712cad6e2511ffd175a5ccbab4f36026dfec28450d601a392673ab54a8c6d5c0b4454eaea73ded13d552aaee36e5ce2ae4f1256ef8ac451a9cc430e6",
-  "ciphertext": "6dd12cb0207ac9d74923ee7c693a3700aa4d56c76381cc712cad6e2511ffd175a5ccbab4f36026dfec28450d601a392673ab54a8c6d5c0b4454eaea73ded13d552aaee",
-  "tag": "36e5ce2ae4f1256ef8ac451a9cc430e6",
+  "pkSm": "13be4feaeaf204c7fd3358fc9c00721881d174278128227ec674f37f7fe97b6d",
+  "enc": "7f6887cec7d2637907f38ab7c3374926c862b786705c5f33ef1ec39ed128c30f",
+  "ct": "44335ad2b6e2159bb68d7516c1735fbca7b4d8efa9e543762ac3418fb77fc0e04f4a3a8289463d8e043ce681609aa2b4c05d8f849a78f7fa188ed558c6b385ecdc2867c41ffaeced79bfbd0f358a66effdce88",
+  "ciphertext": "44335ad2b6e2159bb68d7516c1735fbca7b4d8efa9e543762ac3418fb77fc0e04f4a3a8289463d8e043ce681609aa2b4c05d8f849a78f7fa188ed558c6b385ecdc2867",
+  "tag": "c41ffaeced79bfbd0f358a66effdce88",
   "app_data": {
+    "device_public_key": "device_key",
     "identity_commitment": "0xabcd",
-    "device_public_key": "device-key",
-    "version": 2
+    "ipcp_encryption_public_key": "13be4feaeaf204c7fd3358fc9c00721881d174278128227ec674f37f7fe97b6d",
+    "version": 3
   }
 }

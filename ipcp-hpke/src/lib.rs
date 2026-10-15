@@ -50,8 +50,12 @@ impl PairingKey {
         let ephemeral_public_key =
             <Profile as Kem>::EncappedKey::from_bytes(&encrypted_payload.enc)
                 .map_err(|_| Error::InvalidPayload)?;
+        let sender_pk = <Profile as Kem>::PublicKey::from_bytes(
+            &app_data.ipcp_encryption_public_key,
+        )
+        .map_err(|_| Error::InvalidKey)?;
         hpke::single_shot_open::<AesGcm256, HkdfSha256, Profile>(
-            &OpModeR::Base,
+            &OpModeR::Auth(sender_pk),
             &self.sk,
             &ephemeral_public_key,
             &[],
@@ -61,15 +65,46 @@ impl PairingKey {
         .map(Zeroizing::new)
         .map_err(|_| Error::Decryption)
     }
+}
+
+pub struct SenderKey {
+    mode: OpModeS<'static, Profile>,
+    pk: <Profile as Kem>::PublicKey,
+}
+
+impl Default for SenderKey {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SenderKey {
+    pub fn new() -> Self {
+        let (sk, pk) = Profile::gen_keypair();
+        Self {
+            mode: OpModeS::Auth((sk, pk.clone())),
+            pk,
+        }
+    }
+
+    pub fn public_key(&self) -> Vec<u8> {
+        self.pk.to_bytes().to_vec()
+    }
 
     pub fn encrypt(
+        &self,
         recipient_pk: &RecipientPublicKey,
         plaintext: Zeroizing<Vec<u8>>,
         app_data: &AppAuthenticatedData,
     ) -> Result<EncryptedPayload, Error> {
+        if app_data.ipcp_encryption_public_key.as_slice()
+            != self.pk.to_bytes().as_slice()
+        {
+            return Err(Error::SenderKeyMismatch);
+        }
         let (ephemeral_public_key, ciphertext) =
             hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
-                &OpModeS::Base,
+                &self.mode,
                 &recipient_pk.0,
                 &[],
                 &plaintext,
@@ -109,6 +144,8 @@ impl RecipientPublicKey {
 pub enum Error {
     #[error("Invalid X25519 key")]
     InvalidKey,
+    #[error("HPKE sender key does not match app data")]
+    SenderKeyMismatch,
     #[error("Invalid encrypted payload")]
     InvalidPayload,
     #[error("HPKE encryption failed")]

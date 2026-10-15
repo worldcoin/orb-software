@@ -25,10 +25,20 @@ fn pairing_key_from_fixture(fixture: &Value) -> PairingKey {
     }
 }
 
+fn sender_key_from_fixture(fixture: &Value) -> SenderKey {
+    let sk = <Profile as Kem>::PrivateKey::from_bytes(&bytes(fixture, "skSm")).unwrap();
+    let pk = Profile::sk_to_pk(&sk);
+    SenderKey {
+        mode: OpModeS::Auth((sk, pk.clone())),
+        pk,
+    }
+}
+
 fn app_data() -> AppAuthenticatedData {
     AppAuthenticatedData {
         identity_commitment: "0xabcd".into(),
-        device_public_key: "device-key".into(),
+        device_public_key: "device_key".into(),
+        ipcp_encryption_public_key: bytes(&ipcp_image_fixture(), "pkSm"),
         version: AppAuthenticatedData::VERSION,
         ..Default::default()
     }
@@ -48,8 +58,19 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     assert_ne!(pairing_key.pk, other_pairing_key.pk);
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&recipient_pk, ipcp_image.clone(), &app_data()).unwrap();
+    let sender = sender_key_from_fixture(&ipcp_image_fixture());
+    assert_ne!(sender.public_key(), SenderKey::new().public_key());
+    let encrypted_ipcp_image_payload = sender
+        .encrypt(&recipient_pk, ipcp_image.clone(), &app_data())
+        .unwrap();
+    let second_payload = sender
+        .encrypt(&recipient_pk, ipcp_image.clone(), &app_data())
+        .unwrap();
+    assert_ne!(encrypted_ipcp_image_payload.enc, second_payload.enc);
+    assert_eq!(
+        pairing_key.decrypt(&second_payload, &app_data()).unwrap(),
+        ipcp_image
+    );
     assert_eq!(
         pairing_key
             .decrypt(&encrypted_ipcp_image_payload, &app_data())
@@ -79,8 +100,9 @@ fn recipient_public_key_roundtrips_and_encrypts() {
     assert_eq!(recipient_pk.to_bytes().as_slice(), encoded.as_slice());
 
     let plaintext = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let encrypted =
-        PairingKey::encrypt(&recipient_pk, plaintext.clone(), &app_data()).unwrap();
+    let encrypted = sender_key_from_fixture(&ipcp_image_fixture())
+        .encrypt(&recipient_pk, plaintext.clone(), &app_data())
+        .unwrap();
     assert_eq!(
         pairing_key.decrypt(&encrypted, &app_data()).unwrap(),
         plaintext
@@ -104,9 +126,9 @@ fn recipient_public_key_rejects_invalid_lengths() {
 fn empty_plaintext_roundtrips() {
     let pairing_key = PairingKey::new();
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
-    let encrypted_payload =
-        PairingKey::encrypt(&recipient_pk, Zeroizing::new(Vec::new()), &app_data())
-            .unwrap();
+    let encrypted_payload = sender_key_from_fixture(&ipcp_image_fixture())
+        .encrypt(&recipient_pk, Zeroizing::new(Vec::new()), &app_data())
+        .unwrap();
     assert_eq!(encrypted_payload.ciphertext.len(), TAG_LEN);
     let plaintext: Zeroizing<Vec<u8>> = pairing_key
         .decrypt(&encrypted_payload, &app_data())
@@ -119,8 +141,9 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let pairing_key = PairingKey::new();
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&recipient_pk, ipcp_image.clone(), &app_data()).unwrap();
+    let encrypted_ipcp_image_payload = sender_key_from_fixture(&ipcp_image_fixture())
+        .encrypt(&recipient_pk, ipcp_image.clone(), &app_data())
+        .unwrap();
     let announcement = AnnounceAppId {
         app_data: Some(app_data()),
         encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
@@ -135,15 +158,15 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
         pairing_key.decrypt(&payload, &app_data).unwrap().as_slice(),
         ipcp_image.as_slice()
     );
-    app_data.device_public_key = "attacker-key".into();
+    app_data.ipcp_encryption_public_key = SenderKey::new().pk.to_bytes().to_vec();
     assert!(matches!(
         pairing_key.decrypt(&payload, &app_data),
         Err(Error::Decryption)
     ));
-    app_data.device_public_key.clear();
+    app_data.ipcp_encryption_public_key.clear();
     assert!(matches!(
         pairing_key.decrypt(&payload, &app_data),
-        Err(Error::InvalidAppData(_))
+        Err(Error::InvalidKey)
     ));
 }
 
@@ -151,10 +174,11 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
 fn ipcp_image_fixture_matches_decryption() {
     let f = ipcp_image_fixture();
     for (field, expected) in
-        [("mode", 0), ("kem_id", 32), ("kdf_id", 1), ("aead_id", 2)]
+        [("mode", 2), ("kem_id", 32), ("kdf_id", 1), ("aead_id", 2)]
     {
         assert_eq!(f[field].as_u64(), Some(expected), "{field}");
     }
+    assert_eq!(sender_key_from_fixture(&f).public_key(), bytes(&f, "pkSm"));
     assert!(bytes(&f, "info").is_empty());
     assert_eq!(bytes(&f, "aad"), app_data().hash(32).unwrap());
     let ipcp_image = bytes(&f, "pt");
@@ -276,4 +300,38 @@ fn decrypted_ipcp_image_uses_zeroizing_guard() {
     assert!(!decrypted_ipcp_image_bytes.is_empty());
     decrypted_ipcp_image_bytes.as_mut_slice().zeroize();
     assert!(decrypted_ipcp_image_bytes.iter().all(|&byte| byte == 0));
+}
+
+#[test]
+fn replacement_payload_cannot_impersonate_the_phone() {
+    let recipient = PairingKey::new();
+    let recipient_pk = RecipientPublicKey::from_pk(recipient.pk.clone());
+    let attacker = SenderKey::new();
+    let data = app_data();
+    assert!(matches!(
+        attacker.encrypt(&recipient_pk, Zeroizing::new(vec![1]), &data),
+        Err(Error::SenderKeyMismatch)
+    ));
+    for mode in [OpModeS::Base, attacker.mode] {
+        let (enc, ciphertext) =
+            hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
+                &mode,
+                &recipient.pk,
+                &[],
+                &[1],
+                &data.hash(32).unwrap(),
+            )
+            .unwrap();
+        let replacement = EncryptedPayload {
+            enc: enc.to_bytes().to_vec(),
+            ciphertext,
+        };
+        assert!(matches!(
+            recipient.decrypt(&replacement, &data),
+            Err(Error::Decryption)
+        ));
+    }
+    let mut replaced_data = data.clone();
+    replaced_data.ipcp_encryption_public_key = SenderKey::new().pk.to_bytes().to_vec();
+    assert!(replaced_data.verify(data.hash(16).unwrap()).is_err());
 }
