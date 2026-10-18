@@ -35,6 +35,11 @@ ignore = [
 	{ id = "RUSTSEC-2026-0347", reason = "rustls data disclosure requires ECH enabled, application data buffered before handshake completion, and ECH rejection; data is sent to the authenticated outer server" },
 	{ id = "RUSTSEC-2026-0348", reason = "rustls memory exhaustion requires the non-default brotli feature and a malicious peer; impact is DoS" },
 	{ id = "RUSTSEC-2026-0349", reason = "rustls key exchange downgrade affects post-quantum confidentiality and depends on server policy; no key compromise or authentication bypass" },
+	# zip is only a build dependency of libsodium-sys-stable via deps-tests.
+	# deps-tests forces use-pkg-config, so its ZIP extraction path is not used.
+	{ id = "RUSTSEC-2026-0367", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
+	{ id = "RUSTSEC-2026-0368", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
+	{ id = "RUSTSEC-2026-0369", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
