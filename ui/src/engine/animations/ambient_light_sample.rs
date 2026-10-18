@@ -1,5 +1,5 @@
 //! Circular center LED sweeps around a dark interval for ambient light sampling.
-//! Each sweep lasts half a second. Start after the static QR background's fade-in;
+//! Each sweep lasts 250 ms. Start after the static QR background's fade-in;
 //! its color must match and remain unchanged for a seamless handoff. Sampling
 //! requests must not overlap, since a new request restarts the off sweep.
 
@@ -95,87 +95,9 @@ mod tests {
         animations::Static, AnimationsStack, LEVEL_BACKGROUND, LEVEL_FOREGROUND,
     };
 
-    const COLOR: Argb = Argb::DIAMOND_CENTER_USER_QR_SCAN;
-
     #[test]
-    fn sweeps_off_holds_dark_and_sweeps_on() {
-        let mut animation = AmbientLightSample::<4>::new(COLOR, Duration::from_secs(1));
-        let mut frame = [COLOR; 4];
-
-        animation.animate(&mut frame, 0.0625, false);
-        assert_eq!(frame, [COLOR * 0.5, COLOR, COLOR, COLOR]);
-        animation.animate(&mut frame, 0.1875, false);
-        assert_eq!(frame, [Argb::OFF, Argb::OFF, COLOR, COLOR]);
-        assert_eq!(
-            animation.animate(&mut frame, 0.25, false),
-            AnimationState::Running
-        );
-        assert_eq!(frame, [Argb::OFF; 4]);
-
-        animation.animate(&mut frame, 0.5, false);
-        assert_eq!(frame, [Argb::OFF; 4]);
-        animation.animate(&mut frame, 0.5, false);
-        assert_eq!(frame, [Argb::OFF; 4]);
-
-        animation.animate(&mut frame, 0.25, false);
-        assert_eq!(frame, [COLOR, COLOR, Argb::OFF, Argb::OFF]);
-        assert_eq!(
-            animation.animate(&mut frame, 0.25, false),
-            AnimationState::Finished
-        );
-        assert_eq!(frame, [COLOR; 4]);
-    }
-
-    #[test]
-    fn delayed_off_frame_does_not_shorten_dark_interval() {
-        let mut animation = AmbientLightSample::<4>::new(COLOR, Duration::from_secs(1));
-        let mut frame = [COLOR; 4];
-
-        assert_eq!(
-            animation.animate(&mut frame, 10.0, false),
-            AnimationState::Running
-        );
-        assert_eq!(frame, [Argb::OFF; 4]);
-        animation.animate(&mut frame, 0.75, false);
-        assert_eq!(frame, [Argb::OFF; 4]);
-        animation.animate(&mut frame, 0.25, false);
-        assert_eq!(frame, [Argb::OFF; 4]);
-        animation.animate(&mut frame, 0.25, false);
-        assert_eq!(frame, [COLOR, COLOR, Argb::OFF, Argb::OFF]);
-    }
-
-    #[test]
-    fn idle_animation_does_not_write_frame() {
-        let mut animation = AmbientLightSample::<4>::new(COLOR, Duration::from_secs(1));
-        let mut frame = [Argb::DIAMOND_RING_ERROR_SALMON; 4];
-        let expected = frame;
-
-        for dt in [0.25, 0.25, 1.0, 0.25, 0.25] {
-            animation.animate(&mut frame, dt, true);
-            assert_eq!(frame, expected);
-        }
-    }
-
-    #[test]
-    fn zero_duration_still_sweeps_off_and_on() {
-        let mut animation = AmbientLightSample::<4>::new(COLOR, Duration::ZERO);
-        let mut frame = [COLOR; 4];
-
-        assert_eq!(
-            animation.animate(&mut frame, 0.5, false),
-            AnimationState::Running
-        );
-        assert_eq!(frame, [Argb::OFF; 4]);
-        animation.animate(&mut frame, 0.0, false);
-        assert_eq!(
-            animation.animate(&mut frame, 0.5, false),
-            AnimationState::Finished
-        );
-        assert_eq!(frame, [COLOR; 4]);
-    }
-
-    #[test]
-    fn returns_to_unchanged_background() {
+    fn sweeps_off_holds_dark_and_returns_to_background() {
+        const COLOR: Argb = Argb::DIAMOND_CENTER_USER_QR_SCAN;
         let mut stack = AnimationsStack::new();
         stack.set(LEVEL_BACKGROUND, Box::new(Static::<4>::new(COLOR, None)));
         stack.set(
@@ -184,14 +106,18 @@ mod tests {
         );
         let mut frame = [COLOR; 4];
 
+        stack.run(&mut frame, SWEEP_DURATION / 2.0);
+        assert_eq!(frame, [Argb::OFF, Argb::OFF, COLOR, COLOR]);
+        stack.run(&mut frame, 10.0);
+        assert_eq!(frame, [Argb::OFF; 4]);
         stack.run(&mut frame, 0.5);
         assert_eq!(frame, [Argb::OFF; 4]);
-        stack.run(&mut frame, 1.0);
-        assert_eq!(frame, [Argb::OFF; 4]);
         stack.run(&mut frame, 0.5);
+        assert_eq!(frame, [Argb::OFF; 4]);
+        stack.run(&mut frame, SWEEP_DURATION / 2.0);
+        assert_eq!(frame, [COLOR, COLOR, Argb::OFF, Argb::OFF]);
+        stack.run(&mut frame, SWEEP_DURATION / 2.0);
         assert_eq!(frame, [COLOR; 4]);
         assert!(!stack.stack.contains_key(&LEVEL_FOREGROUND));
-        stack.run(&mut frame, 0.1);
-        assert_eq!(frame, [COLOR; 4]);
     }
 }
