@@ -327,4 +327,4 @@ jobs:
       - name: Check security advisories
         run: |
           nix develop -c \
-            cargo deny check advisories
+            cargo deny check advisories bans

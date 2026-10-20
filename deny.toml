@@ -47,6 +47,11 @@ unmaintained = "workspace" # only warn for direct dependencies (not transitive o
 version = 2
 
 [bans]
+deny = [
+	{ name = "webpki-roots", version = ">=1.0.0, <1.0.10", reason = "RUSTSEC-2026-0381 exception covers only the 0.26.11 forwarding shim, not unpatched 1.x roots" },
+	{ name = "rustls-webpki", version = ">=0.103.0, <0.103.16", reason = "RUSTSEC-2026-0382 exception applies only to legacy stacks; modern clients must reject compromised keys" },
+	{ name = "rustls-webpki", version = ">=0.104.0-alpha.1, <0.104.0-alpha.8", reason = "RUSTSEC-2026-0382: prerelease clients must also reject compromised keys" },
+]
 skip = [{ name = "serialport", version = "4.7.0" }]
 
 [sources]
