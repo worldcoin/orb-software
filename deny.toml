@@ -12,6 +12,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0098", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0099", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
+	{ id = "RUSTSEC-2026-0382", reason = "no patched rustls-webpki 0.101/0.102 release; 0.101.7 (aws-sdk, reqwest 0.11) verifies against the OS root store and 0.102.8 (iroh) against webpki-roots 1.0.10, neither of which contains emSign ECC Root CA - G3" },
 	{ id = "RUSTSEC-2026-0118", reason = "no upgrade available, is merely DoS" },
 	{ id = "RUSTSEC-2026-0119", reason = "no upgrade available, is merely DoS" },
 	# lru 0.12 and 0.13 are pulled in by aws-sdk-s3 and iroh. The fix is only
