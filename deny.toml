@@ -40,6 +40,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0367", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 	{ id = "RUSTSEC-2026-0368", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 	{ id = "RUSTSEC-2026-0369", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
+	{ id = "RUSTSEC-2026-0381", reason = "only hit is the webpki-roots 0.26.11 shim, which re-exports webpki-roots 1.x (locked at 1.0.10)" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
