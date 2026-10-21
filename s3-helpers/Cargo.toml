@@ -12,8 +12,18 @@ rust-version.workspace = true
 [dependencies]
 async-stream.workspace = true
 async-tempfile.workspace = true
-aws-config.workspace = true
-aws-sdk-s3.workspace = true
+aws-config = { version = "=1.5.5", default-features = false, features = [
+	"rt-tokio",
+	"credentials-process",
+	"sso",
+] }
+aws-sdk-s3 = { version = "=1.46.0", default-features = false, features = [
+	"rt-tokio",
+	"sigv4a",
+] }
+aws-smithy-http-client = { version = "1.1.12", default-features = false, features = [
+	"rustls-ring",
+] }
 bytes.workspace = true
 camino.workspace = true
 color-eyre.workspace = true
