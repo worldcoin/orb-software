@@ -12,6 +12,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0098", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0099", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
 	{ id = "RUSTSEC-2026-0104", reason = "transitive dep via aws-sdk and reqwest 0.11, low severity, upgrade blocked by upstream" },
+	{ id = "RUSTSEC-2026-0382", reason = "no patched rustls-webpki 0.101/0.102 release; 0.101.7 (aws-sdk, reqwest 0.11) verifies against the OS root store and 0.102.8 (iroh) against webpki-roots 1.0.10, neither of which contains emSign ECC Root CA - G3" },
 	{ id = "RUSTSEC-2026-0118", reason = "no upgrade available, is merely DoS" },
 	{ id = "RUSTSEC-2026-0119", reason = "no upgrade available, is merely DoS" },
 	# lru 0.12 and 0.13 are pulled in by aws-sdk-s3 and iroh. The fix is only
@@ -40,11 +41,17 @@ ignore = [
 	{ id = "RUSTSEC-2026-0367", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 	{ id = "RUSTSEC-2026-0368", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 	{ id = "RUSTSEC-2026-0369", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
+	{ id = "RUSTSEC-2026-0381", reason = "only hit is the webpki-roots 0.26.11 shim, which re-exports webpki-roots 1.x (locked at 1.0.10)" },
 ]
 unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
 version = 2
 
 [bans]
+deny = [
+	{ name = "webpki-roots", version = ">=1.0.0, <1.0.10", reason = "RUSTSEC-2026-0381 exception covers only the 0.26.11 forwarding shim, not unpatched 1.x roots" },
+	{ name = "rustls-webpki", version = ">=0.103.0, <0.103.16", reason = "RUSTSEC-2026-0382 exception applies only to legacy stacks; modern clients must reject compromised keys" },
+	{ name = "rustls-webpki", version = ">=0.104.0-alpha.1, <0.104.0-alpha.8", reason = "RUSTSEC-2026-0382: prerelease clients must also reject compromised keys" },
+]
 skip = [{ name = "serialport", version = "4.7.0" }]
 
 [sources]
