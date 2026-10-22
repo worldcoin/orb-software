@@ -32,6 +32,7 @@ If there are any differences between this file and AGENTS.override.md, the latte
 - All configuration should be configured in the entry point of the software, and passsed into the rest of the program as explicit config structs via dependency injection.
 - Do not rely on global state like environment variables - reading environment variables should only happen in the `main` of the program, if at all.
 - Avoid any sort of global state or static mutabel variables.
+- Protobuf: nest an enum inside the message that uses it. Enum values are scoped to the enclosing package, so a top-level `MatchStatus` in a shared package like `pcp.v1` clashes with the next file that defines one. Keep a top-level enum only when several messages share it.
 
 ## Testing Guidelines
 - Use standard Rust tests: unit tests in modules, integration tests under `tests/`.
