@@ -35,9 +35,8 @@ in
   ranlib = "${llvmBin}/llvm-ranlib";
 
   # libsodium cross-built for Android via nixpkgs' own NDK cross stdenv, so
-  # crates that need it via pkg-config (e.g. `alkali`'s `use-pkg-config`
-  # feature in `deps-tests`) can find it - libsodium-sys-stable's own vendored
-  # build script doesn't cross-compile.
+  # crates that need it via pkg-config (e.g. alkali in `deps-tests` and `orb-pcp`)
+  # can use the target library without a vendored libsodium build.
   libsodium = pkgs.pkgsCross.aarch64-android-prebuilt.libsodium;
 
   # Same idea for OpenSSL - lets `openssl-sys` find it via pkg-config instead
