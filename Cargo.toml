@@ -189,7 +189,7 @@ x509-parser = "0.17.0"
 zbus = { version = "4.4.0", default-features = false, features = ["tokio"] }
 zbus_systemd = "0.25600.0"
 zenoh = { version = "1.7.1", default-features = false }
-zstd = "=0.13.3"
+zstd = "=0.14.3"
 
 agentwire.path = "agentwire"
 can-rs.path = "can"
