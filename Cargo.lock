@@ -7246,6 +7246,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "orb-config"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "eyre",
+ "httpdate",
+ "orb-build-info",
+ "orb-info",
+ "orb-security-utils 0.0.0",
+ "orb-telemetry",
+ "reqwest 0.12.24",
+ "secrecy 0.8.0",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "zenorb",
+]
+
+[[package]]
 name = "orb-connd"
 version = "0.1.1"
 dependencies = [
