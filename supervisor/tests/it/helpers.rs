@@ -1,4 +1,4 @@
-use std::{io, time::Duration};
+use std::{io, sync::Mutex, time::Duration};
 
 use dbus_launch::{BusType, Daemon};
 use once_cell::sync::Lazy;
@@ -13,6 +13,8 @@ pub const TEST_STOP_CORE_AFTER_SIGNUP: Duration = Duration::from_millis(200);
 
 pub const WORLDCOIN_CORE_SERVICE_OBJECT_PATH: &str =
     "/org/freedesktop/systemd1/unit/worldcoin_2dcore_2eservice";
+pub const UPDATE_AGENT_SERVICE_OBJECT_PATH: &str =
+    "/org/freedesktop/systemd1/unit/worldcoin_2dupdate_2dagent_2eservice";
 static TRACING: Lazy<()> = Lazy::new(|| {
     let _ = orb_telemetry::TelemetryConfig::new().init();
 });
@@ -119,10 +121,23 @@ pub async fn start_signup_service_and_send_signal(
     Ok(())
 }
 
-pub struct Manager;
+#[derive(Default)]
+pub struct Manager {
+    pub started_units: Mutex<Vec<String>>,
+}
 
 #[interface(name = "org.freedesktop.systemd1.Manager")]
 impl Manager {
+    #[zbus(name = "StartUnit")]
+    async fn start_unit(
+        &self,
+        name: String,
+        _mode: String,
+    ) -> fdo::Result<OwnedObjectPath> {
+        self.started_units.lock().unwrap().push(name);
+        Ok(OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/1234").unwrap())
+    }
+
     #[zbus(name = "GetUnit")]
     async fn get_unit(&self, name: String) -> fdo::Result<OwnedObjectPath> {
         tracing::debug!(name, "GetUnit called");
@@ -151,12 +166,12 @@ impl Manager {
     }
 }
 
-pub struct CoreUnit {
+pub struct Unit {
     active_state: String,
 }
 
 #[interface(name = "org.freedesktop.systemd1.Unit")]
-impl CoreUnit {
+impl Unit {
     #[zbus(property)]
     pub async fn active_state(&self) -> String {
         tracing::debug!("ActiveState property requested");
@@ -170,14 +185,16 @@ impl CoreUnit {
     }
 }
 
-pub struct CoreService;
+pub struct Service {
+    pub timeout_stop_usec: u64,
+}
 
 #[interface(name = "org.freedesktop.systemd1.Service")]
-impl CoreService {
+impl Service {
     #[zbus(property, name = "TimeoutStopUSec")]
     async fn timeout_stop_u_sec(&self) -> u64 {
         tracing::debug!("TimeoutStopUSec property requested");
-        20_000_000
+        self.timeout_stop_usec
     }
 }
 
@@ -186,12 +203,32 @@ pub async fn start_interfaces(
 ) -> zbus::Result<zbus::Connection> {
     let conn = zbus::ConnectionBuilder::address(dbus_instances.system.address())?
         .name(zbus_systemd::systemd1::ManagerProxy::DESTINATION.unwrap())?
-        .serve_at(zbus_systemd::systemd1::ManagerProxy::PATH.unwrap(), Manager)?
-        .serve_at(WORLDCOIN_CORE_SERVICE_OBJECT_PATH, CoreService)?
+        .serve_at(
+            zbus_systemd::systemd1::ManagerProxy::PATH.unwrap(),
+            Manager::default(),
+        )?
         .serve_at(
             WORLDCOIN_CORE_SERVICE_OBJECT_PATH,
-            CoreUnit {
+            Service {
+                timeout_stop_usec: 20_000_000,
+            },
+        )?
+        .serve_at(
+            WORLDCOIN_CORE_SERVICE_OBJECT_PATH,
+            Unit {
                 active_state: "active".into(),
+            },
+        )?
+        .serve_at(
+            UPDATE_AGENT_SERVICE_OBJECT_PATH,
+            Unit {
+                active_state: "active".into(),
+            },
+        )?
+        .serve_at(
+            UPDATE_AGENT_SERVICE_OBJECT_PATH,
+            Service {
+                timeout_stop_usec: 20_000_000,
             },
         )?
         .build()
