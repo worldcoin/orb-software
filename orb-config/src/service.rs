@@ -59,7 +59,7 @@ pub async fn run(
 
 fn configured_interval(sections: &Map<String, Value>, previous: Duration) -> Duration {
     let Some(section) = sections.get("config") else {
-        return DEFAULT_POLL_INTERVAL;
+        return previous;
     };
     match serde_json::from_value::<ConfigDaemonConfig>(section.clone()) {
         Ok(config)
