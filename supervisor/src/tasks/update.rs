@@ -24,8 +24,14 @@ fn calculate_stop_deadline(
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("reached timeout while waiting for worldcoin core service to be stopped")]
-    Elapsed(#[from] Elapsed),
+    #[error("reached timeout while waiting for {unit_name} to be stopped")]
+    Elapsed {
+        unit_name: &'static str,
+        #[source]
+        source: Elapsed,
+    },
+    #[error("active state stream ended before {unit_name} stopped")]
+    StateStreamEnded { unit_name: &'static str },
     #[error(
         "failed communicating over dbus; TODO: break this up into individual errors"
     )]
@@ -69,14 +75,17 @@ pub fn spawn_shutdown_worldcoin_core_timer(
         }
         info!("deadline reached, shutting down worldcoin core service");
         let worldcoin_core_timeout_stop =
-            get_worldcoin_core_timeout(proxy.clone()).await?;
+            get_unit_stop_timeout(proxy.clone(), WORLDCOIN_CORE_UNIT_NAME).await?;
         stop_worldcoin_core(proxy.clone(), WORLDCOIN_CORE_UNIT_NAME, "replace").await?;
         tokio::time::timeout(
             worldcoin_core_timeout_stop,
-            has_worldcoin_core_stopped(proxy.clone()),
+            has_unit_stopped(proxy.clone(), WORLDCOIN_CORE_UNIT_NAME),
         )
         .await
-        .map_err(From::from)
+        .map_err(|source| Error::Elapsed {
+            unit_name: WORLDCOIN_CORE_UNIT_NAME,
+            source,
+        })
         .and_then(identity)
     })
 }
@@ -94,12 +103,30 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
             }
             Err(e) => warn!(panic_msg = ?e, "worldcoin core shutdown task panicked"),
         }
-        info!("calling `org.freedesktop.systemd1.Manager.StartUnit` to start update agent");
-        proxy
-            .start_unit(UPDATE_AGENT_SERVICE.into(), "replace".into())
+        let result = async {
+            let timeout =
+                get_unit_stop_timeout(proxy.clone(), UPDATE_AGENT_SERVICE).await?;
+            time::timeout(
+                timeout,
+                has_unit_stopped(proxy.clone(), UPDATE_AGENT_SERVICE),
+            )
             .await
-            .map(|_| {})
-            .map_err(Into::into)
+            .map_err(|source| Error::Elapsed {
+                unit_name: UPDATE_AGENT_SERVICE,
+                source,
+            })??;
+            info!("calling `org.freedesktop.systemd1.Manager.StartUnit` to start update agent");
+            proxy
+                .start_unit(UPDATE_AGENT_SERVICE.into(), "replace".into())
+                .await
+                .map(|_| {})
+                .map_err(Into::into)
+        }
+        .await;
+        if let Err(error) = &result {
+            warn!(?error, "failed to start update agent after core shutdown");
+        }
+        result
     })
 }
 // #[instrument(
@@ -115,36 +142,38 @@ pub fn spawn_start_update_agent_after_core_shutdown_task(
 
 // }
 
-#[instrument(skip_all, err, ret(Debug))]
-async fn get_worldcoin_core_timeout(
+#[instrument(skip(proxy), err, ret(Debug))]
+async fn get_unit_stop_timeout(
     proxy: systemd1::ManagerProxy<'static>,
+    unit_name: &'static str,
 ) -> zbus::Result<Duration> {
-    let worldcoin_core_service = proxy
-        .get_unit(WORLDCOIN_CORE_UNIT_NAME.to_string())
-        .and_then(|worldcoin_core_object| async {
+    let service = proxy
+        .get_unit(unit_name.to_string())
+        .and_then(|unit_object| async {
             systemd1::ServiceProxy::builder(proxy.inner().connection())
                 .destination("org.freedesktop.systemd1")?
-                .path(worldcoin_core_object)?
+                .path(unit_object)?
                 .build()
                 .await
         })
         .await?;
-    worldcoin_core_service
+    service
         .timeout_stop_u_sec()
         .map_ok(Duration::from_micros)
         .await
 }
 
-/// Reports if the worldcoin core systemd service has stopped.
+/// Waits until a systemd unit has stopped.
 ///
 /// This function makes use of the fact that the first item produced by the `PropertyChangedStream`
 /// is its current value. This is probably an implementation detail of zbus.
-#[instrument(skip_all, err, ret)]
-async fn has_worldcoin_core_stopped(
+#[instrument(skip(proxy), err, ret)]
+async fn has_unit_stopped(
     proxy: systemd1::ManagerProxy<'static>,
+    unit_name: &'static str,
 ) -> Result<(), Error> {
-    let orb_core_unit = proxy
-        .get_unit(WORLDCOIN_CORE_UNIT_NAME.to_string())
+    let unit = proxy
+        .get_unit(unit_name.to_string())
         .and_then(|object_path| async {
             zbus_systemd::systemd1::UnitProxy::builder(proxy.inner().connection())
                 .destination("org.freedesktop.systemd1")?
@@ -154,20 +183,19 @@ async fn has_worldcoin_core_stopped(
         })
         .await?;
     debug!("awaiting active state changed");
-    let mut active_state_stream = orb_core_unit.receive_active_state_changed().await;
+    let mut active_state_stream = unit.receive_active_state_changed().await;
 
     // This makes use of the fact that the first iteration always returns the current state.
-    // So if the service is already inactive or failed, then this loop will break and we
-    // doesn't spin indefinitely.
+    // An already inactive or failed unit completes the wait immediately.
     while let Some(event) = active_state_stream.next().await {
         match &*event.get().await? {
-            "inactive" | "failed" => break,
+            "inactive" | "failed" => return Ok(()),
             other => {
                 trace!(event = other, "received event");
             }
         }
     }
-    Ok(())
+    Err(Error::StateStreamEnded { unit_name })
 }
 
 #[instrument(
