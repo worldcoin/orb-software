@@ -43,7 +43,7 @@ ignore = [
 	{ id = "RUSTSEC-2026-0368", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 	{ id = "RUSTSEC-2026-0369", reason = "zip is a build dependency of deps-tests' libsodium-sys-stable; use-pkg-config bypasses ZIP extraction" },
 ]
-unmaintained = "workspace" # only warn for direct dependencies (not transitive ones)
+unmaintained = "workspace" # fail for direct workspace dependencies, not transitive ones
 version = 2
 
 [bans]
