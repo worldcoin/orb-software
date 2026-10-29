@@ -417,7 +417,7 @@ event_enum! {
         /// Resume sending messages to the MCU.
         #[event_enum(method = resume)]
         Resume,
-        /// Temporarily blank front LEDs; zero cancels. Capped at five seconds.
+        /// Sweep Diamond's center LEDs off, hold dark for `duration_ms`, then sweep on.
         #[event_enum(method = ambient_light_sample)]
         AmbientLightSample { duration_ms: u32 },
 
@@ -608,7 +608,6 @@ struct Runner<const RING_LED_COUNT: usize, const CENTER_LED_COUNT: usize> {
     sound: sound::Jetson,
     capture_sound: sound::capture::CaptureLoopSound,
     state: UiState,
-    ambient_light_blackout_until: Option<std::time::Instant>,
     gimbal: Option<(u32, u32)>,
     operating_mode: OperatingMode,
 }
