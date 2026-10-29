@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package pcp.v1;
+
+import "pcp/v1/face_embeddings.proto";
+
+// reference_image.pb: the phone-supplied reference image and how it matched the orb's live captures.
+// Only a trusted face when match_mode is ENFORCING and match_status is MATCHED.
+message ReferenceImage {
+  enum MatchMode {
+    MATCH_MODE_UNSPECIFIED = 0;
+    MATCH_MODE_SHADOW = 1;
+    MATCH_MODE_ENFORCING = 2;
+  }
+
+  enum MatchStatus {
+    MATCH_STATUS_UNSPECIFIED = 0;
+    MATCH_STATUS_MATCHED = 1;
+    MATCH_STATUS_NOT_MATCHED = 2;
+    MATCH_STATUS_ERROR = 3;
+  }
+
+  // PNG bytes as the phone sent them.
+  bytes image = 1;
+  FaceEmbedding embedding = 2;
+  MatchMode match_mode = 3;
+  MatchStatus match_status = 4;
+}
