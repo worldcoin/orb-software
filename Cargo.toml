@@ -30,6 +30,7 @@ members = [
 	"orb-bin",
 	"orb-backend-status",
 	"orb-backend-status/dbus",
+	"orb-config",
 	"orb-connd",
 	"orb-connd/dbus",
 	"orb-core/agent-iroh",
