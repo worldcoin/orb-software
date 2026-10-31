@@ -76,8 +76,8 @@ impl HttpRangeIter {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Range {
-    start: u64,
-    end: u64,
+    pub(crate) start: u64,
+    pub(crate) end: u64,
     total_size: u64,
 }
 
