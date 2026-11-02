@@ -6,7 +6,10 @@
 use data_encoding::BASE64;
 use orb_pcp_defs::{
     prost::Message,
-    v1::{self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes},
+    v1::{
+        self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes,
+        Orbit5IrisEmbeddingShares,
+    },
 };
 use serde_json::Value;
 
@@ -107,6 +110,20 @@ pub(crate) fn encode_di(
         embeddings: embeddings.map(Message::encode_to_vec),
         shares: shares.map(|share| share.map(Message::encode_to_vec)),
     }
+}
+
+pub(crate) const ORBIT5_SHARE_FILES: [&str; 5] = [
+    "orbit5_iris_embeddings_shares_0.pb",
+    "orbit5_iris_embeddings_shares_1.pb",
+    "orbit5_iris_embeddings_shares_2.pb",
+    "orbit5_iris_embeddings_shares_3.pb",
+    "orbit5_iris_embeddings_shares_4.pb",
+];
+
+pub(crate) fn encode_orbit5(
+    shares: Option<&[Orbit5IrisEmbeddingShares; 5]>,
+) -> Option<[Vec<u8>; 5]> {
+    shares.map(|shares| shares.each_ref().map(Message::encode_to_vec))
 }
 
 #[cfg(test)]

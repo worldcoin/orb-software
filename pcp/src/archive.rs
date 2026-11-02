@@ -328,6 +328,7 @@ pub(crate) struct PreparedBiometricFiles<'a> {
     pub face_embeddings_json: &'a [u8],
     pub daugman: &'a EncodedDaugman,
     pub di: &'a EncodedDi,
+    pub orbit5_shares: Option<&'a [Vec<u8>; 5]>,
 }
 
 pub(crate) struct Tier0Files<'a> {
@@ -392,6 +393,13 @@ pub(crate) fn tier0(
             .zip(&biometrics.di.shares)
             .filter_map(|(name, share)| Some((name, share.as_deref()?))),
         );
+        if let Some(shares) = biometrics.orbit5_shares {
+            entries.extend(
+                crate::payload::ORBIT5_SHARE_FILES
+                    .into_iter()
+                    .zip(shares.iter().map(Vec::as_slice)),
+            );
+        }
     }
     entries.extend([
         ("hashes.sign", files.hashes_signature),

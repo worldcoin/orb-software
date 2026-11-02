@@ -483,6 +483,7 @@ mod tier_layout {
             face_embeddings_json: b"face-json",
             daugman,
             di,
+            orbit5_shares: None,
         }
     }
 
@@ -523,7 +524,9 @@ mod tier_layout {
     fn archives_precede_payloads_in_tier0() {
         for fraud in [false, true] {
             let (daugman, di) = payloads();
-            let bio = biometrics(fraud, &daugman, &di);
+            let shares = [0, 1, 2, 3, 4].map(|i| vec![i]);
+            let mut bio = biometrics(fraud, &daugman, &di);
+            bio.orbit5_shares = Some(&shares);
             let bytes = archive::tier0(123, common_files(), Some(&bio)).unwrap();
             let mut expected: Vec<(&str, &[u8])> = vec![
                 ("iris.tar", b"iris-ciphertext"),
@@ -602,6 +605,11 @@ mod tier_layout {
             ("di_iris_embeddings_shares_0.pb", b"di-share-0"),
             ("di_iris_embeddings_shares_1.pb", b"di-share-1"),
             ("di_iris_embeddings_shares_2.pb", b"di-share-2"),
+            ("orbit5_iris_embeddings_shares_0.pb", &[0]),
+            ("orbit5_iris_embeddings_shares_1.pb", &[1]),
+            ("orbit5_iris_embeddings_shares_2.pb", &[2]),
+            ("orbit5_iris_embeddings_shares_3.pb", &[3]),
+            ("orbit5_iris_embeddings_shares_4.pb", &[4]),
             ("hashes.sign", b"signature"),
             ("hashes.json", b"hashes-json"),
             ("backend_keys.json", b"backend-keys-json"),

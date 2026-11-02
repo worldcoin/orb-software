@@ -26,6 +26,9 @@ pub enum BiometricPolicy<'a> {
         iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
         di_embeddings: Option<&'a v1::DiIrisEmbeddings>,
         di_embedding_shares: [Option<&'a v1::DiIrisEmbeddingShares>; 3],
+        /// The ORBIT5 family is absent or includes all five recipients in index order.
+        /// Messages are written as given, including empty messages.
+        orbit5_embedding_shares: Option<&'a [v1::Orbit5IrisEmbeddingShares; 5]>,
     },
 }
 
@@ -186,6 +189,7 @@ struct Prepared {
     face_embeddings: Vec<u8>,
     daugman: payload::EncodedDaugman,
     di: payload::EncodedDi,
+    orbit5_shares: Option<[Vec<u8>; 5]>,
 }
 
 impl Prepared {
@@ -201,6 +205,7 @@ impl Prepared {
             face_embeddings_json: &self.face_embeddings,
             daugman: &self.daugman,
             di: &self.di,
+            orbit5_shares: self.orbit5_shares.as_ref(),
         }
     }
 }
@@ -217,6 +222,7 @@ fn prepare_biometrics<E>(
         iris_code_shares,
         di_embeddings,
         di_embedding_shares,
+        orbit5_embedding_shares,
     } = &request.biometrics
     else {
         return Ok(None);
@@ -242,6 +248,7 @@ fn prepare_biometrics<E>(
     let face_embeddings = payload::face_embeddings(face_embeddings)?;
     let daugman = payload::encode_daugman(*iris_codes, *iris_code_shares)?;
     let di = payload::encode_di(*di_embeddings, *di_embedding_shares);
+    let orbit5_shares = payload::encode_orbit5(*orbit5_embedding_shares);
     for (name, bytes) in [
         ("face_embeddings.json", Some(face_embeddings.as_slice())),
         ("iris_codes.json", daugman.codes.as_deref()),
@@ -265,11 +272,17 @@ fn prepare_biometrics<E>(
                 .push((format!("di_iris_embeddings_shares_{i}.pb"), sha256(share)));
         }
     }
+    if let Some(shares) = &orbit5_shares {
+        for (name, bytes) in payload::ORBIT5_SHARE_FILES.into_iter().zip(shares) {
+            archives.hashes.push((name.to_owned(), sha256(bytes)));
+        }
+    }
     Ok(Some(Prepared {
         archives,
         face_embeddings,
         daugman,
         di,
+        orbit5_shares,
     }))
 }
 
