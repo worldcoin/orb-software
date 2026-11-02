@@ -1,4 +1,4 @@
-use crate::cmd::android::{run_build_with, BuildArgs, TARGET};
+use crate::cmd::android::{run_build_with, BuildArgs};
 use crate::cmd::{args, cmd, cmd_captured};
 use cargo_metadata::{Metadata, MetadataCommand};
 use color_eyre::{eyre::eyre, Result};
@@ -29,21 +29,12 @@ fn run_payload(
     // Rebuild first, so the binaries staged below aren't stale.
     let built = run_build_with(md, args.clone())?;
 
-    let profile_dir = if args.release { "release" } else { "debug" };
-    // Absolute, so this works regardless of the invoking cwd.
-    let target_dir = md.target_directory.as_std_path();
-
     fs::create_dir_all(staging_dir)?;
 
     let mut staged = Vec::new();
 
     for pkg in built.into_iter() {
-        let binaries: Vec<&str> = pkg
-            .targets
-            .iter()
-            .filter(|t| t.is_bin())
-            .map(|t| t.name.as_str())
-            .collect();
+        let binaries = &pkg.binaries;
         if binaries.is_empty() {
             continue;
         }
@@ -72,10 +63,9 @@ fn run_payload(
             "/bin 1000 1000 0755".to_string(),
         ];
 
-        for bin in &binaries {
-            let src = target_dir.join(TARGET).join(profile_dir).join(bin);
+        for (bin, src) in binaries {
             let dst = bin_out.join(bin);
-            fs::copy(&src, &dst).map_err(|e| {
+            fs::copy(src, &dst).map_err(|e| {
                 eyre!("failed to copy {} -> {}: {e}", src.display(), dst.display())
             })?;
             fs_config.push(format!("/bin/{bin} 1000 1000 0755"));
@@ -108,23 +98,35 @@ fn run_payload(
         // directory of per-binary scripts (see apexSrc's own docs/README.md,
         // `/apex/my.apex@1/etc/init.rc`) - so every binary's service block
         // is concatenated into that one file.
-        let init_rc: String = binaries
-            .iter()
-            .map(|bin| {
-                format!(
-                    "# TODO: placeholder, not a working init script. Needs a real \
+        if pkg.name == "zenohd" {
+            stage_zenohd_config(&content_dir, &pkg_out, &mut fs_config)?;
+        } else {
+            let init_rc: String = binaries
+                .iter()
+                .map(|(bin, _)| {
+                    format!(
+                        "# TODO: placeholder, not a working init script. Needs a real \
                      SELinux domain (see external/sepolicy) plus a real decision on \
                      class/user/group/oneshot before this can boot the daemon.\n\
                      service {bin} /apex/{apex_name}/bin/{bin}\n    \
                      class TODO_CLASS\n    user TODO_USER\n    group TODO_GROUP\n    \
                      seclabel u:r:TODO_SELINUX_DOMAIN:s0\n",
-                )
-            })
-            .collect();
-        fs::create_dir_all(content_dir.join("etc"))?;
-        fs::write(content_dir.join("etc/init.rc"), init_rc)?;
-        fs_config.push("/etc 1000 1000 0755".to_string());
-        fs_config.push("/etc/init.rc 1000 1000 0644".to_string());
+                    )
+                })
+                .collect();
+            fs::create_dir_all(content_dir.join("etc"))?;
+            fs::write(content_dir.join("etc/init.rc"), init_rc)?;
+            fs_config.push("/etc 1000 1000 0755".to_string());
+            fs_config.push("/etc/init.rc 1000 1000 0644".to_string());
+
+            // TODO: placeholder SELinux context, matches no real sepolicy type
+            // yet. A single catch-all regex entry is valid file_contexts
+            // syntax, unlike the per-path listing in canned_fs_config.
+            fs::write(
+                pkg_out.join("file_contexts"),
+                "(/.*)?    u:object_r:TODO_SELINUX_CONTEXT:s0\n",
+            )?;
+        }
 
         fs_config.sort();
         fs::write(
@@ -132,18 +134,31 @@ fn run_payload(
             fs_config.join("\n") + "\n",
         )?;
 
-        // TODO: placeholder SELinux context, matches no real sepolicy type
-        // yet. A single catch-all regex entry is valid file_contexts
-        // syntax, unlike the per-path listing in canned_fs_config.
-        fs::write(
-            pkg_out.join("file_contexts"),
-            "(/.*)?    u:object_r:TODO_SELINUX_CONTEXT:s0\n",
-        )?;
-
         staged.push(pkg.name.as_str().to_owned());
     }
 
     Ok(staged)
+}
+
+fn stage_zenohd_config(
+    content_dir: &Path,
+    pkg_out: &Path,
+    fs_config: &mut Vec<String>,
+) -> Result<()> {
+    fs::create_dir_all(content_dir.join("etc"))?;
+    fs::write(
+        content_dir.join("etc/zenohd.json5"),
+        include_str!("../../../android/zenohd/zenohd.json5"),
+    )?;
+    fs_config.push("/etc 1000 1000 0755".to_owned());
+    fs_config.push("/etc/zenohd.json5 1000 1000 0644".to_owned());
+    // Manual-start package until the firmware supplies a dedicated daemon domain.
+    // File labels alone do not define a process domain or grant socket access.
+    fs::write(
+        pkg_out.join("file_contexts"),
+        "(/.*)?    u:object_r:system_file:s0\n",
+    )?;
+    Ok(())
 }
 
 /// `android-apex` needs no fields beyond [`BuildArgs`]'s.
@@ -397,4 +412,27 @@ pub fn run_deploy(args: DeployArgs) -> Result<()> {
     wait_for_boot_completed()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn router_payload_has_config_without_placeholder_service_or_policy() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = dir.path().join("content");
+        let mut fs_config = Vec::new();
+        stage_zenohd_config(&content, dir.path(), &mut fs_config).unwrap();
+        assert_eq!(
+            fs::read_to_string(content.join("etc/zenohd.json5")).unwrap(),
+            include_str!("../../../android/zenohd/zenohd.json5")
+        );
+        assert!(!content.join("etc/init.rc").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("file_contexts")).unwrap(),
+            "(/.*)?    u:object_r:system_file:s0\n"
+        );
+        assert!(fs_config.contains(&"/etc/zenohd.json5 1000 1000 0644".to_owned()));
+    }
 }

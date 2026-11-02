@@ -1,5 +1,6 @@
 use crate::backend::client::{self, StatusClient};
-use crate::dbus::intf_impl::CurrentStatus;
+use crate::backend::types::OrbStatusApiV2;
+use crate::collectors::Collectors;
 use crate::orb_event_stream::OrbEventStream;
 use color_eyre::eyre::Result;
 use std::time::Duration;
@@ -23,8 +24,7 @@ impl BackendSender {
         }
     }
 
-    pub async fn send_snapshot(&self, snapshot: &CurrentStatus) -> Result<bool> {
-        let mut req = snapshot.to_orb_status_api_v2_req().await;
+    pub async fn send_snapshot(&self, mut req: OrbStatusApiV2) -> Result<bool> {
         req.oes_cached = true;
         req.oes = Some(self.oes.cached()?);
 
@@ -53,7 +53,7 @@ impl BackendSender {
 
     pub async fn run_loop(
         self,
-        backend_status: crate::dbus::intf_impl::BackendStatusImpl,
+        collectors: Collectors,
         shutdown_token: CancellationToken,
     ) {
         let mut interval = time::interval(self.interval);
@@ -67,15 +67,15 @@ impl BackendSender {
                 _ = interval.tick() => (),
 
                 // Something urgent happened (reboot or SSID change)
-                _ = backend_status.wait_for_urgent_send() => (),
+                _ = collectors.wait_for_urgent_send() => (),
             };
 
-            let snapshot = backend_status.snapshot();
+            let req = collectors.snapshot().await;
 
-            match self.send_snapshot(&snapshot).await {
+            match self.send_snapshot(req).await {
                 Ok(sent) => {
                     if sent {
-                        backend_status.clear_send_immediately();
+                        collectors.clear_send_immediately();
                         interval.reset();
                     }
                 }

@@ -1,6 +1,6 @@
 use super::types::{
     ConndReportApiV2, LocationDataApiV2, NetIntfApiV2, NetStatsApiV2, OrbStatusApiV2,
-    UpdateProgressApiV2, WifiProfileApiV2,
+    UpdateAgentStateApiV2, UpdateProgressApiV2, WifiProfileApiV2,
 };
 use crate::{
     backend::{
@@ -15,7 +15,23 @@ use crate::{
     dbus::intf_impl::CurrentStatus,
 };
 use chrono::Utc;
+use orb_update_agent_dbus::UpdateAgentState;
 use tracing::warn;
+
+impl From<UpdateAgentState> for UpdateAgentStateApiV2 {
+    fn from(state: UpdateAgentState) -> Self {
+        match state {
+            UpdateAgentState::None => Self::None,
+            UpdateAgentState::Downloading => Self::Downloading,
+            UpdateAgentState::Fetched => Self::Fetched,
+            UpdateAgentState::Processed => Self::Processed,
+            UpdateAgentState::Installing => Self::Installing,
+            UpdateAgentState::Installed => Self::Installed,
+            UpdateAgentState::Rebooting => Self::Rebooting,
+            UpdateAgentState::NoNewVersion => Self::NoNewVersion,
+        }
+    }
+}
 
 impl CurrentStatus {
     pub async fn to_orb_status_api_v2_req(&self) -> OrbStatusApiV2 {
@@ -56,7 +72,7 @@ impl CurrentStatus {
                     install_progress: update_progress.install_progress,
                     total_progress: update_progress.total_progress,
                     error: update_progress.error.clone(),
-                    state: update_progress.state,
+                    state: update_progress.state.into(),
                 }
             }),
             net_stats: self.net_stats.as_ref().map(|net_stats| NetStatsApiV2 {
@@ -236,6 +252,25 @@ fn freq_to_channel(freq: u32) -> Option<u32> {
 mod tests {
     use super::*;
     use orb_backend_status_dbus::types::{SignupState, WifiNetwork};
+
+    #[test]
+    fn update_agent_states_preserve_wire_format() {
+        for state in [
+            UpdateAgentState::None,
+            UpdateAgentState::Downloading,
+            UpdateAgentState::Fetched,
+            UpdateAgentState::Processed,
+            UpdateAgentState::Installing,
+            UpdateAgentState::Installed,
+            UpdateAgentState::Rebooting,
+            UpdateAgentState::NoNewVersion,
+        ] {
+            assert_eq!(
+                serde_json::to_value(UpdateAgentStateApiV2::from(state)).unwrap(),
+                serde_json::to_value(state).unwrap(),
+            );
+        }
+    }
 
     #[tokio::test]
     async fn test_build_status_request_v2() {

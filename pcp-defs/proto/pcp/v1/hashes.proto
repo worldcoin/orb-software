@@ -68,4 +68,6 @@ message Hashes {
   optional string right_depth_png = 58 [json_name = "right_depth.png"];
 
   optional string migration_pb = 59 [json_name = "migration.pb"];
+
+  optional string reference_image_pb = 60 [json_name = "reference_image.pb"];
 }

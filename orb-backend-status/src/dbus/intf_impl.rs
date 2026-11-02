@@ -1,4 +1,4 @@
-use crate::collectors::hardware_states::HardwareState;
+use crate::collectors::hardware_states::{ComponentName, HardwareState};
 use orb_backend_status_dbus::{
     types::{
         CellularStatus, ConndReport, CoreStats, NetStats, SignupState, UpdateProgress,
@@ -38,7 +38,7 @@ pub struct CurrentStatus {
     pub core_stats: Option<CoreStats>,
     pub signup_state: Option<SignupState>,
     pub connd_report: Option<ConndReport>,
-    pub hardware_states: Option<HashMap<String, HardwareState>>,
+    pub hardware_states: Option<HashMap<ComponentName, HardwareState>>,
     pub front_als: Option<AmbientLight>,
 }
 
@@ -215,7 +215,10 @@ impl BackendStatusImpl {
     }
 
     /// Update hardware states from zenoh.
-    pub fn update_hardware_states(&self, states: HashMap<String, HardwareState>) {
+    pub fn update_hardware_states(
+        &self,
+        states: HashMap<ComponentName, HardwareState>,
+    ) {
         let Ok(mut current_status) = self.current_status.lock() else {
             return;
         };

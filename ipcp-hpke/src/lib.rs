@@ -5,13 +5,20 @@ use hpke::{
     OpModeR, OpModeS, Serializable,
 };
 pub use orb_relay_messages::common::v1::IpcpHpkePayload as EncryptedPayload;
+use orb_relay_messages::common::v1::{AppAuthenticatedData, HashError};
 use zeroize::Zeroizing;
 
 type Profile = X25519HkdfSha256;
 
 const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
+const AAD_LEN: usize = 32;
 pub const PAYLOAD_OVERHEAD: usize = KEY_LEN + TAG_LEN;
+
+/// Binds the iPCP to `app_data`, so altering any field of it fails decryption.
+fn aad(app_data: &AppAuthenticatedData) -> Result<Vec<u8>, Error> {
+    Ok(app_data.hash(AAD_LEN)?)
+}
 
 pub struct PairingKey {
     sk: <Profile as Kem>::PrivateKey,
@@ -33,6 +40,7 @@ impl PairingKey {
     pub fn decrypt(
         &self,
         encrypted_payload: &EncryptedPayload,
+        app_data: &AppAuthenticatedData,
     ) -> Result<Zeroizing<Vec<u8>>, Error> {
         if encrypted_payload.enc.len() != KEY_LEN
             || encrypted_payload.ciphertext.len() < TAG_LEN
@@ -48,7 +56,7 @@ impl PairingKey {
             &ephemeral_public_key,
             &[],
             &encrypted_payload.ciphertext,
-            &[],
+            &aad(app_data)?,
         )
         .map(Zeroizing::new)
         .map_err(|_| Error::Decryption)
@@ -57,6 +65,7 @@ impl PairingKey {
     pub fn encrypt(
         recipient_pk: &RecipientPublicKey,
         plaintext: Zeroizing<Vec<u8>>,
+        app_data: &AppAuthenticatedData,
     ) -> Result<EncryptedPayload, Error> {
         let (ephemeral_public_key, ciphertext) =
             hpke::single_shot_seal::<AesGcm256, HkdfSha256, Profile>(
@@ -64,7 +73,7 @@ impl PairingKey {
                 &recipient_pk.0,
                 &[],
                 &plaintext,
-                &[],
+                &aad(app_data)?,
             )
             .map_err(|_| Error::Encryption)?;
         Ok(EncryptedPayload {
@@ -106,6 +115,8 @@ pub enum Error {
     Encryption,
     #[error("HPKE decryption failed")]
     Decryption,
+    #[error("Invalid app data: {0}")]
+    InvalidAppData(#[from] HashError),
 }
 
 #[cfg(test)]

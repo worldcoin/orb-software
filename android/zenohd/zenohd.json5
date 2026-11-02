@@ -1,0 +1,14 @@
+{
+  mode: "router",
+  listen: {
+    endpoints: ["unixsock-stream//dev/socket/zenohd.sock"],
+  },
+  connect: {
+    endpoints: [],
+  },
+  scouting: {
+    multicast: { enabled: false },
+    gossip: { enabled: false },
+  },
+  plugins: {},
+}

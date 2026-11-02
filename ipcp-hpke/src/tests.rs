@@ -1,5 +1,8 @@
 use super::*;
-use orb_relay_messages::{common::v1::AnnounceAppId, prost::Message};
+use orb_relay_messages::{
+    common::v1::{AnnounceAppId, AppAuthenticatedData},
+    prost::Message,
+};
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -22,6 +25,15 @@ fn pairing_key_from_fixture(fixture: &Value) -> PairingKey {
     }
 }
 
+fn app_data() -> AppAuthenticatedData {
+    AppAuthenticatedData {
+        identity_commitment: "0xabcd".into(),
+        device_public_key: "device-key".into(),
+        version: AppAuthenticatedData::VERSION,
+        ..Default::default()
+    }
+}
+
 fn encrypted_ipcp_image_payload_from_fixture(fixture: &Value) -> EncryptedPayload {
     EncryptedPayload {
         enc: bytes(fixture, "enc"),
@@ -37,23 +49,23 @@ fn pairing_keys_are_fresh_and_decrypt_only_their_ipcp_image_payload() {
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&recipient_pk, ipcp_image.clone()).unwrap();
+        PairingKey::encrypt(&recipient_pk, ipcp_image.clone(), &app_data()).unwrap();
     assert_eq!(
         pairing_key
-            .decrypt(&encrypted_ipcp_image_payload)
+            .decrypt(&encrypted_ipcp_image_payload, &app_data())
             .unwrap()
             .as_slice(),
         ipcp_image.as_slice()
     );
     assert!(matches!(
-        other_pairing_key.decrypt(&encrypted_ipcp_image_payload),
+        other_pairing_key.decrypt(&encrypted_ipcp_image_payload, &app_data()),
         Err(Error::Decryption)
     ));
     for index in [0, encrypted_ipcp_image_payload.ciphertext.len() - 1] {
         let mut tampered_payload = encrypted_ipcp_image_payload.clone();
         tampered_payload.ciphertext[index] ^= 1;
         assert!(matches!(
-            pairing_key.decrypt(&tampered_payload),
+            pairing_key.decrypt(&tampered_payload, &app_data()),
             Err(Error::Decryption)
         ));
     }
@@ -67,8 +79,12 @@ fn recipient_public_key_roundtrips_and_encrypts() {
     assert_eq!(recipient_pk.to_bytes().as_slice(), encoded.as_slice());
 
     let plaintext = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
-    let encrypted = PairingKey::encrypt(&recipient_pk, plaintext.clone()).unwrap();
-    assert_eq!(pairing_key.decrypt(&encrypted).unwrap(), plaintext);
+    let encrypted =
+        PairingKey::encrypt(&recipient_pk, plaintext.clone(), &app_data()).unwrap();
+    assert_eq!(
+        pairing_key.decrypt(&encrypted, &app_data()).unwrap(),
+        plaintext
+    );
 }
 
 #[test]
@@ -89,10 +105,12 @@ fn empty_plaintext_roundtrips() {
     let pairing_key = PairingKey::new();
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let encrypted_payload =
-        PairingKey::encrypt(&recipient_pk, Zeroizing::new(Vec::new())).unwrap();
+        PairingKey::encrypt(&recipient_pk, Zeroizing::new(Vec::new()), &app_data())
+            .unwrap();
     assert_eq!(encrypted_payload.ciphertext.len(), TAG_LEN);
-    let plaintext: Zeroizing<Vec<u8>> =
-        pairing_key.decrypt(&encrypted_payload).unwrap();
+    let plaintext: Zeroizing<Vec<u8>> = pairing_key
+        .decrypt(&encrypted_payload, &app_data())
+        .unwrap();
     assert!(plaintext.is_empty());
 }
 
@@ -102,21 +120,31 @@ fn encrypted_ipcp_image_payload_roundtrips_through_app_announcement() {
     let recipient_pk = RecipientPublicKey::from_pk(pairing_key.pk.clone());
     let ipcp_image = Zeroizing::new(bytes(&ipcp_image_fixture(), "pt"));
     let encrypted_ipcp_image_payload =
-        PairingKey::encrypt(&recipient_pk, ipcp_image.clone()).unwrap();
+        PairingKey::encrypt(&recipient_pk, ipcp_image.clone(), &app_data()).unwrap();
     let announcement = AnnounceAppId {
+        app_data: Some(app_data()),
         encrypted_ipcp_payload: Some(encrypted_ipcp_image_payload),
         ..Default::default()
     };
     let decoded =
         AnnounceAppId::decode(announcement.encode_to_vec().as_slice()).unwrap();
     assert_eq!(decoded, announcement);
+    let payload = decoded.encrypted_ipcp_payload.unwrap();
+    let mut app_data = decoded.app_data.unwrap();
     assert_eq!(
-        pairing_key
-            .decrypt(&decoded.encrypted_ipcp_payload.unwrap())
-            .unwrap()
-            .as_slice(),
+        pairing_key.decrypt(&payload, &app_data).unwrap().as_slice(),
         ipcp_image.as_slice()
     );
+    app_data.device_public_key = "attacker-key".into();
+    assert!(matches!(
+        pairing_key.decrypt(&payload, &app_data),
+        Err(Error::Decryption)
+    ));
+    app_data.device_public_key.clear();
+    assert!(matches!(
+        pairing_key.decrypt(&payload, &app_data),
+        Err(Error::InvalidAppData(_))
+    ));
 }
 
 #[test]
@@ -128,7 +156,7 @@ fn ipcp_image_fixture_matches_decryption() {
         assert_eq!(f[field].as_u64(), Some(expected), "{field}");
     }
     assert!(bytes(&f, "info").is_empty());
-    assert!(bytes(&f, "aad").is_empty());
+    assert_eq!(bytes(&f, "aad"), app_data().hash(32).unwrap());
     let ipcp_image = bytes(&f, "pt");
     let encrypted_ipcp_image_payload = encrypted_ipcp_image_payload_from_fixture(&f);
     assert_eq!(
@@ -142,7 +170,7 @@ fn ipcp_image_fixture_matches_decryption() {
     );
     assert_eq!(
         pairing_key_from_fixture(&f)
-            .decrypt(&encrypted_ipcp_image_payload)
+            .decrypt(&encrypted_ipcp_image_payload, &app_data())
             .unwrap()
             .as_slice(),
         ipcp_image
@@ -157,7 +185,7 @@ fn published_cfrg_vector_with_nonempty_context_is_rejected() {
     assert!(!bytes(&f, "info").is_empty());
     assert!(!bytes(&f, "aad").is_empty());
     assert!(matches!(
-        pairing_key.decrypt(&encrypted_test_payload),
+        pairing_key.decrypt(&encrypted_test_payload, &app_data()),
         Err(Error::Decryption)
     ));
 }
@@ -171,20 +199,20 @@ fn truncated_and_extended_payloads_are_rejected() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.enc.truncate(length);
         assert!(matches!(
-            pairing_key.decrypt(&truncated),
+            pairing_key.decrypt(&truncated, &app_data()),
             Err(Error::InvalidPayload)
         ));
     }
     let mut extended = encrypted_ipcp_image_payload.clone();
     extended.enc.push(0);
     assert!(matches!(
-        pairing_key.decrypt(&extended),
+        pairing_key.decrypt(&extended, &app_data()),
         Err(Error::InvalidPayload)
     ));
     for length in 0..encrypted_ipcp_image_payload.ciphertext.len() {
         let mut truncated = encrypted_ipcp_image_payload.clone();
         truncated.ciphertext.truncate(length);
-        let result = pairing_key.decrypt(&truncated);
+        let result = pairing_key.decrypt(&truncated, &app_data());
         assert!(
             if length < TAG_LEN {
                 matches!(result, Err(Error::InvalidPayload))
@@ -197,7 +225,7 @@ fn truncated_and_extended_payloads_are_rejected() {
     let mut extended = encrypted_ipcp_image_payload;
     extended.ciphertext.push(0);
     assert!(matches!(
-        pairing_key.decrypt(&extended),
+        pairing_key.decrypt(&extended, &app_data()),
         Err(Error::Decryption)
     ));
 }
@@ -220,7 +248,7 @@ fn moving_bytes_across_payload_field_boundary_is_rejected() {
             original_field_bytes
         );
         assert!(matches!(
-            pairing_key.decrypt(&malformed),
+            pairing_key.decrypt(&malformed, &app_data()),
             Err(Error::InvalidPayload)
         ));
     }
@@ -242,7 +270,7 @@ fn decrypted_ipcp_image_uses_zeroizing_guard() {
     fn assert_drop_guard<T: ZeroizeOnDrop>(_: &T) {}
     let f = ipcp_image_fixture();
     let mut decrypted_ipcp_image_bytes = pairing_key_from_fixture(&f)
-        .decrypt(&encrypted_ipcp_image_payload_from_fixture(&f))
+        .decrypt(&encrypted_ipcp_image_payload_from_fixture(&f), &app_data())
         .unwrap();
     assert_drop_guard(&decrypted_ipcp_image_bytes);
     assert!(!decrypted_ipcp_image_bytes.is_empty());

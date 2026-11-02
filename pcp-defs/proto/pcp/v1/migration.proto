@@ -8,4 +8,5 @@ message Migration {
   optional string source_pcp_version = 3 [json_name = "source_pcp_version"];
   optional uint64 migrated_ts = 5 [json_name = "migrated_ts"];
   optional string biometric_pipeline_version = 7 [json_name = "biometric_pipeline_version"];
+  optional string signing_key_id = 8 [json_name = "signing_key_id"];
 }

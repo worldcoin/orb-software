@@ -1,5 +1,6 @@
 pub mod alert;
 pub mod alert_v2;
+pub mod ambient_light_sample;
 mod arc_dash;
 pub mod arc_pulse;
 pub mod composites;

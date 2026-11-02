@@ -8,6 +8,7 @@ use color_eyre::{
 use crabwire::inject;
 use nom::AsBytes;
 use oes::{ConnectionQualityReport, Quality, Traffic};
+use orb_dogd::{DogstatsdClient, MetricEmitter, NO_TAGS};
 use orb_info::OrbId;
 use orb_speed_test::{
     assess_connectivity_quality, run_pcp_speed_test, run_speed_test,
@@ -20,7 +21,7 @@ use tokio::{
     select,
     time::{self, Instant, MissedTickBehavior},
 };
-use tracing::warn;
+use tracing::{info, warn};
 use zenorb::{
     zenoh::{handlers::FifoChannelHandler, pubsub::Subscriber, sample::Sample},
     Zenorb,
@@ -42,8 +43,10 @@ pub struct Args {
     pub zsender: zenorb::Sender,
 }
 
-#[inject(speed_test: &SpeedTest, zenoh: &Zenorb)]
+#[inject(speed_test: &SpeedTest, zenoh: &Zenorb, metrics: &DogstatsdClient)]
 pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
+    info!("starting conn quality reporter");
+
     let cfg_sub = zenoh
         .declare_subscriber("core/config")
         .await
@@ -63,6 +66,8 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                 return Err(err);
             }
         };
+
+        info!("received valid conn quality config");
 
         let mut interval =
             time::interval_at(Instant::now() + cfg.interval, cfg.interval);
@@ -124,14 +129,6 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                         }
                     };
 
-                    let cloudflare = match speed_test.run_speed_test(cfg.test_payload_bytes).await {
-                        Ok(result) => result,
-                        Err(err) => {
-                            warn!("Cloudflare speed test failed: {err}");
-                            continue;
-                        }
-                    };
-
                     let pcp = match speed_test
                         .run_pcp_speed_test(cfg.test_payload_bytes, 1)
                         .await
@@ -139,6 +136,24 @@ pub async fn report(ctx: mini::Ctx<Args>) -> Result<()> {
                         Ok(result) => result,
                         Err(err) => {
                             warn!("PCP speed test failed: {err}");
+                            continue;
+                        }
+                    };
+
+                    let _ = metrics
+                        .dist(
+                            "orb.platform.connd.pcp_upload_mbps",
+                            pcp.upload_mbps,
+                            NO_TAGS,
+                        )
+                        .inspect_err(|err| {
+                            warn!("failed to emit PCP upload metric: {err}");
+                        });
+
+                    let cloudflare = match speed_test.run_speed_test(cfg.test_payload_bytes).await {
+                        Ok(result) => result,
+                        Err(err) => {
+                            warn!("Cloudflare speed test failed: {err}");
                             continue;
                         }
                     };

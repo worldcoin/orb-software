@@ -1,6 +1,6 @@
 use crate::{
     backend::types::{OrbStatusApiV2, VersionApiV2},
-    collectors::connectivity::GlobalConnectivity,
+    collectors::GlobalConnectivity,
 };
 use chrono::Utc;
 use color_eyre::Result;
@@ -12,6 +12,7 @@ use reqwest::{Response, Url};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Extension};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use reqwest_tracing::{OtelName, TracingMiddleware};
+use secrecy::{ExposeSecret, SecretString};
 use std::time::{Duration, Instant};
 use tokio::{
     sync::{oneshot, watch},
@@ -54,7 +55,7 @@ impl StatusClient {
         req_timeout: Duration,
         min_req_retry_interval: Duration,
         max_req_retry_interval: Duration,
-        mut attest_token_rx: watch::Receiver<String>,
+        mut attest_token_rx: watch::Receiver<SecretString>,
         mut connectivity_rx: watch::Receiver<GlobalConnectivity>,
     ) -> Self {
         info!("spawning backend-status client, orb_os_version: {orb_os_version}");
@@ -89,7 +90,7 @@ impl StatusClient {
             let mut client = make_client()
                 .inspect_err(|e| error!("failed to create http client: {e:?}"))?;
 
-            let mut attest_token = String::new();
+            let mut attest_token = attest_token_rx.borrow_and_update().clone();
             let mut connectivity = connectivity_rx.borrow_and_update().clone();
 
             info!("client with connectivity: {connectivity:?}");
@@ -100,9 +101,7 @@ impl StatusClient {
 
                     Ok(_) = attest_token_rx.changed() => {
                         info!("new attest token received!");
-                        let t = &attest_token_rx.borrow_and_update();
-                        attest_token.clear();
-                        attest_token.push_str(t);
+                        attest_token = attest_token_rx.borrow_and_update().clone();
                     }
 
                     Ok(_) = connectivity_rx.changed() => {
@@ -116,7 +115,7 @@ impl StatusClient {
                     }
 
                     Ok((req, res_tx)) = req_rx.recv_async() => {
-                        let res = if attest_token.is_empty() {
+                        let res = if attest_token.expose_secret().is_empty() {
                             Err(Err::MissingAttestToken)
                         } else if !connectivity.is_connected() {
                             Err(Err::NoConnectivity)
@@ -136,7 +135,7 @@ impl StatusClient {
                             let response = client
                                 .post(endpoint.clone())
                                 .json(&req)
-                                .basic_auth(&orb_id, Some(attest_token.clone()))
+                                .basic_auth(&orb_id, Some(attest_token.expose_secret()))
                                 .send()
                                 .await
                                 .wrap_err("failed to send request")
