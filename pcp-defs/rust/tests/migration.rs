@@ -12,6 +12,7 @@ fn migration_binary_round_trip() {
         source_pcp_version: Some("2.7".into()),
         migrated_ts: Some(1800000000),
         biometric_pipeline_version: Some("1.2.3-test".into()),
+        signing_key_id: Some("00000000-0000-0000-0000-000000000001".into()),
     };
 
     let wire = migration.encode_to_vec();
@@ -28,6 +29,7 @@ fn binary_absent_and_present_empty_values_keep_presence() {
         tee_software_version: Some(String::new()),
         src_signup_id: Some(String::new()),
         biometric_pipeline_version: Some(String::new()),
+        signing_key_id: Some(String::new()),
         migrated_ts: Some(0),
         ..Default::default()
     };
@@ -54,9 +56,44 @@ fn migration_binary_ignores_future_fields() {
         ..Default::default()
     };
     let mut wire = migration.encode_to_vec();
-    // Unknown field 8, varint value 1.
-    wire.extend_from_slice(&[0x40, 0x01]);
+    // Unknown field 9, varint value 1.
+    wire.extend_from_slice(&[0x48, 0x01]);
     assert_eq!(Migration::decode(wire.as_slice()).unwrap(), migration);
+}
+
+#[test]
+fn signing_key_id_uses_tag_8_and_preserves_legacy_messages() {
+    let legacy_wire = Migration {
+        tee_software_version: Some("0.1.0-test".into()),
+        ..Default::default()
+    }
+    .encode_to_vec();
+    let legacy = Migration::decode(legacy_wire.as_slice()).unwrap();
+    assert!(legacy.signing_key_id.is_none());
+    assert_eq!(legacy.encode_to_vec(), legacy_wire);
+
+    let migration = Migration {
+        signing_key_id: Some("key".into()),
+        ..Default::default()
+    };
+    assert_eq!(migration.encode_to_vec(), b"\x42\x03key");
+}
+
+#[test]
+fn signing_key_id_json_uses_snake_case_and_omits_absent_field() {
+    let absent: Migration = serde_json::from_value(json!({})).unwrap();
+    assert!(absent.signing_key_id.is_none());
+    assert!(serde_json::to_value(absent)
+        .unwrap()
+        .get("signing_key_id")
+        .is_none());
+
+    for key_id in ["", "00000000-0000-0000-0000-000000000001"] {
+        let expected = json!({"signing_key_id": key_id});
+        let migration: Migration = serde_json::from_value(expected.clone()).unwrap();
+        assert_eq!(migration.signing_key_id.as_deref(), Some(key_id));
+        assert_eq!(serde_json::to_value(migration).unwrap(), expected);
+    }
 }
 
 #[test]

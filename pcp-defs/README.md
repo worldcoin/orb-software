@@ -22,8 +22,11 @@ bytes, never against a re-encoded message.
 ## Migration artifacts
 
 - `migration.pb` (binary protobuf `Migration`): TEE software and biometric
-  pipeline versions, source signup ID and PCP version, and migration timestamp.
+  pipeline versions, source signup ID and PCP version, migration timestamp,
+  and manifest-signing key ID.
   `migrated_ts` is uint64 Unix seconds.
+- `Migration.signing_key_id`: the identifier of the key used by the TEE to sign
+  the migrated PCP manifest. Absent in packages generated before this field was added.
 - `Migration.src_signup_id`: the source package's `Info.signup_id`.
   The new package's `Info.signup_id` identifies the new signup.
 - `Hashes.migration_pb` (tag 59): SHA-256 of the complete `migration.pb` file.
