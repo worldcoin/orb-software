@@ -277,6 +277,7 @@ fn migration_pb_follows_info_and_is_hashed() {
         source_pcp_version: Some("2.6".into()),
         migrated_ts: Some(1_800_000_000),
         biometric_pipeline_version: Some("synthetic-pipeline".into()),
+        signing_key_id: Some("synthetic-signing-key".into()),
     };
     let mut input = request(&pair.public_key, &info);
     input.migration = Some(&migration);
