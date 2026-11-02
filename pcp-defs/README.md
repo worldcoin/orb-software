@@ -40,6 +40,24 @@ The TEE verifies the source manifest and signature before processing the
 package, then produces a new `hashes.json` and `hashes.sign` covering the
 migrated package.
 
+## ORBIT5 shares
+
+`orbit5_iris_embeddings_shares_0.pb` through `_4.pb` encode
+`Orbit5IrisEmbeddingShares`. Each file contains one recipient's left, left
+mirrored, right and right mirrored vectors: 512 unsigned 16-bit values per
+vector. Filename indices 0–4 correspond to Shamir IDs 1–5.
+
+Producers record the sharing implementation revision in `shares_version`.
+Consumers must validate vector dimensions and value bounds before using the
+shares. An explicit sharing-scheme identifier is deferred; the separate message
+name alone does not distinguish protobuf wire encodings.
+
+The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
+`reference_image.pb`. Producers must include all five bundles and hashes when
+ORBIT5 is enabled, alongside the existing three-party DI family, and omit them
+under biometric redaction. This schema addition does not change the PCP version;
+the producer version/capability rule remains pending consumer compatibility tests.
+
 ## Next breaking version
 
 Changes that need a new package because they change the signed bytes:
