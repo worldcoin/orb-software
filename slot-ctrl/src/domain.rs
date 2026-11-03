@@ -156,15 +156,13 @@ impl ScratchRegRetryCount {
         let raw = fs::read_to_string(sr_rf_path)
             .map_err(|e| Error::CouldNotOpenScratchReg(e.to_string()))?;
 
-        let hex = raw.trim().strip_prefix("0x").ok_or_else(|| {
-            Error::CouldNotOpenScratchReg(format!(
-                "scratch register retry count in unexpected format: {raw}"
-            ))
-        })?;
+        // R39 emits decimal; older kernels prefix the two-bit counter with 0x.
+        let value = raw.trim();
+        let value = value.strip_prefix("0x").unwrap_or(value);
 
-        let count = hex
+        let count = value
             .parse::<u8>()
-            .map_err(|e| Error::CouldNotOpenScratchReg(format!("{e}: '{hex}'")))?;
+            .map_err(|e| Error::CouldNotOpenScratchReg(format!("{e}: '{value}'")))?;
 
         Ok(ScratchRegRetryCount(count))
     }
@@ -286,6 +284,39 @@ impl RootFsStatus {
             val if val == Self::UPDATE_DONE => Ok(Self::UpdateDone),
             val if val == Self::UNBOOTABLE => Ok(Self::Unbootable),
             _ => Err(Error::InvalidRootFsStatusData),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScratchRegRetryCount;
+    use std::fs;
+
+    #[test]
+    fn reads_scratch_retry_counts_from_old_and_new_kernels() {
+        let register = tempfile::NamedTempFile::new().unwrap();
+        for count in 0..=ScratchRegRetryCount::SR_RF_COUNT_MAX {
+            for raw in [format!("0x{count:x}\n"), format!("{count}\n")] {
+                fs::write(register.path(), &raw).unwrap();
+                assert_eq!(
+                    ScratchRegRetryCount::new(register.path()).unwrap().0,
+                    count,
+                    "{raw:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_scratch_retry_counts() {
+        let register = tempfile::NamedTempFile::new().unwrap();
+        for raw in ["", "0x", "invalid", "0x0x3", "256"] {
+            fs::write(register.path(), raw).unwrap();
+            assert!(
+                ScratchRegRetryCount::new(register.path()).is_err(),
+                "{raw:?}"
+            );
         }
     }
 }
