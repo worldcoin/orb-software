@@ -380,6 +380,26 @@ impl FxHandle {
             .await
             .unwrap();
     }
+
+    pub async fn publish_ble_with_interval(
+        &self,
+        service_id: &str,
+        payload: Option<&[u8]>,
+        advertising_interval_ms: Option<u64>,
+    ) {
+        self.ble_publisher()
+            .await
+            .put(
+                serde_json::json!({
+                    "service_id": service_id,
+                    "payload": payload,
+                    "advertising_interval_ms": advertising_interval_ms,
+                })
+                .to_string(),
+            )
+            .await
+            .unwrap();
+    }
 }
 
 async fn setup_sysfs(container_path: &Path, cap: OrbCapabilities) -> PathBuf {

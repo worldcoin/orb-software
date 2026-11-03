@@ -403,3 +403,265 @@ async fn it_ignores_malformed_json_and_accepts_the_next_payload() {
     // Cleanup
     handle.stop().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_updates_the_interval_without_changing_the_payload_and_restores_defaults() {
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    fixture
+        .bluez
+        .mock_adapter()
+        .mock_adapter_is_powered(true)
+        .mock_interval_override_support(true)
+        .mock_advertisements(1);
+    let service_id = Uuid::from_u128(1).to_string();
+    let payload = [1, 2, 3];
+    let handle = fixture.run().await;
+
+    handle
+        .publish_ble_with_interval(&service_id, Some(&payload), Some(20))
+        .await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.bluez.advertisement_intervals(),
+        vec![(Some(20), Some(20))]
+    );
+
+    handle
+        .publish_ble_with_interval(&service_id, Some(&payload), Some(20))
+        .await;
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+
+    for interval in [Some(10_240), None] {
+        handle
+            .bluez
+            .mock_unregister_advertisements(1)
+            .mock_advertisements(1);
+        handle
+            .publish_ble_with_interval(&service_id, Some(&payload), interval)
+            .await;
+        handle
+            .bluez
+            .wait_all_called(Duration::from_secs(2))
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        handle.bluez.advertisement_intervals(),
+        vec![
+            (Some(20), Some(20)),
+            (Some(10_240), Some(10_240)),
+            (None, None)
+        ],
+    );
+    assert!(handle
+        .bluez
+        .advertisements()
+        .iter()
+        .all(|value| { value == &(service_id.clone(), payload.to_vec()) }));
+
+    handle.publish_ble(&service_id, Some(&payload)).await;
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+    handle.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_uses_defaults_when_bluez_interval_overrides_are_unavailable() {
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    fixture
+        .bluez
+        .mock_adapter()
+        .mock_adapter_is_powered(true)
+        .mock_interval_override_support(false)
+        .mock_advertisements(1);
+    let service_id = Uuid::from_u128(1).to_string();
+    let handle = fixture.run().await;
+
+    handle
+        .publish_ble_with_interval(&service_id, Some(&[1, 2, 3]), Some(20))
+        .await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(2))
+        .await
+        .unwrap();
+    assert_eq!(handle.bluez.advertisement_intervals(), vec![(None, None)]);
+
+    handle
+        .publish_ble_with_interval(&service_id, Some(&[1, 2, 3]), Some(100))
+        .await;
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+    handle.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_preserves_the_active_advertisement_when_the_interval_is_invalid() {
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    fixture
+        .bluez
+        .mock_adapter()
+        .mock_adapter_is_powered(true)
+        .mock_advertisements(1);
+    let service_id = Uuid::from_u128(1).to_string();
+    let payload = [1, 2, 3];
+    let handle = fixture.run().await;
+    handle.publish_ble(&service_id, Some(&payload)).await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(2))
+        .await
+        .unwrap();
+
+    for interval in [
+        serde_json::json!(0),
+        serde_json::json!(19),
+        serde_json::json!(10_241),
+        serde_json::json!(-1),
+        serde_json::json!(20.5),
+        serde_json::json!("20"),
+    ] {
+        handle
+            .ble_publisher()
+            .await
+            .put(
+                serde_json::json!({
+                    "service_id": service_id,
+                    "payload": [4, 5, 6],
+                    "advertising_interval_ms": interval,
+                })
+                .to_string(),
+            )
+            .await
+            .unwrap();
+    }
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+    assert_eq!(
+        handle.bluez.active_advertisements(),
+        vec![(service_id, payload.to_vec())]
+    );
+    assert_eq!(handle.bluez.advertisement_intervals(), vec![(None, None)]);
+    handle.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_retries_a_failed_interval_support_query_without_a_new_message() {
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    fixture
+        .bluez
+        .mock_adapter()
+        .mock_adapter_is_powered(true)
+        .mock_interval_override_error()
+        .mock_advertisements(1);
+    let service_id = Uuid::from_u128(1).to_string();
+    let handle = fixture.run().await;
+    handle
+        .publish_ble_with_interval(&service_id, Some(&[1, 2, 3]), Some(20))
+        .await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(2))
+        .await
+        .unwrap();
+    assert_eq!(handle.bluez.advertisement_intervals(), vec![(None, None)]);
+
+    handle
+        .bluez
+        .mock_interval_override_support(true)
+        .mock_unregister_advertisements(1)
+        .mock_advertisements(1);
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(32))
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.bluez.advertisement_intervals(),
+        vec![(None, None), (Some(20), Some(20))]
+    );
+    handle.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_recovers_from_a_rejected_interval_without_a_new_message() {
+    let mut fixture = Fixture::platform(OrbOsPlatform::Diamond)
+        .bluetooth(true)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    fixture
+        .bluez
+        .mock_adapter()
+        .mock_adapter_is_powered(true)
+        .mock_interval_override_support(true)
+        .mock_advertisement_error("org.bluez.Error.NotSupported")
+        .mock_advertisements(1);
+    let service_id = Uuid::from_u128(1).to_string();
+    let handle = fixture.run().await;
+    handle
+        .publish_ble_with_interval(&service_id, Some(&[1, 2, 3]), Some(20))
+        .await;
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.bluez.advertisement_intervals(),
+        vec![(Some(20), Some(20)), (None, None)]
+    );
+    assert_eq!(
+        handle.bluez.active_advertisements(),
+        vec![(service_id.clone(), vec![1, 2, 3])]
+    );
+
+    handle
+        .bluez
+        .mock_interval_override_support(true)
+        .mock_unregister_advertisements(1)
+        .mock_advertisements(1);
+    handle
+        .bluez
+        .wait_all_called(Duration::from_secs(32))
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.bluez.advertisement_intervals(),
+        vec![(Some(20), Some(20)), (None, None), (Some(20), Some(20))]
+    );
+    assert_eq!(
+        handle.bluez.active_advertisements(),
+        vec![(service_id, vec![1, 2, 3])]
+    );
+    handle.stop().await;
+}
