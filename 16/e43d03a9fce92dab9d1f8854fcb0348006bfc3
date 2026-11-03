@@ -1,0 +1,47 @@
+orb-connd/ARCHITECTURE.md
+  s_53440adb7ff905::t_d0714251e99533 215-216
+  s_ef3715ebb62ae2::t_661a712b7feccd 214
+  s_ef3715ebb62ae2::t_c6818c7aeef15e 200-213,217-219
+orb-connd/tests/ble.rs
+  s_ef3715ebb62ae2::t_c6818c7aeef15e 406-436,445-555,557-568,596,612-613
+  s_ef3715ebb62ae2::t_be36fe07dc064a 437-444,569-595,597-611
+  s_53440adb7ff905::t_d0714251e99533 614-667
+  s_53440adb7ff905::t_656a0b285f7ff3 556
+orb-connd/tests/fixture/mod.rs
+  s_53440adb7ff905::t_c97870a2dd1c90 383-397,399-402
+  s_53440adb7ff905::t_a04a5b04d6d6ae 398
+orb-connd/src/ble/mod.rs
+  s_53440adb7ff905::t_d0714251e99533 188,214-229
+  s_ef3715ebb62ae2::t_661a712b7feccd 17,53,57-66,120,159,181-187,189-193,195
+  s_53440adb7ff905::t_c97870a2dd1c90 54-56,67-68
+  s_ef3715ebb62ae2::t_cfcfaf49703bd4 3,28-37,41-52,118-119,160-164,174,177,207-209,231-232
+  s_53440adb7ff905::t_441d31dd4fc6a3 38-40
+orb-connd/tests/fixture/bluez.rs
+  s_53440adb7ff905::t_c97870a2dd1c90 32,199,208-211,219,221,225-228,283-284,287-299,306-308,343-345
+  s_ef3715ebb62ae2::t_be36fe07dc064a 200-207,212-218,220,222-224
+  s_ef3715ebb62ae2::t_f6bd80c8225ff8 346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "16e43d03a9fce92dab9d1f8854fcb0348006bfc3",
+  "prompts": {},
+  "sessions": {
+    "s_53440adb7ff905": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    },
+    "s_ef3715ebb62ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "unknown"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    }
+  }
+}
