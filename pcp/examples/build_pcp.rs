@@ -281,7 +281,7 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
     let plaintext = open(bytes, pair)?;
     let mut gzip = GzDecoder::new(plaintext.as_slice());
     let header = gzip.header().ok_or("missing gzip header")?;
-    assert_eq!(header.mtime(), TIMESTAMP as u32);
+    assert_eq!(header.mtime(), TIMESTAMP);
     assert_eq!(
         header.filename(),
         Some(name.as_bytes()),
