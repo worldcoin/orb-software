@@ -84,7 +84,7 @@ fn ring_test() {
 
 #[test]
 fn alkali_test() {
-    use alkali::asymmetric::seal;
+    use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as seal;
 
     println!("Running alkali/libsodium smoke test");
     const MESSAGE: &str = "Encrypt this message!";
