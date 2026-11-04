@@ -217,6 +217,57 @@ fn di_rejects_missing_embedding_or_share_records() {
     }
 }
 
+#[test]
+fn iris_rejects_mismatched_iris_versions() {
+    for recipient in 0..3 {
+        // Arrange
+        let codes = iris_codes();
+        let mut shares = iris_code_shares();
+        shares[recipient].iris_version = Some("different-iris".into());
+
+        // Act
+        let result = Iris::codes(&codes).shares(shares.each_ref());
+
+        // Assert
+        assert!(result.is_err(), "share {recipient} should be rejected");
+    }
+}
+
+#[test]
+fn di_rejects_mismatched_model_versions() {
+    for recipient in 0..3 {
+        // Arrange
+        let (embeddings, mut shares) = di_biometrics();
+        shares[recipient].share_v1.as_mut().unwrap().model_version =
+            "different-model".into();
+
+        // Act
+        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+
+        // Assert
+        assert!(result.is_err(), "share {recipient} should be rejected");
+    }
+}
+
+#[test]
+fn di_rejects_mismatched_embedding_versions() {
+    for recipient in 0..3 {
+        // Arrange
+        let (embeddings, mut shares) = di_biometrics();
+        shares[recipient]
+            .share_v1
+            .as_mut()
+            .unwrap()
+            .embedding_version = "different-embedding".into();
+
+        // Act
+        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+
+        // Assert
+        assert!(result.is_err(), "share {recipient} should be rejected");
+    }
+}
+
 struct FailingRng;
 impl CryptoRng for FailingRng {}
 impl RngCore for FailingRng {

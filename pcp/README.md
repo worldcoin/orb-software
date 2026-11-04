@@ -48,10 +48,13 @@ on the resulting builder. The callback receives the exact 32-byte SHA-256 digest
   and all three share files. Share array indices identify recipients.
 - Construct each group with `Iris::codes(&codes).shares(shares)` or
   `Di::embeddings(&embeddings).shares(shares)`. Both take three share references
-  and return `BiometricValidationError` when required fields are absent.
-  `Iris` checks that code, mask and version fields are present.
-  `Di` checks that the embedding record and each share record are present.
-  These checks do not validate numeric ranges or version consistency.
+  and return `BiometricValidationError` when required fields are absent or
+  data/share versions differ.
+  `Iris` checks that code, mask and version fields are present and each share's
+  `iris_version` matches the codes.
+  `Di` checks that the embedding record and each share record are present and
+  each share's `model_version` and `embedding_version` match the embedding.
+  These checks do not validate numeric ranges or sharing format versions.
 - Every manifest is stamped `orb_pcp::PCP_VERSION`.
 
 The result contains three encrypted tiers, of which tiers 1 and 2 are empty

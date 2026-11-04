@@ -23,8 +23,8 @@ pub enum BiometricPolicy<'a> {
 /// no files or hashes; an included group contributes its data file and all three
 /// share files. Share array indices identify recipients.
 ///
-/// [`Iris`] and [`Di`] constructors check required field presence and return
-/// [`BiometricValidationError`] on failure.
+/// [`Iris`] and [`Di`] constructors check required field presence and matching
+/// data/share versions, returning [`BiometricValidationError`] on failure.
 #[derive(bon::Builder)]
 #[builder(start_fn = images)]
 #[builder(finish_fn = face_embeddings)]
@@ -50,8 +50,7 @@ impl<'a> Iris<'a> {
         #[builder(start_fn)] iris_codes: &'a v1::IrisCodes,
         #[builder(finish_fn)] iris_code_shares: [&'a v1::IrisCodeShares; 3],
     ) -> Result<Self, BiometricValidationError> {
-        // TODO: remove these runtime checks and returning a Result once PCP definitions are
-        // updated. These values are not optional!
+        // TODO: remove presence checks once PCP definitions make these fields required.
 
         let iris_code_is_valid = [
             &iris_codes.iris_version,
@@ -84,6 +83,14 @@ impl<'a> Iris<'a> {
             return Err("One of the values in v1::IrisCodeShares is missing.".into());
         }
 
+        for share in iris_code_shares {
+            if share.iris_version != iris_codes.iris_version {
+                return Err(
+                    "Share iris version does not match iris code version.".into()
+                );
+            }
+        }
+
         Ok(Self {
             iris_codes,
             iris_code_shares,
@@ -104,22 +111,33 @@ impl<'a> Di<'a> {
         #[builder(start_fn)] di_embeddings: &'a v1::DiIrisEmbeddings,
         #[builder(finish_fn)] di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
     ) -> Result<Self, BiometricValidationError> {
-        if di_embeddings.embedding_v1.is_none() {
+        let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
                 "At least one of the fields in v1::DiIrisEmbeddings must be present"
                     .into(),
             );
-        }
+        };
 
-        let valid_shares = di_embedding_shares
-            .iter()
-            .all(|share| share.share_v1.is_some());
+        for share in di_embedding_shares {
+            let Some(share) = &share.share_v1 else {
+                return Err(
+                    "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
+                        .into(),
+                );
+            };
 
-        if !valid_shares {
-            return Err(
-                "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
-                    .into(),
-            );
+            if share.model_version != embedding.model_version {
+                return Err(
+                    "Share model version does not match embedding model version."
+                        .into(),
+                );
+            }
+
+            if share.embedding_version != embedding.embedding_version {
+                return Err(
+                    "Share embedding version does not match embedding version.".into(),
+                );
+            }
         }
 
         Ok(Self {
