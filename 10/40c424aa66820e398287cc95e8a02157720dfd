@@ -1,0 +1,21 @@
+orb-connd/src/ble/mod.rs
+  s_53440adb7ff905::t_d66f3926b6de71 237-266
+orb-connd/tests/ble.rs
+  s_53440adb7ff905::t_d66f3926b6de71 441-459,485-487
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1040c424aa66820e398287cc95e8a02157720dfd",
+  "prompts": {},
+  "sessions": {
+    "s_53440adb7ff905": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    }
+  }
+}
