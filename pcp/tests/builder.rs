@@ -142,72 +142,18 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
 }
 
 fn assert_iris_validation(codes: &v1::IrisCodes, shares: &[v1::IrisCodeShares; 3]) {
-    let pair = sealedbox::Keypair::generate().unwrap();
-    let info = capture_info(None);
-    let images = images();
-
-    for strict in [None, Some(true), Some(false)] {
-        let iris = Iris::codes(codes).shares(shares.each_ref());
-        let biometrics = Biometrics::images(&images).iris(iris).face_embeddings(&[]);
-        let mut signed = false;
-
-        let result = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
-            .backend_keys(backend_keys(&pair.public_key))
-            .biometrics(BiometricPolicy::Included(biometrics))
-            .maybe_strict(strict)
-            .rng(&mut rand::rngs::OsRng)
-            .signer(|_| {
-                signed = true;
-
-                Ok::<_, SignerError>(vec![1])
-            })
-            .build();
-
-        if strict != Some(false) {
-            assert!(
-                matches!(result, Err(BuildError::InvalidBiometrics(_))),
-                "invalid Iris data should fail validation with strict={strict:?}"
-            );
-            assert!(
-                !signed,
-                "invalid Iris data should be rejected before signing"
-            );
-        } else {
-            let package =
-                result.expect("strict(false) should accept invalid Iris data");
-            let files: std::collections::BTreeMap<_, _> =
-                tier0(&package, &pair).into_iter().collect();
-
-            assert!(signed);
-            assert_eq!(
-                serde_json::from_slice::<serde_json::Value>(&files["iris_codes.json"])
-                    .unwrap(),
-                serde_json::to_value(codes).unwrap(),
-            );
-
-            for (i, share) in shares.iter().enumerate() {
-                assert_eq!(
-                    serde_json::from_slice::<serde_json::Value>(
-                        &files[&format!("iris_code_shares_{i}.json")],
-                    )
-                    .unwrap(),
-                    serde_json::to_value(share).unwrap(),
-                );
-            }
-        }
-    }
+    assert!(Iris::codes(Some(codes))
+        .shares(shares.each_ref().map(Some))
+        .is_err());
 }
 
 #[test]
-fn builder_validates_iris_fields_in_strict_mode() {
-    for field in 0..5 {
+fn iris_constructor_rejects_missing_fields() {
+    for field in 0..4 {
         // Arrange
         let mut codes = iris_codes();
         let shares = iris_code_shares();
         *[
-            &mut codes.iris_version,
             &mut codes.left_iris_code,
             &mut codes.left_mask_code,
             &mut codes.right_iris_code,
@@ -219,14 +165,12 @@ fn builder_validates_iris_fields_in_strict_mode() {
     }
 
     for recipient in 0..3 {
-        for field in 0..6 {
+        for field in 0..4 {
             // Arrange
             let codes = iris_codes();
             let mut shares = iris_code_shares();
             let share = &mut shares[recipient];
             *[
-                &mut share.iris_version,
-                &mut share.iris_shares_version,
                 &mut share.left_iris_code_shares,
                 &mut share.left_mask_code_shares,
                 &mut share.right_iris_code_shares,
@@ -268,7 +212,7 @@ fn di_rejects_missing_embedding_or_share_records() {
 }
 
 #[test]
-fn builder_validates_iris_versions_in_strict_mode() {
+fn iris_constructor_rejects_mismatched_versions() {
     for recipient in 0..3 {
         // Arrange
         let codes = iris_codes();
@@ -508,8 +452,11 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
         let codes = iris_codes();
         let iris_shares = iris_code_shares();
         let (embeddings, di_shares) = di_biometrics();
-        let iris =
-            iris_present.then(|| Iris::codes(&codes).shares(iris_shares.each_ref()));
+        let iris = iris_present.then(|| {
+            Iris::codes(Some(&codes))
+                .shares(iris_shares.each_ref().map(Some))
+                .unwrap()
+        });
         let di = di_present.then(|| {
             Di::embeddings(&embeddings)
                 .shares(di_shares.each_ref())
@@ -635,7 +582,9 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     let (di_embeddings, di_embedding_shares) = di_biometrics();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
-    let iris = Iris::codes(&iris_codes).shares(iris_code_shares.each_ref());
+    let iris = Iris::codes(Some(&iris_codes))
+        .shares(iris_code_shares.each_ref().map(Some))
+        .unwrap();
     let di = Di::embeddings(&di_embeddings)
         .shares(di_embedding_shares.each_ref())
         .unwrap();
@@ -775,7 +724,9 @@ mod diagnostics {
         let (di_embeddings, di_embedding_shares) = di_biometrics();
         for device in [None, Some("device")] {
             let info = capture_info(device);
-            let iris = Iris::codes(&iris_codes).shares(iris_code_shares.each_ref());
+            let iris = Iris::codes(Some(&iris_codes))
+                .shares(iris_code_shares.each_ref().map(Some))
+                .unwrap();
             let di = Di::embeddings(&di_embeddings)
                 .shares(di_embedding_shares.each_ref())
                 .unwrap();
@@ -833,6 +784,189 @@ mod diagnostics {
         for encrypted in [&output.tier0, &output.tier1, &output.tier2] {
             let gzip = open(encrypted, &pair);
             tier(&gzip);
+        }
+    }
+}
+
+#[test]
+fn iris_constructor_validates_shares_without_codes() {
+    // Arrange
+    let shares = iris_code_shares();
+    let mut invalid_shares = iris_code_shares();
+    invalid_shares[1].left_iris_code_shares = None;
+
+    // Act
+    let valid = Iris::codes(None).shares(shares.each_ref().map(Some));
+    let invalid = Iris::codes(None).shares(invalid_shares.each_ref().map(Some));
+    let absent = Iris::codes(None).shares([None; 3]);
+
+    // Assert
+    assert!(valid.is_ok());
+    assert!(invalid.is_err());
+    assert!(absent.is_ok());
+}
+
+#[test]
+fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files() {
+    // Arrange
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(None);
+    let images = images();
+    let codes = iris_codes();
+    let shares = iris_code_shares();
+
+    for present in 0u8..16 {
+        let codes = (present & 1 != 0).then_some(&codes);
+        let shares =
+            std::array::from_fn(|i| (present & (2 << i) != 0).then_some(&shares[i]));
+
+        for strict in [None, Some(true), Some(false)] {
+            // Arrange
+            let iris = Iris::codes(codes).shares(shares).unwrap();
+            let biometrics =
+                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+            let mut signed = false;
+
+            // Act
+            let result = Builder::timestamp(1)
+                .info(&info)
+                .user_public_key(&pair.public_key)
+                .backend_keys(backend_keys(&pair.public_key))
+                .biometrics(BiometricPolicy::Included(biometrics))
+                .maybe_strict(strict)
+                .rng(&mut rand::rngs::OsRng)
+                .signer(|_| {
+                    signed = true;
+
+                    Ok::<_, SignerError>(vec![1])
+                })
+                .build();
+
+            // Assert
+            let complete = codes.is_some() && shares.iter().all(Option::is_some);
+
+            if strict != Some(false) && !complete {
+                assert!(matches!(result, Err(BuildError::InvalidBiometrics(_))));
+                assert!(!signed);
+
+                continue;
+            }
+
+            let package = result.unwrap();
+            assert!(signed);
+            let files: std::collections::BTreeMap<_, _> =
+                tier0(&package, &pair).into_iter().collect();
+            let manifest: serde_json::Value =
+                serde_json::from_slice(&files["hashes.json"]).unwrap();
+
+            let mut expected_files = vec![(
+                "iris_codes.json".to_owned(),
+                codes.map(|codes| serde_json::to_value(codes).unwrap()),
+            )];
+
+            for (i, share) in shares.iter().enumerate() {
+                expected_files.push((
+                    format!("iris_code_shares_{i}.json"),
+                    share.map(|share| serde_json::to_value(share).unwrap()),
+                ));
+            }
+
+            for (name, expected) in expected_files {
+                assert_eq!(files.contains_key(&name), expected.is_some());
+                assert_eq!(manifest.get(&name).is_some(), expected.is_some());
+
+                if let Some(expected) = expected {
+                    let actual: serde_json::Value =
+                        serde_json::from_slice(&files[&name]).unwrap();
+                    let hash =
+                        ring::digest::digest(&ring::digest::SHA256, &files[&name]);
+
+                    assert_eq!(actual, expected);
+                    assert_eq!(
+                        manifest[&name],
+                        data_encoding::HEXLOWER.encode(hash.as_ref()),
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn missing_iris_versions_require_compatibility_mode() {
+    // Arrange
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(None);
+    let images = images();
+
+    for missing in 0..8 {
+        let mut codes = iris_codes();
+        let mut shares = iris_code_shares();
+        match missing {
+            0 => codes.iris_version = None,
+            1..=3 => shares[missing - 1].iris_version = None,
+            4..=6 => shares[missing - 4].iris_shares_version = None,
+            _ => {
+                codes.iris_version = None;
+                for share in &mut shares {
+                    share.iris_version = None;
+                    share.iris_shares_version = None;
+                }
+            }
+        }
+
+        for strict in [None, Some(true), Some(false)] {
+            // Arrange
+            let mut signed = false;
+
+            // Act
+            let iris = Iris::codes(Some(&codes))
+                .shares(shares.each_ref().map(Some))
+                .expect("missing versions must be accepted by the constructor");
+            let biometrics =
+                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+            let result = Builder::timestamp(1)
+                .info(&info)
+                .user_public_key(&pair.public_key)
+                .backend_keys(backend_keys(&pair.public_key))
+                .biometrics(BiometricPolicy::Included(biometrics))
+                .maybe_strict(strict)
+                .rng(&mut rand::rngs::OsRng)
+                .signer(|_| {
+                    signed = true;
+
+                    Ok::<_, SignerError>(vec![1])
+                })
+                .build();
+
+            // Assert
+            if strict != Some(false) {
+                assert!(matches!(result, Err(BuildError::InvalidBiometrics(_))));
+                assert!(!signed);
+
+                continue;
+            }
+
+            let package =
+                result.expect("compatibility mode must accept missing versions");
+            assert!(signed);
+            let files: std::collections::BTreeMap<_, _> =
+                tier0(&package, &pair).into_iter().collect();
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&files["iris_codes.json"])
+                    .unwrap(),
+                serde_json::to_value(&codes).unwrap(),
+            );
+
+            for (i, share) in shares.iter().enumerate() {
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(
+                        &files[&format!("iris_code_shares_{i}.json")]
+                    )
+                    .unwrap(),
+                    serde_json::to_value(share).unwrap(),
+                );
+            }
         }
     }
 }

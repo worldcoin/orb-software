@@ -102,11 +102,11 @@ fn round_trip(filename: &str) -> Result<()> {
         )?);
     }
 
-    let iris = pcp::Iris::codes(&codes).shares([
-        &iris_shares[0],
-        &iris_shares[1],
-        &iris_shares[2],
-    ]);
+    let iris = pcp::Iris::codes(Some(&codes)).shares([
+        Some(&iris_shares[0]),
+        Some(&iris_shares[1]),
+        Some(&iris_shares[2]),
+    ])?;
 
     let di = pcp::Di::embeddings(&embeddings).shares([
         &di_shares[0],

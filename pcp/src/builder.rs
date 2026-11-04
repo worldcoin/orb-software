@@ -20,10 +20,12 @@ pub enum BiometricPolicy<'a> {
 /// normalized images.
 ///
 /// The iris and DI groups are independently optional. An omitted group contributes
-/// no files or hashes; an included group contributes its data file and all three
-/// share files. Share array indices identify recipients.
+/// no files or hashes; an included group contributes its present data and share
+/// files. Share array indices identify recipients.
 ///
-/// Iris fields and versions are validated when building with strict mode enabled.
+/// Supplied Iris data and version consistency are validated during construction.
+/// For a supplied Iris group, strict mode additionally requires codes, all three
+/// shares, and their versions.
 /// [`Di`] validates its fields and versions during construction.
 #[derive(bon::Builder)]
 #[builder(start_fn = images)]
@@ -38,8 +40,8 @@ pub struct Biometrics<'a> {
 }
 
 pub struct Iris<'a> {
-    iris_codes: &'a v1::IrisCodes,
-    iris_code_shares: [&'a v1::IrisCodeShares; 3],
+    iris_codes: Option<&'a v1::IrisCodes>,
+    iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
 }
 
 #[bon::bon]
@@ -47,57 +49,77 @@ impl<'a> Iris<'a> {
     #[builder(start_fn = codes)]
     #[builder(finish_fn = shares)]
     pub fn new(
-        #[builder(start_fn)] iris_codes: &'a v1::IrisCodes,
-        #[builder(finish_fn)] iris_code_shares: [&'a v1::IrisCodeShares; 3],
-    ) -> Self {
-        Self {
-            iris_codes,
-            iris_code_shares,
-        }
-    }
+        #[builder(start_fn)] iris_codes: Option<&'a v1::IrisCodes>,
+        #[builder(finish_fn)] iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
+    ) -> Result<Self, BiometricValidationError> {
+        if let Some(codes) = iris_codes {
+            let valid = [
+                &codes.left_iris_code,
+                &codes.right_iris_code,
+                &codes.left_mask_code,
+                &codes.right_mask_code,
+            ]
+            .iter()
+            .all(|value| value.is_some());
 
-    pub(crate) fn validate(&self) -> Result<(), BiometricValidationError> {
-        let Self {
-            iris_codes,
-            iris_code_shares,
-        } = self;
-
-        let iris_code_is_valid = [
-            &iris_codes.iris_version,
-            &iris_codes.left_iris_code,
-            &iris_codes.right_iris_code,
-            &iris_codes.left_mask_code,
-            &iris_codes.right_mask_code,
-        ]
-        .iter()
-        .all(|v| v.is_some());
-
-        if !iris_code_is_valid {
-            return Err("One of the values in v1::IrisCodes is missing.".into());
+            if !valid {
+                return Err("One of the values in v1::IrisCodes is missing.".into());
+            }
         }
 
-        let iris_code_shares_are_valid = iris_code_shares.iter().all(|share| {
-            [
-                &share.iris_version,
-                &share.iris_shares_version,
+        for share in iris_code_shares.iter().flatten() {
+            let valid = [
                 &share.left_iris_code_shares,
                 &share.left_mask_code_shares,
                 &share.right_iris_code_shares,
                 &share.right_mask_code_shares,
             ]
             .iter()
-            .all(|v| v.is_some())
-        });
+            .all(|value| value.is_some());
 
-        if !iris_code_shares_are_valid {
-            return Err("One of the values in v1::IrisCodeShares is missing.".into());
-        }
+            if !valid {
+                return Err(
+                    "One of the values in v1::IrisCodeShares is missing.".into()
+                );
+            }
 
-        for share in iris_code_shares {
-            if share.iris_version != iris_codes.iris_version {
+            if let Some(codes) = iris_codes
+                && let (Some(code_version), Some(share_version)) =
+                    (&codes.iris_version, &share.iris_version)
+                && share_version != code_version
+            {
                 return Err(
                     "Share iris version does not match iris code version.".into()
                 );
+            }
+        }
+
+        Ok(Self {
+            iris_codes,
+            iris_code_shares,
+        })
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), BiometricValidationError> {
+        let Some(codes) = self.iris_codes else {
+            return Err("Iris codes are missing.".into());
+        };
+
+        if codes.iris_version.is_none() {
+            return Err("Iris code version is missing.".into());
+        }
+
+        for share in &self.iris_code_shares {
+            let Some(share) = share else {
+                return Err("One or more iris code shares are missing.".into());
+            };
+
+            if share.iris_version.is_none() {
+                return Err("Iris version is missing from a share.".into());
+            }
+
+            if share.iris_shares_version.is_none() {
+                return Err("Iris shares version is missing.".into());
             }
         }
 
@@ -231,7 +253,9 @@ where
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
     backend_keys: payload::BackendKeys<'a>,
     biometrics: BiometricPolicy<'a>,
-    /// Validate Iris fields and versions before building. Defaults to true.
+    /// Check completeness of a supplied Iris group; the group itself is optional.
+    /// Defaults to true. Disabling strictness is only for backward compatibility
+    /// with old PCP values that may omit records or versions within that group.
     #[builder(default = true)]
     strict: bool,
     /// Written as binary `migration.pb` after `info.json` and hashed in
@@ -417,7 +441,7 @@ where
             ("face_embeddings.json", Some(face_embeddings.as_slice())),
             (
                 "iris_codes.json",
-                daugman.as_ref().map(|d| d.codes.as_slice()),
+                daugman.as_ref().and_then(|d| d.codes.as_deref()),
             ),
             (
                 "di_iris_embeddings.pb",
@@ -430,9 +454,11 @@ where
         }
 
         for (i, share) in daugman.iter().flat_map(|d| d.shares.iter().enumerate()) {
-            archives
-                .hashes
-                .push((format!("iris_code_shares_{i}.json"), sha256(share)));
+            if let Some(share) = share {
+                archives
+                    .hashes
+                    .push((format!("iris_code_shares_{i}.json"), sha256(share)));
+            }
         }
 
         for (i, share) in di.iter().flat_map(|di| di.shares.iter().enumerate()) {

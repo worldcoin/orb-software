@@ -367,7 +367,9 @@ pub(crate) fn tier0(
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
         if let Some(daugman) = biometrics.daugman {
-            entries.push(("iris_codes.json", daugman.codes.as_slice()));
+            if let Some(codes) = &daugman.codes {
+                entries.push(("iris_codes.json", codes.as_slice()));
+            }
             entries.extend(
                 [
                     "iris_code_shares_0.json",
@@ -375,7 +377,10 @@ pub(crate) fn tier0(
                     "iris_code_shares_2.json",
                 ]
                 .into_iter()
-                .zip(daugman.shares.iter().map(Vec::as_slice)),
+                .zip(&daugman.shares)
+                .filter_map(|(name, share)| {
+                    share.as_deref().map(|bytes| (name, bytes))
+                }),
             );
         }
 

@@ -24,40 +24,21 @@ Start with `orb_pcp::Builder::timestamp`, supply the inputs and a cryptographica
 secure RNG, then finish configuration with `.signer(callback)`. Call `.build()`
 on the resulting builder. The callback receives the exact 32-byte SHA-256 digest.
 
-- Supply encoded images, recipient keys and the shared `orb_pcp::v1` messages:
-  `Info`, face embeddings, iris codes and shares, and DI embeddings and shares.
-  Accepted messages are written as given; absent optional JSON fields are omitted.
-  Image encoding, quantization, secret sharing and key authorization belong to
-  the caller.
-- The builder owns every `*_salt` field and the multiframe image ID lists in
-  `info.json`; caller values there are replaced. Each present salted value gets
-  a fresh salt and a salted hash in `hashes.json`.
-- Multiframe captures are additional IR frames of an eye. Their `ImageId`s name
-  their files (`{image_id}.png` and, with per-frame normalization,
-  `{image_id}_normalized_*.bin`) and fill the multiframe ID lists.
-- Choose `BiometricPolicy::Included(biometrics)` or `Redacted`. Redaction removes the
-  biometric files and their hashes and blanks all image IDs. `info.json`,
-  `backend_keys.json`, the salted metadata hashes and the `backend_keys.json`
-  hash remain.
-- TEE migrations supply `.migration(&migration)` before `.signer(...)`; it is written as binary
-  `migration.pb` and hashed in `hashes.json`.
-- Build `Biometrics` with `Biometrics::images(&images)`, optionally supply
-  `.iris(iris)` and `.di(di)`, then finish with `.face_embeddings(&face_embeddings)`.
-  The two groups are independent and may both be included. An omitted group
-  contributes no files or hashes; an included group contributes its data file
-  and all three share files. Share array indices identify recipients.
-- Construct each group with `Iris::codes(&codes).shares(shares)` or
-  `Di::embeddings(&embeddings).shares(shares)`. Both take three share references.
-  Iris construction is infallible. By default, building checks that code, mask
-  and version fields are present and each share's `iris_version` matches the
-  codes, returning `BuildError::InvalidBiometrics` on failure. Set `.strict(false)`
-  before `.signer(...)` to skip Iris validation. This applies to both `.build()`
-  and `.build_unencrypted()`.
-  `Di` still validates during construction, returning `BiometricValidationError`
-  when its embedding or share records are absent or their model/embedding
-  versions differ.
-  These checks do not validate numeric ranges or sharing format versions.
-- Every manifest is stamped `orb_pcp::PCP_VERSION`.
+- Supply encoded images, recipient keys and metadata using the shared
+  `orb_pcp::v1` types. Image encoding, quantization, secret sharing and key
+  authorization belong to the caller.
+- Build `Biometrics` with `Biometrics::images(&images)`, optionally add `.iris(iris)`
+  and `.di(di)`, then finish with `.face_embeddings(&face_embeddings)`.
+- Choose `BiometricPolicy::Included(biometrics)` or `Redacted`. Redaction omits
+  biometrics and clears image IDs, while retaining identity metadata.
+- When supplying an Iris group, codes, all three shares, and their versions are
+  required by default. Use `.strict(false)` only for compatibility with older
+  PCPs missing these values. Supplied data and version consistency are still
+  validated.
+- For TEE migrations, supply `.migration(&migration)` before `.signer(...)`.
+
+See the example for complete input construction and the API documentation for
+validation rules and package layout.
 
 The result contains three encrypted tiers, of which tiers 1 and 2 are empty
 archives, and their SHA-256 checksums.

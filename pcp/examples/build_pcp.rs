@@ -172,7 +172,8 @@ pub fn run() -> Result<()> {
             let biometrics = if redacted {
                 pcp::BiometricPolicy::Redacted
             } else {
-                let iris = Iris::codes(&iris_codes).shares(iris_code_shares.each_ref());
+                let iris = Iris::codes(Some(&iris_codes))
+                    .shares(iris_code_shares.each_ref().map(Some))?;
 
                 let di = Di::embeddings(&di_embeddings)
                     .shares(di_embedding_shares.each_ref())?;

@@ -48,15 +48,19 @@ mod json {
             right_mask_code: Some("right-mask".into()),
         };
         assert_eq!(
-            payload::encode_daugman(&codes, shares().each_ref())
+            payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes,
+                .codes.unwrap(),
             br#"{"IRIS_version":"synthetic-version","left_iris_code":"left","left_mask_code":"","right_mask_code":"right-mask"}"#,
         );
         assert_eq!(
-            payload::encode_daugman(&IrisCodes::default(), shares().each_ref())
-                .unwrap()
-                .codes,
+            payload::encode_daugman(
+                Some(&IrisCodes::default()),
+                shares().each_ref().map(Some)
+            )
+            .unwrap()
+            .codes
+            .unwrap(),
             br#"{}"#
         );
     }
@@ -64,15 +68,18 @@ mod json {
     #[test]
     fn share_files_keep_recipient_order_and_exact_wire_names() {
         let shares = shares();
-        let encoded =
-            payload::encode_daugman(&IrisCodes::default(), shares.each_ref()).unwrap();
+        let encoded = payload::encode_daugman(
+            Some(&IrisCodes::default()),
+            shares.each_ref().map(Some),
+        )
+        .unwrap();
         assert_eq!(
-            encoded.shares[0].as_slice(),
+            encoded.shares[0].as_deref().unwrap(),
             br#"{"IRIS_shares_version":"synthetic-sharing-v1","left_iris_code_shares":"li","left_mask_code_shares":"lm","right_iris_code_shares":"ri","right_mask_code_shares":"rm"}"#,
         );
         for (i, bytes) in encoded.shares.iter().enumerate() {
             let decoded: IrisCodeShares =
-                serde_json::from_slice(bytes.as_slice()).unwrap();
+                serde_json::from_slice(bytes.as_deref().unwrap()).unwrap();
             assert_eq!(decoded, shares[i]);
         }
     }
@@ -85,9 +92,9 @@ mod json {
             ..Default::default()
         };
         assert_eq!(
-            payload::encode_daugman(&codes, shares().each_ref())
+            payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes,
+                .codes.unwrap(),
             "{\"IRIS_version\":\"\\\"\\\\\\n\\t\\u0000é\",\"left_iris_code\":\"not base64\"}".as_bytes(),
         );
     }

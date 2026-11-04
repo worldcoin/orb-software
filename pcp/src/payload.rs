@@ -60,19 +60,24 @@ pub(crate) fn face_embeddings(
 }
 
 pub(crate) struct EncodedDaugman {
-    pub codes: Vec<u8>,
-    pub shares: [Vec<u8>; 3],
+    pub codes: Option<Vec<u8>>,
+    pub shares: [Option<Vec<u8>>; 3],
 }
 
 pub(crate) fn encode_daugman(
-    codes: &IrisCodes,
-    shares: [&IrisCodeShares; 3],
+    codes: Option<&IrisCodes>,
+    shares: [Option<&IrisCodeShares>; 3],
 ) -> Result<EncodedDaugman, serde_json::Error> {
-    let [first, second, third] =
-        shares.map(|share| serde_json::to_value(share).and_then(sorted_json));
+    let [first, second, third] = shares.map(|share| {
+        share
+            .map(|share| serde_json::to_value(share).and_then(sorted_json))
+            .transpose()
+    });
 
     Ok(EncodedDaugman {
-        codes: serde_json::to_value(codes).and_then(sorted_json)?,
+        codes: codes
+            .map(|codes| serde_json::to_value(codes).and_then(sorted_json))
+            .transpose()?,
         shares: [first?, second?, third?],
     })
 }
