@@ -17,11 +17,16 @@ pub struct BackendKey<'a> {
     pub encrypted_private_key: &'a str,
 }
 
+#[derive(bon::Builder)]
+#[builder(start_fn = face)]
+#[builder(finish_fn = tier2)]
 pub struct BackendKeys<'a> {
+    #[builder(start_fn)]
+    pub face: BackendKey<'a>,
+    #[builder(finish_fn)]
+    pub tier2: BackendKey<'a>,
     pub iris: BackendKey<'a>,
     pub normalized_iris: BackendKey<'a>,
-    pub face: BackendKey<'a>,
-    pub tier2: BackendKey<'a>,
 }
 
 /// Compact JSON with object keys sorted at every level. Sorting is explicit so it
@@ -68,6 +73,7 @@ pub(crate) fn encode_daugman(
             .map(|share| serde_json::to_value(share).and_then(sorted_json))
             .transpose()
     });
+
     Ok(EncodedDaugman {
         codes: codes
             .map(|codes| serde_json::to_value(codes).and_then(sorted_json))
@@ -94,18 +100,18 @@ pub(crate) fn backend_keys(
 }
 
 pub(crate) struct EncodedDi {
-    pub embeddings: Option<Vec<u8>>,
-    pub shares: [Option<Vec<u8>>; 3],
+    pub embeddings: Vec<u8>,
+    pub shares: [Vec<u8>; 3],
 }
 
 /// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
-    embeddings: Option<&DiIrisEmbeddings>,
-    shares: [Option<&DiIrisEmbeddingShares>; 3],
+    embeddings: &DiIrisEmbeddings,
+    shares: [&DiIrisEmbeddingShares; 3],
 ) -> EncodedDi {
     EncodedDi {
-        embeddings: embeddings.map(Message::encode_to_vec),
-        shares: shares.map(|share| share.map(Message::encode_to_vec)),
+        embeddings: Message::encode_to_vec(embeddings),
+        shares: shares.map(Message::encode_to_vec),
     }
 }
 

@@ -50,8 +50,7 @@ mod json {
         assert_eq!(
             payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes
-                .unwrap(),
+                .codes.unwrap(),
             br#"{"IRIS_version":"synthetic-version","left_iris_code":"left","left_mask_code":"","right_mask_code":"right-mask"}"#,
         );
         assert_eq!(
@@ -69,8 +68,11 @@ mod json {
     #[test]
     fn share_files_keep_recipient_order_and_exact_wire_names() {
         let shares = shares();
-        let encoded =
-            payload::encode_daugman(None, shares.each_ref().map(Some)).unwrap();
+        let encoded = payload::encode_daugman(
+            Some(&IrisCodes::default()),
+            shares.each_ref().map(Some),
+        )
+        .unwrap();
         assert_eq!(
             encoded.shares[0].as_deref().unwrap(),
             br#"{"IRIS_shares_version":"synthetic-sharing-v1","left_iris_code_shares":"li","left_mask_code_shares":"lm","right_iris_code_shares":"ri","right_mask_code_shares":"rm"}"#,
@@ -92,8 +94,7 @@ mod json {
         assert_eq!(
             payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes
-                .unwrap(),
+                .codes.unwrap(),
             "{\"IRIS_version\":\"\\\"\\\\\\n\\t\\u0000é\",\"left_iris_code\":\"not base64\"}".as_bytes(),
         );
     }
@@ -160,9 +161,9 @@ mod di {
                 right_mirror_share: vec![],
             }),
         });
-        let output = payload::encode_di(Some(&embeddings), shares.each_ref().map(Some));
+        let output = payload::encode_di(&embeddings, shares.each_ref());
         assert_eq!(
-            output.embeddings.unwrap(),
+            output.embeddings,
             [
                 0x0a, 0x31, 0x0a, 1, b'm', 0x12, 1, b'b', 0x1a, 1, b'v', 0x22, 5, 0xff,
                 1, 0, 0xfe, 1, 0x2a, 1, 1, 0x32, 1, 2, 0x3a, 1, 3, 0x42, 4, 0, 0, 0x80,
@@ -172,7 +173,7 @@ mod di {
         );
         for (i, bytes) in output.shares.iter().enumerate() {
             assert_eq!(
-                bytes.as_deref().unwrap(),
+                bytes.as_slice(),
                 &[
                     0x0a, 0x0c, 0x0a, 1, b'm', 0x12, 1, b's', 0x1a, 1, b'v', 0x22, 1,
                     i as u8
@@ -184,13 +185,10 @@ mod di {
     #[test]
     fn default_messages_produce_empty_files() {
         let output = payload::encode_di(
-            Some(&DiIrisEmbeddings::default()),
-            [Some(&DiIrisEmbeddingShares::default()); 3],
+            &DiIrisEmbeddings::default(),
+            [&DiIrisEmbeddingShares::default(); 3],
         );
-        assert_eq!(output.embeddings.as_deref(), Some([].as_slice()));
-        assert!(output
-            .shares
-            .iter()
-            .all(|share| share.as_deref() == Some(&[])));
+        assert!(output.embeddings.is_empty());
+        assert!(output.shares.iter().all(|share| share.is_empty()));
     }
 }

@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, error::Error, io::Read};
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use data_encoding::{BASE64, HEXLOWER};
 use flate2::read::GzDecoder;
-use orb_pcp::{self as pcp, v1};
+use orb_pcp::{self as pcp, v1, Biometrics, Di, Iris};
 use orb_pcp_defs::{
     prost::Message,
     v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
@@ -25,7 +25,7 @@ type Files = BTreeMap<String, Vec<u8>>;
 type KeyPair = sealedbox::Keypair;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-const TIMESTAMP: u64 = 1_700_000_000;
+const TIMESTAMP: u32 = 1_700_000_000;
 // A synthetic 1x1 grayscale/alpha PNG.
 const PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
 const MULTIFRAME_IDS: [&str; 2] = [
@@ -168,39 +168,51 @@ pub fn run() -> Result<()> {
                     Ok(BASE64.encode(&ciphertext))
                 })
                 .collect::<Result<_>>()?;
-            let request = pcp::BuildRequest {
-                timestamp: TIMESTAMP,
-                info: &info,
-                user_public_key: &user.public_key,
-                backend_keys: pcp::BackendKeys {
-                    iris: backend_key(&backends[0], &encrypted_keys[0]),
-                    normalized_iris: backend_key(&backends[1], &encrypted_keys[1]),
-                    face: backend_key(&backends[2], &encrypted_keys[2]),
-                    tier2: backend_key(&backends[3], &encrypted_keys[3]),
-                },
-                biometrics: if redacted {
-                    pcp::BiometricPolicy::Redacted
-                } else {
-                    pcp::BiometricPolicy::Included {
-                        images: &images,
-                        face_embeddings: &face_embeddings,
-                        iris_codes: Some(&iris_codes),
-                        iris_code_shares: iris_code_shares.each_ref().map(Some),
-                        di_embeddings: Some(&di_embeddings),
-                        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-                    }
-                },
-                migration: None,
+
+            let biometrics = if redacted {
+                pcp::BiometricPolicy::Redacted
+            } else {
+                let iris = Iris::codes(Some(&iris_codes))
+                    .shares(iris_code_shares.each_ref().map(Some))?;
+
+                let di = Di::embeddings(&di_embeddings)
+                    .shares(di_embedding_shares.each_ref())?;
+
+                pcp::BiometricPolicy::Included(
+                    Biometrics::images(&images)
+                        .iris(iris)
+                        .di(di)
+                        .face_embeddings(&face_embeddings),
+                )
             };
-            // Any prehash signer works; this example uses P-256.
+
+            let backend_keys =
+                pcp::BackendKeys::face(backend_key(&backends[2], &encrypted_keys[2]))
+                    .iris(backend_key(&backends[0], &encrypted_keys[0]))
+                    .normalized_iris(backend_key(&backends[1], &encrypted_keys[1]))
+                    .tier2(backend_key(&backends[3], &encrypted_keys[3]));
+
             let signer = SigningKey::random(&mut OsRng);
             let mut calls = 0;
-            let package = pcp::build(&request, &mut OsRng, |hash| {
-                calls += 1;
-                let signature: Signature = signer.sign_prehash(hash)?;
-                Ok::<_, p256::ecdsa::Error>(signature.to_der().as_bytes().to_vec())
-            })?;
+
+            let package = pcp::Builder::timestamp(TIMESTAMP)
+                .info(&info)
+                .user_public_key(&user.public_key)
+                .backend_keys(backend_keys)
+                .biometrics(biometrics)
+                .rng(&mut OsRng)
+                .signer(|hash| {
+                    let signature: Signature = signer.sign_prehash(hash)?;
+                    calls += 1;
+
+                    Ok::<_, p256::ecdsa::Error>(signature.to_der().as_bytes().to_vec())
+                })
+                .build()?;
+
+            // Any prehash signer works; this example uses P-256.
+
             assert_eq!(calls, 1);
+
             verify(
                 &package,
                 device_public_key,
@@ -209,6 +221,7 @@ pub fn run() -> Result<()> {
                 &backends,
                 &signer,
             )?;
+
             println!(
                 "device_key={} redacted={redacted}: encrypted tier lengths [{}, {}, {}]; verified",
                 device_public_key.is_some(), package.tier0.len(), package.tier1.len(), package.tier2.len()
@@ -252,7 +265,7 @@ fn files(bytes: &[u8]) -> Result<Files> {
     let mut result = Files::new();
     for entry in tar::Archive::new(bytes).entries()? {
         let mut entry = entry?;
-        assert_eq!(entry.header().mtime()?, TIMESTAMP);
+        assert_eq!(entry.header().mtime()?, TIMESTAMP as u64);
         let name = entry
             .path()?
             .to_str()
@@ -269,7 +282,7 @@ fn tier(bytes: &[u8], pair: &KeyPair, name: &str) -> Result<Files> {
     let plaintext = open(bytes, pair)?;
     let mut gzip = GzDecoder::new(plaintext.as_slice());
     let header = gzip.header().ok_or("missing gzip header")?;
-    assert_eq!(header.mtime(), TIMESTAMP as u32);
+    assert_eq!(header.mtime(), TIMESTAMP);
     assert_eq!(
         header.filename(),
         Some(name.as_bytes()),
