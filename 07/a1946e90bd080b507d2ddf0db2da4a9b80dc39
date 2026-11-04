@@ -1,0 +1,44 @@
+orb-connd/src/connectivity_daemon.rs
+  s_53440adb7ff905::t_de3d084aafabdb 4,18,91
+orb-connd/tests/ble.rs
+  s_53440adb7ff905::t_84f9978f106fea 453,466,472,500,508,554-556
+  s_ef3715ebb62ae2::t_ae50d81b60a45b 3,5,7-10,412-425,429,433,436,445-446,449-450,454-462,467,470-471,473-483,485,487-489,494,496,498,505-507,509-510,515,519-520,522-524,526,528,533,535,539,574-575
+  s_ef3715ebb62ae2::t_08a08e2fc83646 516-517
+  s_ef3715ebb62ae2::t_70e1f78898b945 527
+  s_ef3715ebb62ae2::t_52dbc91f4b0f50 529
+  s_ef3715ebb62ae2::t_5049e635703510 534
+  s_ef3715ebb62ae2::t_2a563c722ea5c3 538
+  s_53440adb7ff905::t_75d4d6efb14ab4 557-558
+  s_ef3715ebb62ae2::t_273c803dc75b34 571-573
+  s_ef3715ebb62ae2::t_b58c5791de1599 531,540-553,560-570
+orb-connd/tests/fixture/bluez.rs
+  s_ef3715ebb62ae2::t_ae50d81b60a45b 198-201,258-259,262-264
+orb-connd/src/ble/mod.rs
+  s_53440adb7ff905::t_84f9978f106fea 190-193,196
+  s_ef3715ebb62ae2::t_6835877609031a 151-155,164-186
+  s_53440adb7ff905::t_de3d084aafabdb 1,18,22,30-35,40,50,53,63-64,86-96,109-113,156,158,187-189,194-195,197-202,207,210,215,227,232-243,245,257,265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "07a1946e90bd080b507d2ddf0db2da4a9b80dc39",
+  "prompts": {},
+  "sessions": {
+    "s_53440adb7ff905": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    },
+    "s_ef3715ebb62ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "unknown"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    }
+  }
+}
