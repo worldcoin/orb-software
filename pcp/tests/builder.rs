@@ -141,6 +141,82 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     (embeddings, shares)
 }
 
+#[test]
+fn iris_rejects_missing_required_fields() {
+    for field in 0..5 {
+        // Arrange
+        let mut codes = iris_codes();
+        let shares = iris_code_shares();
+        *[
+            &mut codes.iris_version,
+            &mut codes.left_iris_code,
+            &mut codes.left_mask_code,
+            &mut codes.right_iris_code,
+            &mut codes.right_mask_code,
+        ][field] = None;
+
+        // Act
+        let result = Iris::codes(&codes).shares(shares.each_ref());
+
+        // Assert
+        assert!(result.is_err(), "accepted missing code field {field}");
+    }
+
+    for recipient in 0..3 {
+        for field in 0..6 {
+            // Arrange
+            let codes = iris_codes();
+            let mut shares = iris_code_shares();
+            let share = &mut shares[recipient];
+            *[
+                &mut share.iris_version,
+                &mut share.iris_shares_version,
+                &mut share.left_iris_code_shares,
+                &mut share.left_mask_code_shares,
+                &mut share.right_iris_code_shares,
+                &mut share.right_mask_code_shares,
+            ][field] = None;
+
+            // Act
+            let result = Iris::codes(&codes).shares(shares.each_ref());
+
+            // Assert
+            assert!(
+                result.is_err(),
+                "accepted missing field {field} in share {recipient}"
+            );
+        }
+    }
+}
+
+#[test]
+fn di_rejects_missing_embedding_or_share_records() {
+    // Arrange
+    let (mut embeddings, shares) = di_biometrics();
+    embeddings.embedding_v1 = None;
+
+    // Act
+    let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+
+    // Assert
+    assert!(result.is_err(), "accepted missing embedding record");
+
+    for recipient in 0..3 {
+        // Arrange
+        let (embeddings, mut shares) = di_biometrics();
+        shares[recipient].share_v1 = None;
+
+        // Act
+        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "accepted missing record in share {recipient}"
+        );
+    }
+}
+
 struct FailingRng;
 impl CryptoRng for FailingRng {}
 impl RngCore for FailingRng {
