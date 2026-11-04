@@ -1,0 +1,21 @@
+orb-connd/src/ble/mod.rs
+  s_ef3715ebb62ae2::t_d6dd134f01c282 4,26,30
+orb-connd/tests/ble.rs
+  s_ef3715ebb62ae2::t_25fd74e7a8723d 543
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e07087bf5423febb5dc94584a807851390146fcf",
+  "prompts": {},
+  "sessions": {
+    "s_ef3715ebb62ae2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01a1a2d1-ab9e-7c80-a465-b84216f98a7b",
+        "model": "unknown"
+      },
+      "human_author": "mustafakuloglu <mustafakuloglunun@gmail.com>"
+    }
+  }
+}
