@@ -1,13 +1,13 @@
 use orb_pcp_defs::{
     prost::Message,
-    v1::{Hashes, Orbit5IrisEmbeddingShareV1, Orbit5IrisEmbeddingShares},
+    v1::{Hashes, Orbit5DiIrisEmbeddingShareV1, Orbit5DiIrisEmbeddingShares},
 };
 use serde_json::json;
 
 #[test]
 fn orbit5_bundle_preserves_four_vectors_and_metadata() {
-    let original = Orbit5IrisEmbeddingShares {
-        share_v1: Some(Orbit5IrisEmbeddingShareV1 {
+    let original = Orbit5DiIrisEmbeddingShares {
+        share_v1: Some(Orbit5DiIrisEmbeddingShareV1 {
             model_version: "test-model".into(),
             shares_version: "test-sharing-revision".into(),
             embedding_version: "test-embedding".into(),
@@ -20,12 +20,12 @@ fn orbit5_bundle_preserves_four_vectors_and_metadata() {
 
     let wire = original.encode_to_vec();
     assert_eq!(
-        Orbit5IrisEmbeddingShares::decode(wire.as_slice()).unwrap(),
+        Orbit5DiIrisEmbeddingShares::decode(wire.as_slice()).unwrap(),
         original
     );
     let json = serde_json::to_value(&original).unwrap();
     assert_eq!(
-        serde_json::from_value::<Orbit5IrisEmbeddingShares>(json).unwrap(),
+        serde_json::from_value::<Orbit5DiIrisEmbeddingShares>(json).unwrap(),
         original
     );
 }
@@ -35,11 +35,11 @@ fn orbit5_hashes_use_filenames_and_preserve_existing_fields() {
     let expected = json!({
         "reference_image.pb": "00".repeat(32),
         "di_iris_embeddings_shares_0.pb": "11".repeat(32),
-        "orbit5_iris_embeddings_shares_0.pb": "22".repeat(32),
-        "orbit5_iris_embeddings_shares_1.pb": "33".repeat(32),
-        "orbit5_iris_embeddings_shares_2.pb": "44".repeat(32),
-        "orbit5_iris_embeddings_shares_3.pb": "55".repeat(32),
-        "orbit5_iris_embeddings_shares_4.pb": "66".repeat(32),
+        "orbit5_di_iris_embeddings_shares_0.pb": "22".repeat(32),
+        "orbit5_di_iris_embeddings_shares_1.pb": "33".repeat(32),
+        "orbit5_di_iris_embeddings_shares_2.pb": "44".repeat(32),
+        "orbit5_di_iris_embeddings_shares_3.pb": "55".repeat(32),
+        "orbit5_di_iris_embeddings_shares_4.pb": "66".repeat(32),
     });
     let hashes: Hashes = serde_json::from_value(expected.clone()).unwrap();
     let wire = hashes.encode_to_vec();

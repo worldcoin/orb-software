@@ -46,9 +46,9 @@ a signer callback receiving the exact 32-byte SHA-256 digest.
   a default DI message produces a zero-byte protobuf file. Callers that require
   empty files must supply `Some(&default_message)` explicitly. Share indices stay
   fixed when other shares are absent.
-- `BiometricPolicy::Included::orbit5_embedding_shares` accepts an optional array
+- `BiometricPolicy::Included::orbit5_di_embedding_shares` accepts an optional array
   of five ORBIT5 recipient bundles. `None` omits the entire family; `Some` writes
-  all five `orbit5_iris_embeddings_shares_{0..4}.pb` files and their signed hashes,
+  all five `orbit5_di_iris_embeddings_shares_{0..4}.pb` files and their signed hashes,
   including zero-byte files for default messages. Redaction omits the family.
   The caller owns share generation and validation of dimensions, values and
   metadata.

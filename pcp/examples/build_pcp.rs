@@ -12,7 +12,7 @@ use flate2::read::GzDecoder;
 use orb_pcp::{self as pcp, v1};
 use orb_pcp_defs::{
     prost::Message,
-    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings, Orbit5IrisEmbeddingShares},
+    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings, Orbit5DiIrisEmbeddingShares},
 };
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -117,9 +117,9 @@ pub fn run() -> Result<()> {
             right_mirror_share: vec![40 + i],
         }),
     });
-    let orbit5_embedding_shares =
-        [0, 1, 2, 3, 4].map(|i| v1::Orbit5IrisEmbeddingShares {
-            share_v1: Some(v1::Orbit5IrisEmbeddingShareV1 {
+    let orbit5_di_embedding_shares =
+        [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
+            share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
                 model_version: "synthetic-model".into(),
                 shares_version: "synthetic-orbit5-sharing".into(),
                 embedding_version: "synthetic-embedding".into(),
@@ -200,7 +200,7 @@ pub fn run() -> Result<()> {
                         iris_code_shares: iris_code_shares.each_ref().map(Some),
                         di_embeddings: Some(&di_embeddings),
                         di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-                        orbit5_embedding_shares: Some(&orbit5_embedding_shares),
+                        orbit5_di_embedding_shares: Some(&orbit5_di_embedding_shares),
                     }
                 },
                 migration: None,
@@ -464,8 +464,8 @@ fn verify(
             serde_json::json!([MULTIFRAME_IDS[1]])
         );
         for i in 0..5 {
-            let name = format!("orbit5_iris_embeddings_shares_{i}.pb");
-            let shares = Orbit5IrisEmbeddingShares::decode(tier0[&name].as_slice())?
+            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+            let shares = Orbit5DiIrisEmbeddingShares::decode(tier0[&name].as_slice())?
                 .share_v1
                 .ok_or("missing ORBIT5 share record")?;
             assert_eq!(shares.model_version, di.model_version);

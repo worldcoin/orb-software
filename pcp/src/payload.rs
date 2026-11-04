@@ -8,7 +8,7 @@ use orb_pcp_defs::{
     prost::Message,
     v1::{
         self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes,
-        Orbit5IrisEmbeddingShares,
+        Orbit5DiIrisEmbeddingShares,
     },
 };
 use serde_json::Value;
@@ -98,33 +98,32 @@ pub(crate) fn backend_keys(
 
 pub(crate) struct EncodedDi {
     pub embeddings: Option<Vec<u8>>,
-    pub shares: [Option<Vec<u8>>; 3],
+    pub three_party_shares: [Option<Vec<u8>>; 3],
+    pub orbit5_di_embedding_shares: Option<[Vec<u8>; 5]>,
 }
 
 /// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
     embeddings: Option<&DiIrisEmbeddings>,
-    shares: [Option<&DiIrisEmbeddingShares>; 3],
+    three_party_shares: [Option<&DiIrisEmbeddingShares>; 3],
+    orbit5_di_embedding_shares: Option<&[Orbit5DiIrisEmbeddingShares; 5]>,
 ) -> EncodedDi {
     EncodedDi {
         embeddings: embeddings.map(Message::encode_to_vec),
-        shares: shares.map(|share| share.map(Message::encode_to_vec)),
+        three_party_shares: three_party_shares
+            .map(|share| share.map(Message::encode_to_vec)),
+        orbit5_di_embedding_shares: orbit5_di_embedding_shares
+            .map(|shares| shares.each_ref().map(Message::encode_to_vec)),
     }
 }
 
-pub(crate) const ORBIT5_SHARE_FILES: [&str; 5] = [
-    "orbit5_iris_embeddings_shares_0.pb",
-    "orbit5_iris_embeddings_shares_1.pb",
-    "orbit5_iris_embeddings_shares_2.pb",
-    "orbit5_iris_embeddings_shares_3.pb",
-    "orbit5_iris_embeddings_shares_4.pb",
+pub(crate) const ORBIT5_DI_SHARE_FILES: [&str; 5] = [
+    "orbit5_di_iris_embeddings_shares_0.pb",
+    "orbit5_di_iris_embeddings_shares_1.pb",
+    "orbit5_di_iris_embeddings_shares_2.pb",
+    "orbit5_di_iris_embeddings_shares_3.pb",
+    "orbit5_di_iris_embeddings_shares_4.pb",
 ];
-
-pub(crate) fn encode_orbit5(
-    shares: Option<&[Orbit5IrisEmbeddingShares; 5]>,
-) -> Option<[Vec<u8>; 5]> {
-    shares.map(|shares| shares.each_ref().map(Message::encode_to_vec))
-}
 
 #[cfg(test)]
 #[path = "../tests/unit/payload.rs"]

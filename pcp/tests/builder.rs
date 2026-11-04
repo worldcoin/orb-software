@@ -114,9 +114,9 @@ fn no_di() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     Default::default()
 }
 
-fn orbit5_shares() -> [v1::Orbit5IrisEmbeddingShares; 5] {
-    [0, 1, 2, 3, 4].map(|i| v1::Orbit5IrisEmbeddingShares {
-        share_v1: Some(v1::Orbit5IrisEmbeddingShareV1 {
+fn orbit5_di_embedding_shares() -> [v1::Orbit5DiIrisEmbeddingShares; 5] {
+    [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
+        share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
             model_version: "synthetic-model".into(),
             shares_version: "synthetic-orbit5-sharing".into(),
             embedding_version: "synthetic-embedding".into(),
@@ -337,7 +337,7 @@ fn absent_iris_code_files_are_left_out_with_their_hashes() {
         iris_code_shares: [None, Some(&shares[1]), None],
         di_embeddings: Some(&di_embeddings),
         di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-        orbit5_embedding_shares: None,
+        orbit5_di_embedding_shares: None,
     };
     let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
         Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -389,7 +389,7 @@ fn iris_and_di_file_presence_is_explicit_and_independent() {
             di_embedding_shares: std::array::from_fn(|i| {
                 di_present[i + 1].then_some(&di_shares[i])
             }),
-            orbit5_embedding_shares: None,
+            orbit5_di_embedding_shares: None,
         };
         let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
             Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -447,7 +447,7 @@ fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
     let images = images();
-    let shares: [v1::Orbit5IrisEmbeddingShares; 5] = Default::default();
+    let shares: [v1::Orbit5DiIrisEmbeddingShares; 5] = Default::default();
     for (included, present) in [(true, false), (true, true), (false, true)] {
         let mut input = request(&pair.public_key, &info);
         if included {
@@ -458,7 +458,7 @@ fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
                 iris_code_shares: [None; 3],
                 di_embeddings: None,
                 di_embedding_shares: [None; 3],
-                orbit5_embedding_shares: present.then_some(&shares),
+                orbit5_di_embedding_shares: present.then_some(&shares),
             };
         }
         let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
@@ -470,7 +470,7 @@ fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
         let manifest: serde_json::Value =
             serde_json::from_slice(&files["hashes.json"]).unwrap();
         for i in 0..5 {
-            let name = format!("orbit5_iris_embeddings_shares_{i}.pb");
+            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
             let expected = included && present;
             assert_eq!(files.contains_key(&name), expected, "{name}");
             assert_eq!(manifest.get(&name).is_some(), expected, "{name}");
@@ -526,7 +526,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         embedding_inference_backend: Some("none".into()),
     }];
     let (di_embeddings, di_embedding_shares) = no_di();
-    let orbit5_shares = orbit5_shares();
+    let orbit5_di_embedding_shares = orbit5_di_embedding_shares();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
     let mut input = request(&pair.public_key, &info);
@@ -537,7 +537,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         iris_code_shares: iris_code_shares.each_ref().map(Some),
         di_embeddings: Some(&di_embeddings),
         di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-        orbit5_embedding_shares: Some(&orbit5_shares),
+        orbit5_di_embedding_shares: Some(&orbit5_di_embedding_shares),
     };
     let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
         Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -556,11 +556,11 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
             &files[&format!("iris_code_shares_{i}.json")]
         );
     }
-    for (i, expected) in orbit5_shares.iter().enumerate() {
-        let name = format!("orbit5_iris_embeddings_shares_{i}.pb");
+    for (i, expected) in orbit5_di_embedding_shares.iter().enumerate() {
+        let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
         assert_eq!(files[&name], expected.encode_to_vec());
         assert_eq!(
-            v1::Orbit5IrisEmbeddingShares::decode(files[&name].as_slice()).unwrap(),
+            v1::Orbit5DiIrisEmbeddingShares::decode(files[&name].as_slice()).unwrap(),
             *expected
         );
     }
@@ -681,7 +681,7 @@ mod diagnostics {
                 iris_code_shares: iris_code_shares.each_ref().map(Some),
                 di_embeddings: Some(&di_embeddings),
                 di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-                orbit5_embedding_shares: None,
+                orbit5_di_embedding_shares: None,
             };
             let output = pcp::build_unencrypted_for_diagnostics(
                 &input,

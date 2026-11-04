@@ -42,8 +42,8 @@ migrated package.
 
 ## ORBIT5 shares
 
-`orbit5_iris_embeddings_shares_0.pb` through `_4.pb` encode
-`Orbit5IrisEmbeddingShares`. Each file contains one recipient's left, left
+`orbit5_di_iris_embeddings_shares_0.pb` through `_4.pb` encode
+`Orbit5DiIrisEmbeddingShares`. Each file contains one recipient's left, left
 mirrored, right and right mirrored vectors: 512 unsigned 16-bit values per
 vector. Filename indices 0–4 correspond to Shamir IDs 1–5.
 

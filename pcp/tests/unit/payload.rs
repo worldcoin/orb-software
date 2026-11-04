@@ -160,7 +160,8 @@ mod di {
                 right_mirror_share: vec![],
             }),
         });
-        let output = payload::encode_di(Some(&embeddings), shares.each_ref().map(Some));
+        let output =
+            payload::encode_di(Some(&embeddings), shares.each_ref().map(Some), None);
         assert_eq!(
             output.embeddings.unwrap(),
             [
@@ -170,7 +171,7 @@ mod di {
                 0x3f,
             ]
         );
-        for (i, bytes) in output.shares.iter().enumerate() {
+        for (i, bytes) in output.three_party_shares.iter().enumerate() {
             assert_eq!(
                 bytes.as_deref().unwrap(),
                 &[
@@ -186,10 +187,11 @@ mod di {
         let output = payload::encode_di(
             Some(&DiIrisEmbeddings::default()),
             [Some(&DiIrisEmbeddingShares::default()); 3],
+            None,
         );
         assert_eq!(output.embeddings.as_deref(), Some([].as_slice()));
         assert!(output
-            .shares
+            .three_party_shares
             .iter()
             .all(|share| share.as_deref() == Some(&[])));
     }

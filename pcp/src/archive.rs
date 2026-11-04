@@ -328,7 +328,6 @@ pub(crate) struct PreparedBiometricFiles<'a> {
     pub face_embeddings_json: &'a [u8],
     pub daugman: &'a EncodedDaugman,
     pub di: &'a EncodedDi,
-    pub orbit5_shares: Option<&'a [Vec<u8>; 5]>,
 }
 
 pub(crate) struct Tier0Files<'a> {
@@ -390,12 +389,12 @@ pub(crate) fn tier0(
                 "di_iris_embeddings_shares_2.pb",
             ]
             .into_iter()
-            .zip(&biometrics.di.shares)
+            .zip(&biometrics.di.three_party_shares)
             .filter_map(|(name, share)| Some((name, share.as_deref()?))),
         );
-        if let Some(shares) = biometrics.orbit5_shares {
+        if let Some(shares) = &biometrics.di.orbit5_di_embedding_shares {
             entries.extend(
-                crate::payload::ORBIT5_SHARE_FILES
+                crate::payload::ORBIT5_DI_SHARE_FILES
                     .into_iter()
                     .zip(shares.iter().map(Vec::as_slice)),
             );
