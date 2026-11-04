@@ -1,6 +1,6 @@
 //! Personal Custody Package construction.
 //!
-//! [build] assembles, hashes, signs and encrypts caller-prepared inputs: encoded
+//! [Builder::build] assembles, hashes, signs and encrypts caller-prepared inputs: encoded
 //! PNGs, the shared [v1] messages for metadata and biometric payloads, recipient
 //! keys and a callback signing the raw SHA-256 manifest digest. Construction is
 //! synchronous; call it from a blocking worker in async applications.
@@ -21,9 +21,12 @@ pub use archive::{
     ArchiveError, FraudImages, InnerArchiveError, IrisEye, IrisFrame,
     NormalizedIrisFrame, PackageImages, PrimaryIrisFrame,
 };
-pub use builder::{build, BiometricPolicy, BuildError, BuildRequest, Package};
 #[cfg(feature = "not-prod-diagnostics")]
-pub use builder::{build_unencrypted_for_diagnostics, DiagnosticPackage};
+pub use builder::DiagnosticPackage;
+pub use builder::{
+    BiometricPolicy, BiometricValidationError, Biometrics, BuildError, Builder, Di,
+    Iris, Package,
+};
 pub use crypto::{CommitmentError, SealingError};
 pub use manifest::{ManifestError, SigningError, PCP_VERSION};
 pub use metadata::MetadataError;

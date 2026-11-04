@@ -17,11 +17,16 @@ pub struct BackendKey<'a> {
     pub encrypted_private_key: &'a str,
 }
 
+#[derive(bon::Builder)]
+#[builder(start_fn = face)]
+#[builder(finish_fn = tier2)]
 pub struct BackendKeys<'a> {
-    pub iris: BackendKey<'a>,
-    pub normalized_iris: BackendKey<'a>,
-    pub face: BackendKey<'a>,
-    pub tier2: BackendKey<'a>,
+    #[builder(start_fn)]
+    pub(crate) face: BackendKey<'a>,
+    #[builder(finish_fn)]
+    pub(crate) tier2: BackendKey<'a>,
+    pub(crate) iris: BackendKey<'a>,
+    pub(crate) normalized_iris: BackendKey<'a>,
 }
 
 /// Compact JSON with object keys sorted at every level. Sorting is explicit so it
@@ -55,23 +60,19 @@ pub(crate) fn face_embeddings(
 }
 
 pub(crate) struct EncodedDaugman {
-    pub codes: Option<Vec<u8>>,
-    pub shares: [Option<Vec<u8>>; 3],
+    pub codes: Vec<u8>,
+    pub shares: [Vec<u8>; 3],
 }
 
 pub(crate) fn encode_daugman(
-    codes: Option<&IrisCodes>,
-    shares: [Option<&IrisCodeShares>; 3],
+    codes: &IrisCodes,
+    shares: [&IrisCodeShares; 3],
 ) -> Result<EncodedDaugman, serde_json::Error> {
-    let [first, second, third] = shares.map(|share| {
-        share
-            .map(|share| serde_json::to_value(share).and_then(sorted_json))
-            .transpose()
-    });
+    let [first, second, third] =
+        shares.map(|share| serde_json::to_value(share).and_then(sorted_json));
+
     Ok(EncodedDaugman {
-        codes: codes
-            .map(|codes| serde_json::to_value(codes).and_then(sorted_json))
-            .transpose()?,
+        codes: serde_json::to_value(codes).and_then(sorted_json)?,
         shares: [first?, second?, third?],
     })
 }
@@ -94,18 +95,18 @@ pub(crate) fn backend_keys(
 }
 
 pub(crate) struct EncodedDi {
-    pub embeddings: Option<Vec<u8>>,
-    pub shares: [Option<Vec<u8>>; 3],
+    pub embeddings: Vec<u8>,
+    pub shares: [Vec<u8>; 3],
 }
 
 /// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
-    embeddings: Option<&DiIrisEmbeddings>,
-    shares: [Option<&DiIrisEmbeddingShares>; 3],
+    embeddings: &DiIrisEmbeddings,
+    shares: [&DiIrisEmbeddingShares; 3],
 ) -> EncodedDi {
     EncodedDi {
-        embeddings: embeddings.map(Message::encode_to_vec),
-        shares: shares.map(|share| share.map(Message::encode_to_vec)),
+        embeddings: Message::encode_to_vec(embeddings),
+        shares: shares.map(Message::encode_to_vec),
     }
 }
 

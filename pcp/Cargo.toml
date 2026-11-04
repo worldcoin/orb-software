@@ -13,6 +13,7 @@ not-prod-diagnostics = []
 
 [dependencies]
 alkali.workspace = true
+bon.workspace = true
 data-encoding.workspace = true
 flate2.workspace = true
 hyrax = { git = "https://github.com/worldcoin/hyrax-pcs-commit.git", rev = "ec5f1120e394643ad09990a34815dd11e9122366" }

@@ -7815,6 +7815,7 @@ name = "orb-pcp"
 version = "0.1.0"
 dependencies = [
  "alkali",
+ "bon",
  "data-encoding",
  "flate2",
  "hyrax",

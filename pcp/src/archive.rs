@@ -326,8 +326,8 @@ pub(crate) struct BiometricArchives<'a> {
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
     pub face_embeddings_json: &'a [u8],
-    pub daugman: &'a EncodedDaugman,
-    pub di: &'a EncodedDi,
+    pub daugman: Option<&'a EncodedDaugman>,
+    pub di: Option<&'a EncodedDi>,
 }
 
 pub(crate) struct Tier0Files<'a> {
@@ -366,32 +366,31 @@ pub(crate) fn tier0(
     }
     if let Some(biometrics) = biometrics {
         entries.push(("face_embeddings.json", biometrics.face_embeddings_json));
-        if let Some(codes) = &biometrics.daugman.codes {
-            entries.push(("iris_codes.json", codes.as_slice()));
+        if let Some(daugman) = biometrics.daugman {
+            entries.push(("iris_codes.json", daugman.codes.as_slice()));
+            entries.extend(
+                [
+                    "iris_code_shares_0.json",
+                    "iris_code_shares_1.json",
+                    "iris_code_shares_2.json",
+                ]
+                .into_iter()
+                .zip(daugman.shares.iter().map(Vec::as_slice)),
+            );
         }
-        entries.extend(
-            [
-                "iris_code_shares_0.json",
-                "iris_code_shares_1.json",
-                "iris_code_shares_2.json",
-            ]
-            .into_iter()
-            .zip(&biometrics.daugman.shares)
-            .filter_map(|(name, share)| Some((name, share.as_deref()?))),
-        );
-        if let Some(embeddings) = &biometrics.di.embeddings {
-            entries.push(("di_iris_embeddings.pb", embeddings.as_slice()));
+
+        if let Some(di) = biometrics.di {
+            entries.push(("di_iris_embeddings.pb", di.embeddings.as_slice()));
+            entries.extend(
+                [
+                    "di_iris_embeddings_shares_0.pb",
+                    "di_iris_embeddings_shares_1.pb",
+                    "di_iris_embeddings_shares_2.pb",
+                ]
+                .into_iter()
+                .zip(di.shares.iter().map(Vec::as_slice)),
+            );
         }
-        entries.extend(
-            [
-                "di_iris_embeddings_shares_0.pb",
-                "di_iris_embeddings_shares_1.pb",
-                "di_iris_embeddings_shares_2.pb",
-            ]
-            .into_iter()
-            .zip(&biometrics.di.shares)
-            .filter_map(|(name, share)| Some((name, share.as_deref()?))),
-        );
     }
     entries.extend([
         ("hashes.sign", files.hashes_signature),
