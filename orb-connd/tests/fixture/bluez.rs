@@ -29,7 +29,6 @@ type Response = Box<
 struct State {
     calls: Vec<Message>,
     advertisements: Vec<(String, Vec<u8>)>,
-    advertisement_intervals: Vec<(Option<u32>, Option<u32>)>,
     active_advertisements: HashMap<OwnedObjectPath, (String, Vec<u8>)>,
     responses: VecDeque<Response>,
     unregister_responses: VecDeque<Response>,
@@ -196,34 +195,10 @@ impl FakeBluez {
         })
     }
 
-    pub fn mock_interval_override_support(&self, supported: bool) -> &Self {
-        self.mock_interval_support_reply(Some(supported))
-    }
-
-    pub fn mock_interval_override_error(&self) -> &Self {
-        self.mock_interval_support_reply(None)
-    }
-
-    fn mock_interval_support_reply(&self, supported: Option<bool>) -> &Self {
-        self.mock_next(move |call| {
-            let (interface, property): (String, String) = call.body().deserialize()?;
-            assert_eq!(interface, "org.bluez.LEAdvertisingManager1");
-            assert_eq!(property, "SupportedFeatures");
-            match supported {
-                Some(true) => {
-                    Message::method_reply(call)?.build(&OwnedValue::try_from(
-                        zbus::zvariant::Value::from(Vec::<String>::new()),
-                    )?)
-                }
-                Some(false) => Message::method_error(
-                    call,
-                    "org.freedesktop.DBus.Error.InvalidArgs",
-                )?
-                .build(&"experimental API is disabled"),
-                None => Message::method_error(call, "org.bluez.Error.Failed")?
-                    .build(&"temporary support query failure"),
-            }
-        })
+    pub fn mock_adapter_after_restart(&self) -> &Self {
+        self.mock_adapter()
+            .mock_adapter_is_powered(false)
+            .mock_adapter_set_powered(true)
     }
 
     pub fn mock_advertisements(&self, count: usize) -> &Self {
@@ -280,32 +255,19 @@ impl FakeBluez {
                                 Some(header.sender().unwrap().as_str()),
                                 path.as_str(),
                                 Some("org.freedesktop.DBus.Properties"),
-                                "GetAll",
-                                &("org.bluez.LEAdvertisement1",),
+                                "Get",
+                                &("org.bluez.LEAdvertisement1", "ServiceData"),
                             )
                             .await?;
-                        let mut properties: HashMap<String, OwnedValue> =
-                            reply.body().deserialize()?;
-                        let min_interval = properties
-                            .remove("MinInterval")
-                            .map(u32::try_from)
-                            .transpose()?;
-                        let max_interval = properties
-                            .remove("MaxInterval")
-                            .map(u32::try_from)
-                            .transpose()?;
-                        let service_data = HashMap::<String, OwnedValue>::try_from(
-                            properties.remove("ServiceData").unwrap(),
-                        )?;
+                        let service_data: OwnedValue = reply.body().deserialize()?;
+                        let service_data =
+                            HashMap::<String, OwnedValue>::try_from(service_data)?;
                         assert_eq!(service_data.len(), 1);
                         let (service_id, payload) =
                             service_data.into_iter().next().unwrap();
                         let advertisement = (service_id, Vec::<u8>::try_from(payload)?);
                         let mut state = state.lock().unwrap();
                         state.advertisements.push(advertisement.clone());
-                        state
-                            .advertisement_intervals
-                            .push((min_interval, max_interval));
                         if error.is_none() {
                             assert!(state
                                 .active_advertisements
@@ -338,10 +300,6 @@ impl FakeBluez {
 
     pub fn advertisements(&self) -> Vec<(String, Vec<u8>)> {
         self.state.lock().unwrap().advertisements.clone()
-    }
-
-    pub fn advertisement_intervals(&self) -> Vec<(Option<u32>, Option<u32>)> {
-        self.state.lock().unwrap().advertisement_intervals.clone()
     }
 
     pub fn active_advertisements(&self) -> Vec<(String, Vec<u8>)> {

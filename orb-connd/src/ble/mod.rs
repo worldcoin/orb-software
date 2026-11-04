@@ -1,3 +1,4 @@
+use crate::systemd::Systemd;
 use bluer::adv::{Advertisement, Type};
 use color_eyre::{eyre::eyre, Result};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
@@ -14,10 +15,11 @@ use zenorb::Zenorb;
 
 const MAX_ADVERTISEMENT_LEN: usize = 31;
 const MAX_PAYLOAD_LEN: usize = 10;
-const INTERVAL_SUPPORT_RETRY_DELAY: Duration = Duration::from_secs(30);
+const RETRY_DELAY: Duration = Duration::from_secs(30);
 
 pub struct Args {
     pub zenoh: Zenorb,
+    pub systemd: Systemd,
     pub interval: Duration,
 }
 
@@ -25,19 +27,17 @@ pub struct Args {
 struct Advert {
     service_id: Uuid,
     payload: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "deserialize_advertising_interval")]
-    advertising_interval_ms: Option<u64>,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-struct ServiceData {
-    payload: Vec<u8>,
-    advertising_interval: Option<Duration>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_advertising_interval"
+    )]
+    advertising_interval_ms: Option<Option<u64>>,
 }
 
 fn deserialize_advertising_interval<'de, D>(
     deserializer: D,
-) -> Result<Option<u64>, D::Error>
+) -> Result<Option<Option<u64>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -47,30 +47,10 @@ where
             "advertising_interval_ms must be between 20 and 10240 milliseconds",
         ));
     }
-    Ok(interval)
+    Ok(Some(interval))
 }
 
-async fn interval_override_supported(adapter: &bluer::Adapter) -> Option<bool> {
-    // BlueZ 5.64 hides this property when experimental APIs are off.
-    // Diamond's Linux 5.15 also provides the required extended advertising commands.
-    match adapter.supported_advertising_features().await {
-        Ok(features) => {
-            let supported = features.is_some();
-            if !supported {
-                warn!("BLE interval override is unavailable; using adapter defaults. Install a Diamond OS with BlueZ experimental advertising support");
-            }
-            Some(supported)
-        }
-        Err(error) => {
-            warn!(%error, "failed to check BLE interval override support; using adapter defaults and retrying in 30 seconds");
-            None
-        }
-    }
-}
-
-pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
-    info!("starting ble advertiser");
-
+async fn connect_bluetooth() -> Result<Option<(bluer::Session, bluer::Adapter)>> {
     let session = bluer::Session::new()
         .await
         .inspect_err(|e| warn!("failed to create bluer session: {e}"))?;
@@ -80,8 +60,8 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
             kind: bluer::ErrorKind::NotFound,
             ..
         }) => {
-            warn!("no bluetooth adapter found. ble advertiser task will quit early.");
-            return Ok(());
+            warn!("no bluetooth adapter found");
+            return Ok(None);
         }
 
         Err(e) => {
@@ -103,6 +83,17 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
             .inspect_err(|e| warn!("failed to power ble adapter: {e}"))?;
     }
 
+    Ok(Some((session, adapter)))
+}
+
+pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
+    info!("starting ble advertiser");
+
+    let mut bluetooth = connect_bluetooth().await?;
+    if bluetooth.is_none() {
+        return Ok(());
+    }
+
     let subscriber = ctx
         .zenoh
         .declare_subscriber("*/ble_beacon")
@@ -115,9 +106,11 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
     let mut service_data = BTreeMap::new();
     let mut advertisement_handle = None;
     let mut last_service_id = None;
-    let mut last_service_data = None;
-    let mut supports_interval_override = None;
-    let mut next_interval_support_probe = time::Instant::now();
+    let mut last_payload = None;
+    let mut requested_interval = None;
+    let mut applied_interval = None;
+    let mut next_apply = time::Instant::now();
+    let mut next_connect = time::Instant::now();
     let mut interval = time::interval(ctx.interval);
     interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -155,44 +148,71 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
                     }
 
                     Some(payload) => {
+                        if let Some(requested) = advert.advertising_interval_ms
+                            && requested_interval != Some(requested)
+                        {
+                            requested_interval = Some(requested);
+                            next_apply = time::Instant::now();
+                        }
                         info!("adding ble advert for service: {}", advert.service_id);
-                        let advertising_interval =
-                            advert.advertising_interval_ms.map(Duration::from_millis);
-                        service_data.insert(advert.service_id, ServiceData {
-                            payload,
-                            advertising_interval,
-                        });
+                        service_data.insert(advert.service_id, payload);
                     }
                 }
             }
 
             _ = interval.tick() => {
+                if let Some(requested) = requested_interval
+                    && applied_interval != Some(requested)
+                    && time::Instant::now() >= next_apply
+                {
+                    let instance = requested.map_or_else(|| "default".to_owned(), |ms| ms.to_string());
+                    let unit = format!("worldcoin-bluetooth-interval@{instance}.service");
+                    applied_interval = match ctx.systemd.restart_service(&unit, Duration::from_secs(20)).await {
+                        Ok(()) => {
+                            info!(advertising_interval_ms = %instance, "configured BLE adapter advertising interval");
+                            Some(requested)
+                        },
+                        Err(error) => {
+                            warn!(%error, %unit, "failed to apply BLE interval; retrying in 30 seconds");
+                            None
+                        }
+                    };
+                    next_apply = time::Instant::now() + RETRY_DELAY;
+                    // The helper can restart BlueZ even when a later step fails.
+                    drop(advertisement_handle.take());
+                    bluetooth = None;
+                    last_service_id = None;
+                    last_payload = None;
+                    next_connect = time::Instant::now();
+                }
+                if bluetooth.is_none() && time::Instant::now() >= next_connect {
+                    bluetooth = match connect_bluetooth().await {
+                        Ok(bluetooth) => {
+                            next_connect = time::Instant::now() + ctx.interval;
+                            bluetooth
+                        }
+                        Err(error) => {
+                            warn!(%error, "failed to reconnect to BlueZ; retrying in 30 seconds");
+                            next_connect = time::Instant::now() + RETRY_DELAY;
+                            None
+                        }
+                    };
+                }
+                let Some((_, adapter)) = &bluetooth else { continue };
+
                 let next = last_service_id
                     .and_then(|id| service_data.range((Excluded(id), Unbounded)).next())
                     .or_else(|| service_data.first_key_value());
 
-                let Some((&service_id, data)) = next else {
+                let Some((&service_id, payload)) = next else {
                     drop(advertisement_handle.take());
                     last_service_id = None;
-                    last_service_data = None;
+                    last_payload = None;
                     continue;
                 };
 
-                if data.advertising_interval.is_some()
-                    && supports_interval_override.is_none()
-                    && time::Instant::now() >= next_interval_support_probe
-                {
-                    supports_interval_override = interval_override_supported(&adapter).await;
-                    next_interval_support_probe = time::Instant::now() + INTERVAL_SUPPORT_RETRY_DELAY;
-                }
-                let mut data = ServiceData {
-                    payload: data.payload.clone(),
-                    advertising_interval: data.advertising_interval
-                        .filter(|_| supports_interval_override == Some(true)),
-                };
-
                 let advertisement_unchanged = last_service_id == Some(service_id)
-                    && last_service_data.as_ref() == Some(&data);
+                    && last_payload.as_ref() == Some(payload);
 
                 if advertisement_unchanged {
                     continue;
@@ -204,32 +224,25 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
 
                 let advertisement = Advertisement {
                     advertisement_type: Type::Broadcast,
-                    service_data: BTreeMap::from([(service_id, data.payload.clone())]),
-                    min_interval: data.advertising_interval,
-                    max_interval: data.advertising_interval,
+                    service_data: BTreeMap::from([(service_id, payload.clone())]),
                     timeout: Some(Duration::ZERO),
                     ..Default::default()
                 };
 
-                advertisement_handle = Some(match adapter.advertise(advertisement.clone()).await {
-                    Ok(handle) => handle,
-                    Err(error) if data.advertising_interval.is_some() => {
-                        warn!(%error, advertising_interval_ms = ?data.advertising_interval.map(|value| value.as_millis()),
-                            "BLE interval override registration failed; using adapter defaults and retrying in 30 seconds");
-                        data.advertising_interval = None;
-                        supports_interval_override = None;
-                        next_interval_support_probe = time::Instant::now() + INTERVAL_SUPPORT_RETRY_DELAY;
-                        adapter.advertise(Advertisement {
-                            min_interval: None,
-                            max_interval: None,
-                            ..advertisement
-                        }).await?
+                match adapter.advertise(advertisement).await {
+                    Ok(handle) => {
+                        advertisement_handle = Some(handle);
+                        last_service_id = Some(service_id);
+                        last_payload = Some(payload.clone());
                     }
-                    Err(error) => return Err(error.into()),
-                });
-                last_service_id = Some(service_id);
-                last_service_data = Some(data.clone());
-                info!(?service_id, advertising_interval_ms = ?data.advertising_interval.map(|value| value.as_millis()), "registered BLE advertisement");
+                    Err(error) => {
+                        warn!(%error, "failed to register BLE advertisement; retrying in 30 seconds");
+                        bluetooth = None;
+                        last_service_id = None;
+                        last_payload = None;
+                        next_connect = time::Instant::now() + RETRY_DELAY;
+                    }
+                }
             }
         }
     }
@@ -241,7 +254,7 @@ mod tests {
     use serde_json::{from_value, json};
 
     #[test]
-    fn advertising_interval_accepts_only_null_or_integers_in_range() {
+    fn advertising_interval_distinguishes_omission_reset_and_valid_values() {
         let mut message =
             json!({"service_id": super::Uuid::nil(), "payload": [1, 2, 3]});
         let parsed: Advert = from_value(message.clone()).unwrap();
@@ -249,7 +262,7 @@ mod tests {
         for value in [json!(null), json!(20), json!(10_240)] {
             message["advertising_interval_ms"] = value.clone();
             let parsed: Advert = from_value(message.clone()).unwrap();
-            assert_eq!(parsed.advertising_interval_ms, value.as_u64());
+            assert_eq!(parsed.advertising_interval_ms, Some(value.as_u64()));
         }
         for value in [
             json!(0),
