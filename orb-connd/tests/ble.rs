@@ -438,8 +438,25 @@ async fn it_updates_and_validates_intervals_without_changing_the_payload() {
     let mut expected = vec![(None, None)];
     assert_intervals(&handle, &expected, 2).await;
 
-    handle.bluez.mock_interval_override_support(true);
-    for interval in [Some(20), Some(10_240), None] {
+    handle
+        .bluez
+        .mock_interval_override_support(true)
+        .mock_unregister_advertisements(1)
+        .mock_advertisements(1);
+    handle
+        .publish_ble_with_interval(&service_id, Some(&payload), Some(20))
+        .await;
+    expected.push((Some(20), Some(20)));
+    assert_intervals(&handle, &expected, 2).await;
+    handle
+        .publish_ble_with_interval(&service_id, Some(&payload), Some(20))
+        .await;
+    handle
+        .bluez
+        .assert_no_calls_for(Duration::from_millis(1_100))
+        .await;
+
+    for interval in [Some(10_240), None] {
         handle
             .bluez
             .mock_unregister_advertisements(1)
@@ -453,15 +470,6 @@ async fn it_updates_and_validates_intervals_without_changing_the_payload() {
             .await;
         expected.push((interval, interval));
         assert_intervals(&handle, &expected, 2).await;
-        if interval == Some(20) {
-            handle
-                .publish_ble_with_interval(&service_id, Some(&payload), Some(20))
-                .await;
-            handle
-                .bluez
-                .assert_no_calls_for(Duration::from_millis(1_100))
-                .await;
-        }
     }
     assert!(handle
         .bluez
@@ -474,28 +482,9 @@ async fn it_updates_and_validates_intervals_without_changing_the_payload() {
         .assert_no_calls_for(Duration::from_millis(1_100))
         .await;
 
-    for interval in [
-        serde_json::json!(0),
-        serde_json::json!(19),
-        serde_json::json!(10_241),
-        serde_json::json!(-1),
-        serde_json::json!(20.5),
-        serde_json::json!("20"),
-    ] {
-        handle
-            .ble_publisher()
-            .await
-            .put(
-                serde_json::json!({
-                    "service_id": service_id,
-                    "payload": [4, 5, 6],
-                    "advertising_interval_ms": interval,
-                })
-                .to_string(),
-            )
-            .await
-            .unwrap();
-    }
+    handle
+        .publish_ble_with_interval(&service_id, Some(&[4, 5, 6]), Some(19))
+        .await;
     handle
         .bluez
         .assert_no_calls_for(Duration::from_millis(1_100))

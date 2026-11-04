@@ -197,12 +197,3 @@ zenohd. The test fixture (`tests/fixture.rs`) provides:
 
 Test coverage spans profile CRUD, QR code parsing, netconfig operations,
 profile persistence across restarts, and legacy config import.
-
-## BLE beacon intervals
-
-Diamond `ble_beacon` messages accept optional `advertising_interval_ms` (20..10240 ms).
-It sets BlueZ `MinInterval` and `MaxInterval`. Missing/null uses adapter defaults.
-Invalid messages preserve the current beacon. Interval-only changes replace it.
-BlueZ 5.64 needs experimental D-Bus APIs and Diamond's Linux 5.15 advertising commands.
-Missing APIs use defaults. Query/registration failures keep a default beacon and retry after 30 seconds.
-Verify the actual radio interval with controller traces on the target Orb.

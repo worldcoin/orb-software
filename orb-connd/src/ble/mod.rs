@@ -234,3 +234,33 @@ pub async fn advertiser(ctx: mini::Ctx<Args>) -> Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Advert;
+    use serde_json::{from_value, json};
+
+    #[test]
+    fn advertising_interval_accepts_only_null_or_integers_in_range() {
+        let mut message =
+            json!({"service_id": super::Uuid::nil(), "payload": [1, 2, 3]});
+        let parsed: Advert = from_value(message.clone()).unwrap();
+        assert_eq!(parsed.advertising_interval_ms, None);
+        for value in [json!(null), json!(20), json!(10_240)] {
+            message["advertising_interval_ms"] = value.clone();
+            let parsed: Advert = from_value(message.clone()).unwrap();
+            assert_eq!(parsed.advertising_interval_ms, value.as_u64());
+        }
+        for value in [
+            json!(0),
+            json!(19),
+            json!(10_241),
+            json!(-1),
+            json!(20.5),
+            json!("20"),
+        ] {
+            message["advertising_interval_ms"] = value;
+            assert!(from_value::<Advert>(message.clone()).is_err(), "{message}");
+        }
+    }
+}
