@@ -1,7 +1,7 @@
 use crate::systemd::Systemd;
 use bluer::adv::{Advertisement, Type};
 use color_eyre::{eyre::eyre, Result};
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer};
 use speare::mini;
 use std::{
     collections::BTreeMap,
@@ -23,15 +23,11 @@ pub struct Args {
     pub interval: Duration,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct Advert {
     service_id: Uuid,
     payload: Option<Vec<u8>>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "deserialize_advertising_interval"
-    )]
+    #[serde(default, deserialize_with = "deserialize_advertising_interval")]
     advertising_interval_ms: Option<Option<u64>>,
 }
 

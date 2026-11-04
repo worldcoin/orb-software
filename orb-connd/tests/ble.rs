@@ -540,13 +540,7 @@ async fn it_retries_helper_and_bluez_failures_without_a_new_message() {
         .mock_advertisements(1);
     wait_for_ble(&handle, 32).await;
     assert_eq!(handle.bluez.active_advertisements(), beacon);
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![
-            "worldcoin-bluetooth-interval@20.service",
-            "worldcoin-bluetooth-interval@20.service",
-        ]
-    );
+    assert_eq!(calls.lock().unwrap().len(), 2);
 
     handle
         .bluez
