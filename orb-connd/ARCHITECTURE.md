@@ -200,20 +200,9 @@ profile persistence across restarts, and legacy config import.
 
 ## BLE beacon intervals
 
-On Diamond, `ble_beacon` JSON messages accept optional `advertising_interval_ms`
-values from 20 through 10240 milliseconds. The interval sets both BlueZ
-`MinInterval` and `MaxInterval`. It controls radio broadcasts, independently of
-Core's pairing-token refresh interval and connd's service rotation timer.
-Missing or null values use the adapter defaults. Invalid messages leave the
-previous service advertisement unchanged. An interval change replaces the
-advertisement even when its service ID and payload remain unchanged.
-
-BlueZ 5.64 requires experimental D-Bus advertising APIs for these properties.
-Connd checks for the experimental `SupportedFeatures` property before sending
-intervals. If unavailable, it logs a warning and continues with adapter defaults.
-A failed support query retries after 30 seconds without interrupting the beacon.
-If an interval-bearing registration fails, connd registers the beacon with adapter
-defaults and retries the requested interval after the same delay.
-Diamond's Linux 5.15 kernel supplies the extended advertising management commands
-that carry interval values. Property registration alone does not establish the
-actual radio interval; verify controller traces on the target Orb after rollout.
+Diamond `ble_beacon` messages accept optional `advertising_interval_ms` (20..10240 ms).
+It sets BlueZ `MinInterval` and `MaxInterval`. Missing/null uses adapter defaults.
+Invalid messages preserve the current beacon. Interval-only changes replace it.
+BlueZ 5.64 needs experimental D-Bus APIs and Diamond's Linux 5.15 advertising commands.
+Missing APIs use defaults. Query/registration failures keep a default beacon and retry after 30 seconds.
+Verify the actual radio interval with controller traces on the target Orb.
