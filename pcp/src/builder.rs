@@ -50,8 +50,6 @@ impl<'a> Iris<'a> {
         #[builder(start_fn)] iris_codes: &'a v1::IrisCodes,
         #[builder(finish_fn)] iris_code_shares: [&'a v1::IrisCodeShares; 3],
     ) -> Result<Self, BiometricValidationError> {
-        // TODO: remove presence checks once PCP definitions make these fields required.
-
         let iris_code_is_valid = [
             &iris_codes.iris_version,
             &iris_codes.left_iris_code,
