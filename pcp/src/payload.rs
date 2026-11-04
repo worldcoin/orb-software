@@ -22,11 +22,11 @@ pub struct BackendKey<'a> {
 #[builder(finish_fn = tier2)]
 pub struct BackendKeys<'a> {
     #[builder(start_fn)]
-    pub(crate) face: BackendKey<'a>,
+    pub face: BackendKey<'a>,
     #[builder(finish_fn)]
-    pub(crate) tier2: BackendKey<'a>,
-    pub(crate) iris: BackendKey<'a>,
-    pub(crate) normalized_iris: BackendKey<'a>,
+    pub tier2: BackendKey<'a>,
+    pub iris: BackendKey<'a>,
+    pub normalized_iris: BackendKey<'a>,
 }
 
 /// Compact JSON with object keys sorted at every level. Sorting is explicit so it

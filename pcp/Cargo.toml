@@ -27,4 +27,5 @@ thiserror.workspace = true
 zeroize = "1"
 
 [dev-dependencies]
+color-eyre.workspace = true
 p256.workspace = true
