@@ -1,7 +1,7 @@
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use orb_pcp::{
-    self as pcp, v1, BackendKey, BackendKeys, BiometricPolicy, BuildError,
-    BuildRequest, MetadataError,
+    self as pcp, v1, BackendKey, BackendKeys, BiometricPolicy, Biometrics, BuildError,
+    Builder, Di, Iris, MetadataError,
 };
 use rand::{CryptoRng, RngCore};
 
@@ -36,24 +36,15 @@ fn capture_info(device_public_key: Option<&str>) -> v1::Info {
     }
 }
 
-fn request<'a>(key: &'a [u8; 32], info: &'a v1::Info) -> BuildRequest<'a> {
+fn backend_keys(key: &[u8; 32]) -> BackendKeys<'_> {
     let backend = || BackendKey {
         public_key: key,
         encrypted_private_key: "synthetic-envelope",
     };
-    BuildRequest {
-        timestamp: 1,
-        info,
-        user_public_key: key,
-        backend_keys: BackendKeys {
-            iris: backend(),
-            normalized_iris: backend(),
-            face: backend(),
-            tier2: backend(),
-        },
-        biometrics: BiometricPolicy::Redacted,
-        migration: None,
-    }
+    BackendKeys::face(backend())
+        .iris(backend())
+        .normalized_iris(backend())
+        .tier2(backend())
 }
 
 fn tier0(output: &pcp::Package, pair: &sealedbox::Keypair) -> Vec<(String, Vec<u8>)> {
@@ -99,6 +90,16 @@ fn images() -> pcp::PackageImages<'static> {
     }
 }
 
+fn iris_codes() -> v1::IrisCodes {
+    v1::IrisCodes {
+        iris_version: Some("synthetic-iris".into()),
+        left_iris_code: Some("left".into()),
+        left_mask_code: Some("left".into()),
+        right_iris_code: Some("right".into()),
+        right_mask_code: Some("right".into()),
+    }
+}
+
 fn iris_code_shares() -> [v1::IrisCodeShares; 3] {
     [0, 1, 2].map(|i| v1::IrisCodeShares {
         iris_version: Some("synthetic-iris".into()),
@@ -110,8 +111,34 @@ fn iris_code_shares() -> [v1::IrisCodeShares; 3] {
     })
 }
 
-fn no_di() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
-    Default::default()
+fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
+    let embeddings = v1::DiIrisEmbeddings {
+        embedding_v1: Some(v1::DiIrisEmbeddingV1 {
+            model_version: "synthetic-model".into(),
+            embedding_inference_backend: "synthetic-backend".into(),
+            embedding_version: "synthetic-embedding".into(),
+            left_embedding: vec![-1, 2],
+            left_mirror_embedding: vec![3, -4],
+            right_embedding: vec![5, -6],
+            right_mirror_embedding: vec![-7, 8],
+            left_embedding_f32: vec![-1.0, 2.0],
+            left_mirror_embedding_f32: vec![3.0, -4.0],
+            right_embedding_f32: vec![5.0, -6.0],
+            right_mirror_embedding_f32: vec![-7.0, 8.0],
+        }),
+    };
+    let shares = [0, 1, 2].map(|i| v1::DiIrisEmbeddingShares {
+        share_v1: Some(v1::DiIrisEmbeddingShareV1 {
+            model_version: "synthetic-model".into(),
+            shares_version: "synthetic-sharing".into(),
+            embedding_version: "synthetic-embedding".into(),
+            left_share: vec![10 + i, 11 + i],
+            left_mirror_share: vec![20 + i, 21 + i],
+            right_share: vec![30 + i, 31 + i],
+            right_mirror_share: vec![40 + i, 41 + i],
+        }),
+    });
+    (embeddings, shares)
 }
 
 struct FailingRng;
@@ -140,12 +167,15 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
     let pair = sealedbox::Keypair::generate().unwrap();
     for device in [None, Some("device"), Some("")] {
         let info = capture_info(device);
-        let output = pcp::build(
-            &request(&pair.public_key, &info),
-            &mut rand::rngs::OsRng,
-            |_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()),
-        )
-        .unwrap();
+        let output = Builder::timestamp(1)
+            .info(&info)
+            .user_public_key(&pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(BiometricPolicy::Redacted)
+            .rng(rand::rngs::OsRng)
+            .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
+            .build()
+            .unwrap();
         let files: std::collections::BTreeMap<_, _> =
             tier0(&output, &pair).into_iter().collect();
         assert_eq!(files.len(), 4);
@@ -189,30 +219,17 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
 #[test]
 fn invalid_user_key_fails_before_metadata_randomness() {
     let info = capture_info(Some("device"));
-    let result = pcp::build(
-        &request(&[0; 32], &info),
-        &mut FailingRng,
-        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-    );
+    let result = Builder::timestamp(1)
+        .info(&info)
+        .user_public_key(&[0; 32])
+        .backend_keys(backend_keys(&[0; 32]))
+        .biometrics(BiometricPolicy::Redacted)
+        .rng(FailingRng)
+        .signer(|_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") })
+        .build();
     assert!(matches!(
         result,
         Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
-    ));
-}
-
-#[test]
-fn oversized_archive_timestamp_fails_before_signing() {
-    let info = capture_info(Some("device"));
-    let mut input = request(&[0; 32], &info);
-    input.timestamp = u64::from(u32::MAX) + 1;
-    let result = pcp::build(
-        &input,
-        &mut FailingRng,
-        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-    );
-    assert!(matches!(
-        result,
-        Err(BuildError::Archive(pcp::ArchiveError::TimestampOutOfRange))
     ));
 }
 
@@ -220,28 +237,17 @@ fn oversized_archive_timestamp_fails_before_signing() {
 fn randomness_failure_returns_no_package_or_signature() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(Some("device"));
-    let result = pcp::build(
-        &request(&pair.public_key, &info),
-        &mut FailingRng,
-        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-    );
+    let result = Builder::timestamp(1)
+        .info(&info)
+        .user_public_key(&pair.public_key)
+        .backend_keys(backend_keys(&pair.public_key))
+        .biometrics(BiometricPolicy::Redacted)
+        .rng(FailingRng)
+        .signer(|_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") })
+        .build();
     assert!(matches!(
         result,
         Err(BuildError::Metadata(MetadataError::Randomness(_)))
-    ));
-}
-
-#[test]
-fn invalid_user_recipient_returns_no_package_or_signature() {
-    let info = capture_info(Some("device"));
-    let result = pcp::build(
-        &request(&[0; 32], &info),
-        &mut rand::rngs::OsRng,
-        |_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") },
-    );
-    assert!(matches!(
-        result,
-        Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
     ));
 }
 
@@ -250,14 +256,17 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(Some("device"));
     let mut calls = 0;
-    let result = pcp::build(
-        &request(&pair.public_key, &info),
-        &mut rand::rngs::OsRng,
-        |_| {
+    let result = Builder::timestamp(1)
+        .info(&info)
+        .user_public_key(&pair.public_key)
+        .backend_keys(backend_keys(&pair.public_key))
+        .biometrics(BiometricPolicy::Redacted)
+        .rng(rand::rngs::OsRng)
+        .signer(|_| {
             calls += 1;
             Err::<Vec<u8>, _>(SignerError)
-        },
-    );
+        })
+        .build();
     assert_eq!(calls, 1);
     assert!(matches!(
         result,
@@ -278,12 +287,16 @@ fn migration_pb_follows_info_and_is_hashed() {
         migrated_ts: Some(1_800_000_000),
         biometric_pipeline_version: Some("synthetic-pipeline".into()),
     };
-    let mut input = request(&pair.public_key, &info);
-    input.migration = Some(&migration);
-    let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-    })
-    .unwrap();
+    let output = Builder::timestamp(1)
+        .info(&info)
+        .user_public_key(&pair.public_key)
+        .backend_keys(backend_keys(&pair.public_key))
+        .biometrics(BiometricPolicy::Redacted)
+        .migration(&migration)
+        .rng(rand::rngs::OsRng)
+        .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
+        .build()
+        .unwrap();
     let files = tier0(&output, &pair);
     let names: Vec<_> = files.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(
@@ -308,81 +321,48 @@ fn migration_pb_follows_info_and_is_hashed() {
 }
 
 #[test]
-fn absent_iris_code_files_are_left_out_with_their_hashes() {
-    let pair = sealedbox::Keypair::generate().unwrap();
-    let info = capture_info(Some("device"));
-    let images = images();
-    let shares = iris_code_shares();
-    let (di_embeddings, di_embedding_shares) = no_di();
-    let mut input = request(&pair.public_key, &info);
-    input.biometrics = BiometricPolicy::Included {
-        images: &images,
-        face_embeddings: &[],
-        iris_codes: None,
-        iris_code_shares: [None, Some(&shares[1]), None],
-        di_embeddings: Some(&di_embeddings),
-        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-    };
-    let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-    })
-    .unwrap();
-    let files: std::collections::BTreeMap<_, _> =
-        tier0(&output, &pair).into_iter().collect();
-    let manifest: serde_json::Value =
-        serde_json::from_slice(&files["hashes.json"]).unwrap();
-    for name in [
-        "iris_codes.json",
-        "iris_code_shares_0.json",
-        "iris_code_shares_2.json",
-    ] {
-        assert!(!files.contains_key(name), "{name}");
-        assert!(manifest.get(name).is_none(), "{name}");
-    }
-    let share = &files["iris_code_shares_1.json"];
-    let decoded: v1::IrisCodeShares = serde_json::from_slice(share).unwrap();
-    assert_eq!(decoded, shares[1]);
-    let digest = ring::digest::digest(&ring::digest::SHA256, share);
-    assert_eq!(
-        manifest["iris_code_shares_1.json"],
-        data_encoding::HEXLOWER.encode(digest.as_ref())
-    );
-}
+fn iris_and_di_groups_are_included_or_omitted_independently() {
+    use orb_pcp_defs::prost::Message;
 
-#[test]
-fn iris_and_di_file_presence_is_explicit_and_independent() {
-    let pair = sealedbox::Keypair::generate().unwrap();
-    let info = capture_info(None);
-    let images = images();
-    let iris_codes = v1::IrisCodes::default();
-    let iris_share = v1::IrisCodeShares::default();
-    let (di_embeddings, di_shares) = no_di();
+    for (iris_present, di_present) in
+        [(false, false), (true, false), (false, true), (true, true)]
+    {
+        // Arrange
+        let pair = sealedbox::Keypair::generate().unwrap();
+        let info = capture_info(None);
+        let images = images();
+        let codes = iris_codes();
+        let iris_shares = iris_code_shares();
+        let (embeddings, di_shares) = di_biometrics();
+        let iris = iris_present
+            .then(|| Iris::codes(&codes).shares(iris_shares.each_ref()).unwrap());
+        let di = di_present.then(|| {
+            Di::embeddings(&embeddings)
+                .shares(di_shares.each_ref())
+                .unwrap()
+        });
+        let biometrics = Biometrics::images(&images)
+            .maybe_iris(iris)
+            .maybe_di(di)
+            .face_embeddings(&[]);
 
-    for mask in 0..16 {
-        let iris_present: [bool; 4] = std::array::from_fn(|i| mask & (1 << i) != 0);
-        let di_present = iris_present.map(|present| !present);
-        let mut input = request(&pair.public_key, &info);
-        input.biometrics = BiometricPolicy::Included {
-            images: &images,
-            face_embeddings: &[],
-            iris_codes: iris_present[0].then_some(&iris_codes),
-            iris_code_shares: std::array::from_fn(|i| {
-                iris_present[i + 1].then_some(&iris_share)
-            }),
-            di_embeddings: di_present[0].then_some(&di_embeddings),
-            di_embedding_shares: std::array::from_fn(|i| {
-                di_present[i + 1].then_some(&di_shares[i])
-            }),
-        };
-        let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-            Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-        })
-        .unwrap();
+        // Act
+        let output = Builder::timestamp(1)
+            .info(&info)
+            .user_public_key(&pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(BiometricPolicy::Included(biometrics))
+            .rng(rand::rngs::OsRng)
+            .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
+            .build()
+            .unwrap();
+
+        // Assert
         let files: std::collections::BTreeMap<_, _> =
             tier0(&output, &pair).into_iter().collect();
         let manifest: serde_json::Value =
             serde_json::from_slice(&files["hashes.json"]).unwrap();
-        for (names, present, bytes) in [
+        for (names, present) in [
             (
                 [
                     "iris_codes.json",
@@ -391,7 +371,6 @@ fn iris_and_di_file_presence_is_explicit_and_independent() {
                     "iris_code_shares_2.json",
                 ],
                 iris_present,
-                b"{}".as_slice(),
             ),
             (
                 [
@@ -401,16 +380,11 @@ fn iris_and_di_file_presence_is_explicit_and_independent() {
                     "di_iris_embeddings_shares_2.pb",
                 ],
                 di_present,
-                b"".as_slice(),
             ),
         ] {
-            for (name, present) in names.into_iter().zip(present) {
-                assert_eq!(
-                    files.get(name).map(Vec::as_slice),
-                    present.then_some(bytes),
-                    "{name}"
-                );
-                let expected_hash = present.then(|| {
+            for name in names {
+                assert_eq!(files.contains_key(name), present, "{name}");
+                let expected_hash = files.get(name).map(|bytes| {
                     data_encoding::HEXLOWER.encode(
                         ring::digest::digest(&ring::digest::SHA256, bytes).as_ref(),
                     )
@@ -420,6 +394,34 @@ fn iris_and_di_file_presence_is_explicit_and_independent() {
                     expected_hash.as_deref(),
                     "{name}"
                 );
+            }
+        }
+        if iris_present {
+            assert_eq!(
+                serde_json::from_slice::<v1::IrisCodes>(&files["iris_codes.json"])
+                    .unwrap(),
+                codes
+            );
+            for (i, share) in iris_shares.iter().enumerate() {
+                let decoded: v1::IrisCodeShares = serde_json::from_slice(
+                    &files[&format!("iris_code_shares_{i}.json")],
+                )
+                .unwrap();
+                assert_eq!(&decoded, share);
+            }
+        }
+        if di_present {
+            assert_eq!(
+                v1::DiIrisEmbeddings::decode(files["di_iris_embeddings.pb"].as_slice())
+                    .unwrap(),
+                embeddings
+            );
+            for (i, share) in di_shares.iter().enumerate() {
+                let decoded = v1::DiIrisEmbeddingShares::decode(
+                    files[&format!("di_iris_embeddings_shares_{i}.pb")].as_slice(),
+                )
+                .unwrap();
+                assert_eq!(&decoded, share);
             }
         }
     }
@@ -448,13 +450,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     }];
     let mut images = images();
     images.left.multiframe = &extra;
-    let iris_codes = v1::IrisCodes {
-        iris_version: Some("synthetic-iris".into()),
-        left_iris_code: Some("left".into()),
-        left_mask_code: Some("left".into()),
-        right_iris_code: Some("right".into()),
-        right_mask_code: Some("right".into()),
-    };
+    let iris_codes = iris_codes();
     let iris_code_shares = iris_code_shares();
     let face_embeddings = [v1::FaceEmbedding {
         embedding: Some("synthetic-embedding".into()),
@@ -462,22 +458,28 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         embedding_version: Some("v1".into()),
         embedding_inference_backend: Some("none".into()),
     }];
-    let (di_embeddings, di_embedding_shares) = no_di();
+    let (di_embeddings, di_embedding_shares) = di_biometrics();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
-    let mut input = request(&pair.public_key, &info);
-    input.biometrics = BiometricPolicy::Included {
-        images: &images,
-        face_embeddings: &face_embeddings,
-        iris_codes: Some(&iris_codes),
-        iris_code_shares: iris_code_shares.each_ref().map(Some),
-        di_embeddings: Some(&di_embeddings),
-        di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-    };
-    let output = pcp::build(&input, &mut rand::rngs::OsRng, |_| {
-        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-    })
-    .unwrap();
+    let iris = Iris::codes(&iris_codes)
+        .shares(iris_code_shares.each_ref())
+        .unwrap();
+    let di = Di::embeddings(&di_embeddings)
+        .shares(di_embedding_shares.each_ref())
+        .unwrap();
+    let biometrics = Biometrics::images(&images)
+        .iris(iris)
+        .di(di)
+        .face_embeddings(&face_embeddings);
+    let output = Builder::timestamp(1)
+        .info(&info)
+        .user_public_key(&pair.public_key)
+        .backend_keys(backend_keys(&pair.public_key))
+        .biometrics(BiometricPolicy::Included(biometrics))
+        .rng(rand::rngs::OsRng)
+        .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
+        .build()
+        .unwrap();
     let files: std::collections::BTreeMap<_, _> =
         tier0(&output, &pair).into_iter().collect();
 
@@ -553,17 +555,18 @@ mod diagnostics {
     fn diagnostic_redacted_tiers_are_gzip() {
         for device in [None, Some("device")] {
             let info = capture_info(device);
-            let input = request(&[0; 32], &info);
             let mut calls = 0;
-            let output: pcp::DiagnosticPackage =
-                pcp::build_unencrypted_for_diagnostics(
-                    &input,
-                    &mut rand::rngs::OsRng,
-                    |_| {
-                        calls += 1;
-                        Ok::<_, SignerError>(b"synthetic-signature".to_vec())
-                    },
-                )
+            let output: pcp::DiagnosticPackage = Builder::timestamp(1)
+                .info(&info)
+                .user_public_key(&[0; 32])
+                .backend_keys(backend_keys(&[0; 32]))
+                .biometrics(BiometricPolicy::Redacted)
+                .rng(rand::rngs::OsRng)
+                .signer(|_| {
+                    calls += 1;
+                    Ok::<_, SignerError>(b"synthetic-signature".to_vec())
+                })
+                .build_unencrypted()
                 .unwrap();
             assert_eq!(calls, 1);
             let tier0 = tier(&output.tier0);
@@ -595,26 +598,30 @@ mod diagnostics {
             left_depth_png: None,
             right_depth_png: None,
         });
-        let iris_codes = v1::IrisCodes::default();
+        let iris_codes = iris_codes();
         let iris_code_shares = iris_code_shares();
-        let (di_embeddings, di_embedding_shares) = no_di();
+        let (di_embeddings, di_embedding_shares) = di_biometrics();
         for device in [None, Some("device")] {
             let info = capture_info(device);
-            let mut input = request(&[0; 32], &info);
-            input.biometrics = BiometricPolicy::Included {
-                images: &images,
-                face_embeddings: &[],
-                iris_codes: Some(&iris_codes),
-                iris_code_shares: iris_code_shares.each_ref().map(Some),
-                di_embeddings: Some(&di_embeddings),
-                di_embedding_shares: di_embedding_shares.each_ref().map(Some),
-            };
-            let output = pcp::build_unencrypted_for_diagnostics(
-                &input,
-                &mut rand::rngs::OsRng,
-                |_| Ok::<_, SignerError>(Vec::new()),
-            )
-            .unwrap();
+            let iris = Iris::codes(&iris_codes)
+                .shares(iris_code_shares.each_ref())
+                .unwrap();
+            let di = Di::embeddings(&di_embeddings)
+                .shares(di_embedding_shares.each_ref())
+                .unwrap();
+            let biometrics = Biometrics::images(&images)
+                .iris(iris)
+                .di(di)
+                .face_embeddings(&[]);
+            let output = Builder::timestamp(1)
+                .info(&info)
+                .user_public_key(&[0; 32])
+                .backend_keys(backend_keys(&[0; 32]))
+                .biometrics(BiometricPolicy::Included(biometrics))
+                .rng(rand::rngs::OsRng)
+                .signer(|_| Ok::<_, SignerError>(Vec::new()))
+                .build_unencrypted()
+                .unwrap();
             let archives = tier(&output.tier0);
             assert!(tier(&output.tier1).is_empty());
             assert!(tier(&output.tier2).is_empty());
@@ -644,12 +651,15 @@ mod diagnostics {
     fn normal_builder_remains_encrypted_with_diagnostics_enabled() {
         let pair = sealedbox::Keypair::generate().unwrap();
         let info = capture_info(Some("device"));
-        let output = pcp::build(
-            &request(&pair.public_key, &info),
-            &mut rand::rngs::OsRng,
-            |_| Ok::<_, SignerError>(Vec::new()),
-        )
-        .unwrap();
+        let output = Builder::timestamp(1)
+            .info(&info)
+            .user_public_key(&pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(BiometricPolicy::Redacted)
+            .rng(rand::rngs::OsRng)
+            .signer(|_| Ok::<_, SignerError>(Vec::new()))
+            .build()
+            .unwrap();
         for encrypted in [&output.tier0, &output.tier1, &output.tier2] {
             let gzip = open(encrypted, &pair);
             tier(&gzip);
