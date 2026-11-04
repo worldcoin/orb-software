@@ -106,7 +106,7 @@ fn round_trip(filename: &str) -> Result<()> {
         &iris_shares[0],
         &iris_shares[1],
         &iris_shares[2],
-    ])?;
+    ]);
 
     let di = pcp::Di::embeddings(&embeddings).shares([
         &di_shares[0],

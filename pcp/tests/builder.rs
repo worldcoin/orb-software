@@ -141,8 +141,67 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     (embeddings, shares)
 }
 
+fn assert_iris_validation(codes: &v1::IrisCodes, shares: &[v1::IrisCodeShares; 3]) {
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(None);
+    let images = images();
+
+    for strict in [None, Some(true), Some(false)] {
+        let iris = Iris::codes(codes).shares(shares.each_ref());
+        let biometrics = Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+        let mut signed = false;
+
+        let result = Builder::timestamp(1)
+            .info(&info)
+            .user_public_key(&pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(BiometricPolicy::Included(biometrics))
+            .maybe_strict(strict)
+            .rng(&mut rand::rngs::OsRng)
+            .signer(|_| {
+                signed = true;
+
+                Ok::<_, SignerError>(vec![1])
+            })
+            .build();
+
+        if strict != Some(false) {
+            assert!(
+                matches!(result, Err(BuildError::InvalidBiometrics(_))),
+                "invalid Iris data should fail validation with strict={strict:?}"
+            );
+            assert!(
+                !signed,
+                "invalid Iris data should be rejected before signing"
+            );
+        } else {
+            let package =
+                result.expect("strict(false) should accept invalid Iris data");
+            let files: std::collections::BTreeMap<_, _> =
+                tier0(&package, &pair).into_iter().collect();
+
+            assert!(signed);
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&files["iris_codes.json"])
+                    .unwrap(),
+                serde_json::to_value(codes).unwrap(),
+            );
+
+            for (i, share) in shares.iter().enumerate() {
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(
+                        &files[&format!("iris_code_shares_{i}.json")],
+                    )
+                    .unwrap(),
+                    serde_json::to_value(share).unwrap(),
+                );
+            }
+        }
+    }
+}
+
 #[test]
-fn iris_rejects_missing_required_fields() {
+fn builder_validates_iris_fields_in_strict_mode() {
     for field in 0..5 {
         // Arrange
         let mut codes = iris_codes();
@@ -155,11 +214,8 @@ fn iris_rejects_missing_required_fields() {
             &mut codes.right_mask_code,
         ][field] = None;
 
-        // Act
-        let result = Iris::codes(&codes).shares(shares.each_ref());
-
-        // Assert
-        assert!(result.is_err(), "accepted missing code field {field}");
+        // Act / Assert
+        assert_iris_validation(&codes, &shares);
     }
 
     for recipient in 0..3 {
@@ -177,14 +233,8 @@ fn iris_rejects_missing_required_fields() {
                 &mut share.right_mask_code_shares,
             ][field] = None;
 
-            // Act
-            let result = Iris::codes(&codes).shares(shares.each_ref());
-
-            // Assert
-            assert!(
-                result.is_err(),
-                "accepted missing field {field} in share {recipient}"
-            );
+            // Act / Assert
+            assert_iris_validation(&codes, &shares);
         }
     }
 }
@@ -218,18 +268,15 @@ fn di_rejects_missing_embedding_or_share_records() {
 }
 
 #[test]
-fn iris_rejects_mismatched_iris_versions() {
+fn builder_validates_iris_versions_in_strict_mode() {
     for recipient in 0..3 {
         // Arrange
         let codes = iris_codes();
         let mut shares = iris_code_shares();
         shares[recipient].iris_version = Some("different-iris".into());
 
-        // Act
-        let result = Iris::codes(&codes).shares(shares.each_ref());
-
-        // Assert
-        assert!(result.is_err(), "share {recipient} should be rejected");
+        // Act / Assert
+        assert_iris_validation(&codes, &shares);
     }
 }
 
@@ -461,8 +508,8 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
         let codes = iris_codes();
         let iris_shares = iris_code_shares();
         let (embeddings, di_shares) = di_biometrics();
-        let iris = iris_present
-            .then(|| Iris::codes(&codes).shares(iris_shares.each_ref()).unwrap());
+        let iris =
+            iris_present.then(|| Iris::codes(&codes).shares(iris_shares.each_ref()));
         let di = di_present.then(|| {
             Di::embeddings(&embeddings)
                 .shares(di_shares.each_ref())
@@ -588,9 +635,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     let (di_embeddings, di_embedding_shares) = di_biometrics();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
-    let iris = Iris::codes(&iris_codes)
-        .shares(iris_code_shares.each_ref())
-        .unwrap();
+    let iris = Iris::codes(&iris_codes).shares(iris_code_shares.each_ref());
     let di = Di::embeddings(&di_embeddings)
         .shares(di_embedding_shares.each_ref())
         .unwrap();
@@ -730,9 +775,7 @@ mod diagnostics {
         let (di_embeddings, di_embedding_shares) = di_biometrics();
         for device in [None, Some("device")] {
             let info = capture_info(device);
-            let iris = Iris::codes(&iris_codes)
-                .shares(iris_code_shares.each_ref())
-                .unwrap();
+            let iris = Iris::codes(&iris_codes).shares(iris_code_shares.each_ref());
             let di = Di::embeddings(&di_embeddings)
                 .shares(di_embedding_shares.each_ref())
                 .unwrap();

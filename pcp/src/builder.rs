@@ -23,8 +23,8 @@ pub enum BiometricPolicy<'a> {
 /// no files or hashes; an included group contributes its data file and all three
 /// share files. Share array indices identify recipients.
 ///
-/// [`Iris`] and [`Di`] constructors check required field presence and matching
-/// data/share versions, returning [`BiometricValidationError`] on failure.
+/// Iris fields and versions are validated when building with strict mode enabled.
+/// [`Di`] validates its fields and versions during construction.
 #[derive(bon::Builder)]
 #[builder(start_fn = images)]
 #[builder(finish_fn = face_embeddings)]
@@ -49,7 +49,19 @@ impl<'a> Iris<'a> {
     pub fn new(
         #[builder(start_fn)] iris_codes: &'a v1::IrisCodes,
         #[builder(finish_fn)] iris_code_shares: [&'a v1::IrisCodeShares; 3],
-    ) -> Result<Self, BiometricValidationError> {
+    ) -> Self {
+        Self {
+            iris_codes,
+            iris_code_shares,
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), BiometricValidationError> {
+        let Self {
+            iris_codes,
+            iris_code_shares,
+        } = self;
+
         let iris_code_is_valid = [
             &iris_codes.iris_version,
             &iris_codes.left_iris_code,
@@ -89,10 +101,7 @@ impl<'a> Iris<'a> {
             }
         }
 
-        Ok(Self {
-            iris_codes,
-            iris_code_shares,
-        })
+        Ok(())
     }
 }
 
@@ -222,6 +231,9 @@ where
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
     backend_keys: payload::BackendKeys<'a>,
     biometrics: BiometricPolicy<'a>,
+    /// Validate Iris fields and versions before building. Defaults to true.
+    #[builder(default = true)]
+    strict: bool,
     /// Written as binary `migration.pb` after `info.json` and hashed in
     /// `hashes.json`. Set by TEE migrations.
     migration: Option<&'a v1::Migration>,
@@ -268,6 +280,14 @@ where
     }
 
     fn build_with_sealer(mut self, seal: Sealer) -> Result<BuiltTiers, BuildError<E>> {
+        if self.strict
+            && let BiometricPolicy::Included(Biometrics {
+                iris: Some(iris), ..
+            }) = &self.biometrics
+        {
+            iris.validate()?;
+        }
+
         let backend_keys_json = payload::backend_keys(&self.backend_keys)?;
         let mut hashes =
             vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
