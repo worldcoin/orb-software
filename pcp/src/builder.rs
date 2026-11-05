@@ -238,6 +238,25 @@ impl From<&str> for BiometricValidationError {
     }
 }
 
+/// Builds a PCP from caller-prepared inputs, a sealed-box function and a signer.
+///
+/// Supply whole seconds since the Unix epoch to [`Self::timestamp`], configure
+/// the inputs, then finish with `.signer(...)` and call [`Self::build`].
+/// Construction is synchronous; use a blocking worker in async applications.
+///
+/// Abbreviated example; input preparation and callback implementations are omitted.
+///
+/// ```ignore
+/// let package = orb_pcp::Builder::timestamp(unix_seconds)
+///     .info(&info)
+///     .user_public_key(&user_public_key)
+///     .backend_keys(backend_keys)
+///     .biometrics(biometrics)
+///     .rng(rand::rngs::OsRng)
+///     .sealer(seal)
+///     .signer(sign_digest)
+///     .build()?;
+/// ```
 #[derive(bon::Builder)]
 #[builder(start_fn = timestamp)]
 #[builder(finish_fn = signer)]
@@ -246,9 +265,12 @@ where
     Rng: RngCore + CryptoRng,
     DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
 {
-    /// Whole Unix seconds used for archive and gzip headers.
+    /// Whole seconds since the Unix epoch, used for archive and gzip headers.
     #[builder(start_fn)]
     timestamp: u32,
+    /// Signs the raw 32-byte SHA-256 digest of `hashes.json` once per build.
+    /// The returned signature bytes are stored unchanged in `hashes.sign`.
+    /// The caller owns signer initialization, retries and deadlines.
     #[builder(finish_fn)]
     digest_signer: DigestSigner,
     /// Caller-owned PCP sealed-box implementation.
@@ -257,9 +279,11 @@ where
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
     /// fields are omitted.
     info: &'a v1::Info,
+    /// Raw 32-byte Curve25519 recipient public key used to seal all three tiers.
     user_public_key: &'a [u8; 32],
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
     backend_keys: payload::BackendKeys<'a>,
+    /// Includes the supplied biometric payloads or redacts them and their image IDs.
     biometrics: BiometricPolicy<'a>,
     /// Check completeness of a supplied Iris group; the group itself is optional.
     /// Defaults to true. Disabling strictness is only for backward compatibility
@@ -269,6 +293,8 @@ where
     /// Written as binary `migration.pb` after `info.json` and hashed in
     /// `hashes.json`. Set by TEE migrations.
     migration: Option<&'a v1::Migration>,
+    /// Cryptographically secure randomness for metadata salts and Hyrax blinding seeds.
+    /// The sealer manages its own encryption randomness.
     rng: Rng,
 }
 
