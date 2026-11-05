@@ -1,3 +1,5 @@
+mod support;
+
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
 use orb_pcp::{
     self as pcp, v1, BackendKey, BackendKeys, BiometricPolicy, Biometrics, BuildError,
@@ -291,6 +293,7 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
             .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
             .build()
             .unwrap();
@@ -343,11 +346,14 @@ fn invalid_user_key_fails_before_metadata_randomness() {
         .backend_keys(backend_keys(&[0; 32]))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
+        .sealer(support::seal)
         .signer(|_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") })
         .build();
     assert!(matches!(
         result,
-        Err(BuildError::Encryption(pcp::SealingError::InvalidRecipient))
+        Err(BuildError::Encryption(
+            support::SealingError::InvalidRecipient
+        ))
     ));
 }
 
@@ -361,6 +367,7 @@ fn randomness_failure_returns_no_package_or_signature() {
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
+        .sealer(support::seal)
         .signer(|_| -> Result<Vec<u8>, SignerError> { panic!("must not sign") })
         .build();
     assert!(matches!(
@@ -380,6 +387,7 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(rand::rngs::OsRng)
+        .sealer(support::seal)
         .signer(|_| {
             calls += 1;
             Err::<Vec<u8>, _>(SignerError)
@@ -413,6 +421,7 @@ fn migration_pb_follows_info_and_is_hashed() {
         .biometrics(BiometricPolicy::Redacted)
         .migration(&migration)
         .rng(rand::rngs::OsRng)
+        .sealer(support::seal)
         .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
         .build()
         .unwrap();
@@ -475,6 +484,7 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Included(biometrics))
             .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
             .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
             .build()
             .unwrap();
@@ -599,6 +609,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Included(biometrics))
         .rng(rand::rngs::OsRng)
+        .sealer(support::seal)
         .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
         .build()
         .unwrap();
@@ -684,6 +695,9 @@ mod diagnostics {
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Redacted)
                 .rng(rand::rngs::OsRng)
+                .sealer(|_, _| -> Result<Vec<u8>, std::convert::Infallible> {
+                    panic!("diagnostics must not invoke the sealer")
+                })
                 .signer(|_| {
                     calls += 1;
                     Ok::<_, SignerError>(b"synthetic-signature".to_vec())
@@ -741,6 +755,9 @@ mod diagnostics {
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .rng(rand::rngs::OsRng)
+                .sealer(|_, _| -> Result<Vec<u8>, std::convert::Infallible> {
+                    panic!("diagnostics must not invoke the sealer")
+                })
                 .signer(|_| Ok::<_, SignerError>(Vec::new()))
                 .build_unencrypted()
                 .unwrap();
@@ -779,6 +796,7 @@ mod diagnostics {
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
             .signer(|_| Ok::<_, SignerError>(Vec::new()))
             .build()
             .unwrap();
@@ -836,6 +854,7 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)
                 .rng(&mut rand::rngs::OsRng)
+                .sealer(support::seal)
                 .signer(|_| {
                     signed = true;
 
@@ -933,6 +952,7 @@ fn missing_iris_versions_require_compatibility_mode() {
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)
                 .rng(&mut rand::rngs::OsRng)
+                .sealer(support::seal)
                 .signer(|_| {
                     signed = true;
 

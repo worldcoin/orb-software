@@ -4,6 +4,9 @@
 //! Run with `cargo run -p orb-pcp --example build_pcp`. Everything stays in
 //! memory; only case labels and encrypted sizes are printed.
 
+#[path = "../tests/support/mod.rs"]
+mod support;
+
 use std::{collections::BTreeMap, error::Error, io::Read};
 
 use alkali::asymmetric::seal::curve25519xsalsa20poly1305 as sealedbox;
@@ -201,6 +204,7 @@ pub fn run() -> Result<()> {
                 .backend_keys(backend_keys)
                 .biometrics(biometrics)
                 .rng(&mut OsRng)
+                .sealer(support::seal)
                 .signer(|hash| {
                     let signature: Signature = signer.sign_prehash(hash)?;
                     calls += 1;

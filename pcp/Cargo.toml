@@ -12,7 +12,6 @@ rust-version.workspace = true
 not-prod-diagnostics = []
 
 [dependencies]
-alkali.workspace = true
 bon.workspace = true
 data-encoding.workspace = true
 flate2.workspace = true
@@ -27,5 +26,6 @@ thiserror.workspace = true
 zeroize = "1"
 
 [dev-dependencies]
+alkali.workspace = true
 color-eyre.workspace = true
 p256.workspace = true
