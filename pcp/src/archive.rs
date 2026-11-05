@@ -4,7 +4,7 @@
 use std::io::Write;
 
 use orb_wld_data_id::ImageId;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{
     crypto, manifest,
@@ -92,64 +92,71 @@ fn validate_name(name: &str) -> Result<(), ArchiveError> {
     Ok(())
 }
 
-pub struct NormalizedIrisFrame<'a> {
-    pub image: &'a [u8],
-    pub mask: &'a [u8],
-    pub image_resized: &'a [u8],
-    pub mask_resized: &'a [u8],
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct NormalizedIrisFrame {
+    pub image: Vec<u8>,
+    pub mask: Vec<u8>,
+    pub image_resized: Vec<u8>,
+    pub mask_resized: Vec<u8>,
 }
 
 /// Written as `left_ir.png`/`right_ir.png`, with its normalization as
 /// `{left,right}_normalized_*.bin`. Its image ID is the eye's `*_ir_image_id`
 /// in `info.json`.
-pub struct PrimaryIrisFrame<'a> {
-    pub ir_png: &'a [u8],
-    pub normalized: NormalizedIrisFrame<'a>,
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct PrimaryIrisFrame {
+    pub ir_png: Vec<u8>,
+    pub normalized: NormalizedIrisFrame,
 }
 
 /// An additional IR capture of the eye, written as `{image_id}.png` and listed in
 /// the eye's `*_ir_multiframe_image_ids` in `info.json`.
-pub struct IrisFrame<'a> {
-    pub image_id: &'a ImageId,
-    pub ir_png: &'a [u8],
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct IrisFrame {
+    #[zeroize(skip)]
+    pub image_id: ImageId,
+    pub ir_png: Vec<u8>,
     /// Normalization of this frame from the multiframe iris pipeline, written with
     /// its Hyrax commitments as `{image_id}_normalized_*.bin`. Without it, only
     /// `{image_id}.png` is written.
-    pub normalized: Option<NormalizedIrisFrame<'a>>,
+    pub normalized: Option<NormalizedIrisFrame>,
 }
 
 /// One eye's IR captures: the primary frame and any multiframe captures, in
 /// capture order. The `*_iris_code_aggregate_image_ids` in `info.json` name the
 /// frames an aggregated iris code was computed from and are written as given.
-pub struct IrisEye<'a> {
-    pub primary: PrimaryIrisFrame<'a>,
-    pub multiframe: &'a [IrisFrame<'a>],
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct IrisEye {
+    pub primary: PrimaryIrisFrame,
+    pub multiframe: Vec<IrisFrame>,
 }
 
 /// Images written to `fraud.tar`; each `None` image is left out.
-pub struct FraudImages<'a> {
-    pub scc_rgb_png: Option<&'a [u8]>,
-    pub left_rgb_png: Option<&'a [u8]>,
-    pub right_rgb_png: Option<&'a [u8]>,
-    pub left_thermal_png: Option<&'a [u8]>,
-    pub right_thermal_png: Option<&'a [u8]>,
-    pub scc_depth_png: Option<&'a [u8]>,
-    pub left_depth_png: Option<&'a [u8]>,
-    pub right_depth_png: Option<&'a [u8]>,
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct FraudImages {
+    pub scc_rgb_png: Option<Vec<u8>>,
+    pub left_rgb_png: Option<Vec<u8>>,
+    pub right_rgb_png: Option<Vec<u8>>,
+    pub left_thermal_png: Option<Vec<u8>>,
+    pub right_thermal_png: Option<Vec<u8>>,
+    pub scc_depth_png: Option<Vec<u8>>,
+    pub left_depth_png: Option<Vec<u8>>,
+    pub right_depth_png: Option<Vec<u8>>,
 }
 
 /// Encoded PNGs and normalized bytes.
 /// Optional face IR and thermal images are written to `face_ir_and_thermal.tar`
 /// only when supplied.
-pub struct PackageImages<'a> {
-    pub left: IrisEye<'a>,
-    pub right: IrisEye<'a>,
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct PackageImages {
+    pub left: IrisEye,
+    pub right: IrisEye,
     /// `None` writes an empty `thumbnail.png`.
-    pub thumbnail_png: Option<&'a [u8]>,
-    pub face_ir_png: Option<&'a [u8]>,
-    pub thermal_png: Option<&'a [u8]>,
+    pub thumbnail_png: Option<Vec<u8>>,
+    pub face_ir_png: Option<Vec<u8>>,
+    pub thermal_png: Option<Vec<u8>>,
     /// `None` leaves out `fraud.tar`.
-    pub fraud: Option<FraudImages<'a>>,
+    pub fraud: Option<FraudImages>,
 }
 
 pub(crate) struct InnerArchives {
@@ -173,7 +180,7 @@ pub enum InnerArchiveError {
 /// Builds the inner archives and hashes their individual files.
 pub(crate) fn encode_inner(
     timestamp: u64,
-    images: &PackageImages<'_>,
+    images: &PackageImages,
     rng: &mut (impl rand::RngCore + rand::CryptoRng),
 ) -> Result<InnerArchives, InnerArchiveError> {
     let (left, right) = (&images.left, &images.right);
@@ -182,11 +189,11 @@ pub(crate) fn encode_inner(
     let mut hashes = Vec::new();
 
     let mut iris_files = vec![
-        ("left_ir.png".to_owned(), left.primary.ir_png),
-        ("right_ir.png".to_owned(), right.primary.ir_png),
+        ("left_ir.png".to_owned(), left.primary.ir_png.as_slice()),
+        ("right_ir.png".to_owned(), right.primary.ir_png.as_slice()),
     ];
-    for frame in left.multiframe.iter().chain(right.multiframe) {
-        iris_files.push((format!("{}.png", frame.image_id), frame.ir_png));
+    for frame in left.multiframe.iter().chain(&right.multiframe) {
+        iris_files.push((format!("{}.png", frame.image_id), frame.ir_png.as_slice()));
     }
     let iris = encode_archive(
         timestamp,
@@ -202,7 +209,7 @@ pub(crate) fn encode_inner(
             normalized_files.extend(normalized_pair(prefix, frame, resized, rng)?);
         }
     }
-    for frame in left.multiframe.iter().chain(right.multiframe) {
+    for frame in left.multiframe.iter().chain(&right.multiframe) {
         let Some(normalized) = &frame.normalized else {
             continue;
         };
@@ -225,7 +232,7 @@ pub(crate) fn encode_inner(
     )?;
     let face = encode_archive(
         timestamp,
-        [("thumbnail.png", images.thumbnail_png.unwrap_or_default())],
+        [("thumbnail.png", images.thumbnail_png.as_deref().unwrap_or_default())],
         &mut hashes,
     )?;
     let fraud = images
@@ -235,14 +242,14 @@ pub(crate) fn encode_inner(
             encode_archive(
                 timestamp,
                 [
-                    ("scc_rgb.png", fraud.scc_rgb_png),
-                    ("left_rgb.png", fraud.left_rgb_png),
-                    ("right_rgb.png", fraud.right_rgb_png),
-                    ("left_thermal.png", fraud.left_thermal_png),
-                    ("right_thermal.png", fraud.right_thermal_png),
-                    ("scc_depth.png", fraud.scc_depth_png),
-                    ("left_depth.png", fraud.left_depth_png),
-                    ("right_depth.png", fraud.right_depth_png),
+                    ("scc_rgb.png", fraud.scc_rgb_png.as_deref()),
+                    ("left_rgb.png", fraud.left_rgb_png.as_deref()),
+                    ("right_rgb.png", fraud.right_rgb_png.as_deref()),
+                    ("left_thermal.png", fraud.left_thermal_png.as_deref()),
+                    ("right_thermal.png", fraud.right_thermal_png.as_deref()),
+                    ("scc_depth.png", fraud.scc_depth_png.as_deref()),
+                    ("left_depth.png", fraud.left_depth_png.as_deref()),
+                    ("right_depth.png", fraud.right_depth_png.as_deref()),
                 ]
                 .into_iter()
                 .filter_map(|(name, data)| data.map(|data| (name, data))),
@@ -253,8 +260,8 @@ pub(crate) fn encode_inner(
     let face_ir_and_thermal = encode_archive(
         timestamp,
         [
-            ("face_ir.png", images.face_ir_png),
-            ("thermal.png", images.thermal_png),
+            ("face_ir.png", images.face_ir_png.as_deref()),
+            ("thermal.png", images.thermal_png.as_deref()),
         ]
         .into_iter()
         .filter_map(|(name, data)| data.map(|data| (name, data))),
@@ -278,15 +285,15 @@ struct NormalizedFile<'a> {
 
 fn normalized_pair<'a>(
     prefix: &str,
-    frame: &NormalizedIrisFrame<'a>,
+    frame: &'a NormalizedIrisFrame,
     resized: bool,
     rng: &mut (impl rand::RngCore + rand::CryptoRng),
 ) -> Result<[NormalizedFile<'a>; 2], InnerArchiveError> {
     let suffix = if resized { "_resized" } else { "" };
     let (image, mask) = if resized {
-        (frame.image_resized, frame.mask_resized)
+        (frame.image_resized.as_slice(), frame.mask_resized.as_slice())
     } else {
-        (frame.image, frame.mask)
+        (frame.image.as_slice(), frame.mask.as_slice())
     };
     let mut make_file = |kind, data| -> Result<NormalizedFile<'a>, InnerArchiveError> {
         Ok(NormalizedFile {

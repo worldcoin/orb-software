@@ -46,37 +46,37 @@ pub fn run() -> Result<()> {
     let normalized = [0x5a; 512];
     let [left_id, right_id] =
         MULTIFRAME_IDS.map(|id| id.parse::<pcp::ImageId>().expect("valid image ID"));
-    let extra_left = [pcp::IrisFrame {
-        image_id: &left_id,
-        ir_png: &png,
+    let extra_left = vec![pcp::IrisFrame {
+        image_id: left_id,
+        ir_png: png.clone(),
         normalized: None,
     }];
-    let extra_right = [pcp::IrisFrame {
-        image_id: &right_id,
-        ir_png: &png,
+    let extra_right = vec![pcp::IrisFrame {
+        image_id: right_id,
+        ir_png: png.clone(),
         normalized: None,
     }];
     let images = pcp::PackageImages {
         left: pcp::IrisEye {
             primary: primary(&png, &normalized),
-            multiframe: &extra_left,
+            multiframe: extra_left,
         },
         right: pcp::IrisEye {
             primary: primary(&png, &normalized),
-            multiframe: &extra_right,
+            multiframe: extra_right,
         },
-        thumbnail_png: Some(&png),
-        face_ir_png: Some(&png),
-        thermal_png: Some(&png),
+        thumbnail_png: Some(png.clone()),
+        face_ir_png: Some(png.clone()),
+        thermal_png: Some(png.clone()),
         fraud: Some(pcp::FraudImages {
-            scc_rgb_png: Some(&png),
-            left_rgb_png: Some(&png),
-            right_rgb_png: Some(&png),
-            left_thermal_png: Some(&png),
-            right_thermal_png: Some(&png),
-            scc_depth_png: Some(&png),
-            left_depth_png: Some(&png),
-            right_depth_png: Some(&png),
+            scc_rgb_png: Some(png.clone()),
+            left_rgb_png: Some(png.clone()),
+            right_rgb_png: Some(png.clone()),
+            left_thermal_png: Some(png.clone()),
+            right_thermal_png: Some(png.clone()),
+            scc_depth_png: Some(png.clone()),
+            left_depth_png: Some(png.clone()),
+            right_depth_png: Some(png),
         }),
     };
     let iris_codes = v1::IrisCodes {
@@ -235,14 +235,14 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-fn primary<'a>(png: &'a [u8], data: &'a [u8]) -> pcp::PrimaryIrisFrame<'a> {
+fn primary(png: &[u8], data: &[u8]) -> pcp::PrimaryIrisFrame {
     pcp::PrimaryIrisFrame {
-        ir_png: png,
+        ir_png: png.to_vec(),
         normalized: pcp::NormalizedIrisFrame {
-            image: data,
-            mask: data,
-            image_resized: data,
-            mask_resized: data,
+            image: data.to_vec(),
+            mask: data.to_vec(),
+            image_resized: data.to_vec(),
+            mask_resized: data.to_vec(),
         },
     }
 }

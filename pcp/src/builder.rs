@@ -32,7 +32,7 @@ pub enum BiometricPolicy<'a> {
 #[builder(finish_fn = face_embeddings)]
 pub struct Biometrics<'a> {
     #[builder(start_fn)]
-    images: &'a archive::PackageImages<'a>,
+    images: &'a archive::PackageImages,
     #[builder(finish_fn)]
     face_embeddings: &'a [v1::FaceEmbedding],
     iris: Option<Iris<'a>>,
@@ -577,7 +577,7 @@ impl Prepared {
     }
 }
 
-fn multiframe_ids(eye: &archive::IrisEye<'_>) -> Vec<String> {
+fn multiframe_ids(eye: &archive::IrisEye) -> Vec<String> {
     eye.multiframe
         .iter()
         .map(|frame| frame.image_id.to_string())

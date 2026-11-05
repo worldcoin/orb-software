@@ -65,27 +65,27 @@ fn tier0(output: &pcp::Package, pair: &sealedbox::Keypair) -> Vec<(String, Vec<u
     files
 }
 
-fn normalized() -> pcp::NormalizedIrisFrame<'static> {
+fn normalized() -> pcp::NormalizedIrisFrame {
     pcp::NormalizedIrisFrame {
-        image: b"image",
-        mask: b"mask",
-        image_resized: b"resized-image",
-        mask_resized: b"resized-mask",
+        image: b"image".to_vec(),
+        mask: b"mask".to_vec(),
+        image_resized: b"resized-image".to_vec(),
+        mask_resized: b"resized-mask".to_vec(),
     }
 }
 
-fn images() -> pcp::PackageImages<'static> {
+fn images() -> pcp::PackageImages {
     let eye = || pcp::IrisEye {
         primary: pcp::PrimaryIrisFrame {
-            ir_png: b"synthetic-ir",
+            ir_png: b"synthetic-ir".to_vec(),
             normalized: normalized(),
         },
-        multiframe: &[],
+        multiframe: Vec::new(),
     };
     pcp::PackageImages {
         left: eye(),
         right: eye(),
-        thumbnail_png: Some(b"synthetic-thumbnail"),
+        thumbnail_png: Some(b"synthetic-thumbnail".to_vec()),
         face_ir_png: None,
         thermal_png: None,
         fraud: None,
@@ -575,13 +575,13 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
 
     let pair = sealedbox::Keypair::generate().unwrap();
     let extra_id: pcp::ImageId = "00ff0000000000000000000000000001".parse().unwrap();
-    let extra = [pcp::IrisFrame {
-        image_id: &extra_id,
-        ir_png: b"synthetic-ir",
+    let extra = vec![pcp::IrisFrame {
+        image_id: extra_id.clone(),
+        ir_png: b"synthetic-ir".to_vec(),
         normalized: Some(normalized()),
     }];
     let mut images = images();
-    images.left.multiframe = &extra;
+    images.left.multiframe = extra;
     let iris_codes = iris_codes();
     let iris_code_shares = iris_code_shares();
     let face_embeddings = [v1::FaceEmbedding {
@@ -722,12 +722,12 @@ mod diagnostics {
     #[test]
     fn diagnostic_included_inner_archives_are_plaintext() {
         let mut images = images();
-        images.face_ir_png = Some(b"synthetic-face-ir");
-        images.thermal_png = Some(b"synthetic-thermal");
+        images.face_ir_png = Some(b"synthetic-face-ir".to_vec());
+        images.thermal_png = Some(b"synthetic-thermal".to_vec());
         images.fraud = Some(pcp::FraudImages {
-            scc_rgb_png: Some(b"synthetic-scc"),
-            left_rgb_png: Some(b"synthetic-left"),
-            right_rgb_png: Some(b"synthetic-right"),
+            scc_rgb_png: Some(b"synthetic-scc".to_vec()),
+            left_rgb_png: Some(b"synthetic-left".to_vec()),
+            right_rgb_png: Some(b"synthetic-right".to_vec()),
             left_thermal_png: None,
             right_thermal_png: None,
             scc_depth_png: None,

@@ -72,9 +72,9 @@ fn round_trip(filename: &str) -> Result<()> {
     let images = pcp::PackageImages {
         left: eye(&iris_files, &normalized, "left"),
         right: eye(&iris_files, &normalized, "right"),
-        thumbnail_png: Some(&face["thumbnail.png"]),
-        face_ir_png: Some(&extra["face_ir.png"]),
-        thermal_png: Some(&extra["thermal.png"]),
+        thumbnail_png: Some(face["thumbnail.png"].clone()),
+        face_ir_png: Some(extra["face_ir.png"].clone()),
+        thermal_png: Some(extra["thermal.png"].clone()),
         fraud: None,
     };
 
@@ -237,20 +237,22 @@ fn read_tier(bytes: &[u8], name: &str) -> Result<(u32, Files)> {
     Ok((timestamp, read_tar(&tar)?))
 }
 
-fn eye<'a>(iris: &'a Files, normalized: &'a Files, side: &str) -> pcp::IrisEye<'a> {
+fn eye(iris: &Files, normalized: &Files, side: &str) -> pcp::IrisEye {
     pcp::IrisEye {
         primary: pcp::PrimaryIrisFrame {
-            ir_png: &iris[&format!("{side}_ir.png")],
+            ir_png: iris[&format!("{side}_ir.png")].clone(),
             normalized: pcp::NormalizedIrisFrame {
-                image: &normalized[&format!("{side}_normalized_image.bin")],
-                mask: &normalized[&format!("{side}_normalized_mask.bin")],
-                image_resized: &normalized
-                    [&format!("{side}_normalized_image_resized.bin")],
-                mask_resized: &normalized
-                    [&format!("{side}_normalized_mask_resized.bin")],
+                image: normalized[&format!("{side}_normalized_image.bin")].clone(),
+                mask: normalized[&format!("{side}_normalized_mask.bin")].clone(),
+                image_resized: normalized
+                    [&format!("{side}_normalized_image_resized.bin")]
+                    .clone(),
+                mask_resized: normalized
+                    [&format!("{side}_normalized_mask_resized.bin")]
+                    .clone(),
             },
         },
-        multiframe: &[],
+        multiframe: Vec::new(),
     }
 }
 
