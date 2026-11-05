@@ -72,9 +72,9 @@ fn round_trip(filename: &str) -> Result<()> {
     let images = pcp::PackageImages {
         left: eye(&iris_files, &normalized, "left"),
         right: eye(&iris_files, &normalized, "right"),
-        thumbnail_png: Some(&face["thumbnail.png"]),
-        face_ir_png: Some(&extra["face_ir.png"]),
-        thermal_png: Some(&extra["thermal.png"]),
+        thumbnail_png: Some(face["thumbnail.png"].clone()),
+        face_ir_png: Some(extra["face_ir.png"].clone()),
+        thermal_png: Some(extra["thermal.png"].clone()),
         fraud: None,
     };
 
@@ -102,22 +102,16 @@ fn round_trip(filename: &str) -> Result<()> {
         )?);
     }
 
-    let iris = pcp::Iris::codes(Some(&codes)).shares([
-        Some(&iris_shares[0]),
-        Some(&iris_shares[1]),
-        Some(&iris_shares[2]),
-    ])?;
+    let iris_shares: [v1::IrisCodeShares; 3] = iris_shares.try_into().unwrap();
+    let di_shares: [v1::DiIrisEmbeddingShares; 3] = di_shares.try_into().unwrap();
 
-    let di = pcp::Di::embeddings(&embeddings).shares([
-        &di_shares[0],
-        &di_shares[1],
-        &di_shares[2],
-    ])?;
+    let iris = pcp::Iris::codes(Some(codes)).shares(iris_shares.map(Some))?;
+    let di = pcp::Di::embeddings(embeddings).shares(di_shares)?;
 
-    let biometrics = pcp::Biometrics::images(&images)
+    let biometrics = pcp::Biometrics::images(images)
         .iris(iris)
         .di(di)
-        .face_embeddings(&face_embeddings);
+        .face_embeddings(face_embeddings);
 
     let keys: v1::BackendKeys = serde_json::from_slice(&original["backend_keys.json"])?;
     let mut decoded_keys = Vec::new();
@@ -144,8 +138,8 @@ fn round_trip(filename: &str) -> Result<()> {
     }
 
     let backend = |i: usize| pcp::BackendKey {
-        public_key: &decoded_keys[i].0,
-        encrypted_private_key: decoded_keys[i].1,
+        public_key: decoded_keys[i].0,
+        encrypted_private_key: decoded_keys[i].1.to_owned(),
     };
 
     let backend_keys = pcp::BackendKeys::face(backend(0))
@@ -157,8 +151,8 @@ fn round_trip(filename: &str) -> Result<()> {
 
     // Act
     let rebuilt = pcp::Builder::timestamp(timestamp)
-        .info(&info)
-        .user_public_key(&[0; 32]) // Diagnostics do not encrypt the output.
+        .info(info)
+        .user_public_key([0; 32]) // Diagnostics do not encrypt the output.
         .backend_keys(backend_keys)
         .biometrics(pcp::BiometricPolicy::Included(biometrics))
         .rng(&mut OsRng)
@@ -237,20 +231,22 @@ fn read_tier(bytes: &[u8], name: &str) -> Result<(u32, Files)> {
     Ok((timestamp, read_tar(&tar)?))
 }
 
-fn eye<'a>(iris: &'a Files, normalized: &'a Files, side: &str) -> pcp::IrisEye<'a> {
+fn eye(iris: &Files, normalized: &Files, side: &str) -> pcp::IrisEye {
     pcp::IrisEye {
         primary: pcp::PrimaryIrisFrame {
-            ir_png: &iris[&format!("{side}_ir.png")],
+            ir_png: iris[&format!("{side}_ir.png")].clone(),
             normalized: pcp::NormalizedIrisFrame {
-                image: &normalized[&format!("{side}_normalized_image.bin")],
-                mask: &normalized[&format!("{side}_normalized_mask.bin")],
-                image_resized: &normalized
-                    [&format!("{side}_normalized_image_resized.bin")],
-                mask_resized: &normalized
-                    [&format!("{side}_normalized_mask_resized.bin")],
+                image: normalized[&format!("{side}_normalized_image.bin")].clone(),
+                mask: normalized[&format!("{side}_normalized_mask.bin")].clone(),
+                image_resized: normalized
+                    [&format!("{side}_normalized_image_resized.bin")]
+                    .clone(),
+                mask_resized: normalized
+                    [&format!("{side}_normalized_mask_resized.bin")]
+                    .clone(),
             },
         },
-        multiframe: &[],
+        multiframe: Vec::new(),
     }
 }
 

@@ -11,9 +11,11 @@ use crate::{archive, manifest, metadata, payload};
 use manifest::sha256;
 
 /// Whether biometric files, their hashes and the image IDs are included.
-pub enum BiometricPolicy<'a> {
+// Keep biometric values inline to avoid an extra allocation per package.
+#[allow(clippy::large_enum_variant)]
+pub enum BiometricPolicy {
     Redacted,
-    Included(Biometrics<'a>),
+    Included(Biometrics),
 }
 
 /// Accepted messages are written as given. Hyrax commitments are generated from the
@@ -30,29 +32,29 @@ pub enum BiometricPolicy<'a> {
 #[derive(bon::Builder)]
 #[builder(start_fn = images)]
 #[builder(finish_fn = face_embeddings)]
-pub struct Biometrics<'a> {
+pub struct Biometrics {
     #[builder(start_fn)]
-    images: &'a archive::PackageImages<'a>,
+    images: archive::PackageImages,
     #[builder(finish_fn)]
-    face_embeddings: &'a [v1::FaceEmbedding],
-    iris: Option<Iris<'a>>,
-    di: Option<Di<'a>>,
+    face_embeddings: Vec<v1::FaceEmbedding>,
+    iris: Option<Iris>,
+    di: Option<Di>,
 }
 
-pub struct Iris<'a> {
-    iris_codes: Option<&'a v1::IrisCodes>,
-    iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
+pub struct Iris {
+    iris_codes: Option<v1::IrisCodes>,
+    iris_code_shares: [Option<v1::IrisCodeShares>; 3],
 }
 
 #[bon::bon]
-impl<'a> Iris<'a> {
+impl Iris {
     #[builder(start_fn = codes)]
     #[builder(finish_fn = shares)]
     pub fn new(
-        #[builder(start_fn)] iris_codes: Option<&'a v1::IrisCodes>,
-        #[builder(finish_fn)] iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
+        #[builder(start_fn)] iris_codes: Option<v1::IrisCodes>,
+        #[builder(finish_fn)] iris_code_shares: [Option<v1::IrisCodeShares>; 3],
     ) -> Result<Self, BiometricValidationError> {
-        if let Some(codes) = iris_codes {
+        if let Some(codes) = &iris_codes {
             let valid = [
                 &codes.left_iris_code,
                 &codes.right_iris_code,
@@ -83,7 +85,7 @@ impl<'a> Iris<'a> {
                 );
             }
 
-            if let Some(codes) = iris_codes
+            if let Some(codes) = &iris_codes
                 && let (Some(code_version), Some(share_version)) =
                     (&codes.iris_version, &share.iris_version)
                 && share_version != code_version
@@ -101,7 +103,7 @@ impl<'a> Iris<'a> {
     }
 
     pub(crate) fn validate(&self) -> Result<(), BiometricValidationError> {
-        let Some(codes) = self.iris_codes else {
+        let Some(codes) = &self.iris_codes else {
             return Err("Iris codes are missing.".into());
         };
 
@@ -127,18 +129,18 @@ impl<'a> Iris<'a> {
     }
 }
 
-pub struct Di<'a> {
-    di_embeddings: &'a v1::DiIrisEmbeddings,
-    di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+pub struct Di {
+    di_embeddings: v1::DiIrisEmbeddings,
+    di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
 }
 
 #[bon::bon]
-impl<'a> Di<'a> {
+impl Di {
     #[builder(start_fn = embeddings)]
     #[builder(finish_fn = shares)]
     pub fn new(
-        #[builder(start_fn)] di_embeddings: &'a v1::DiIrisEmbeddings,
-        #[builder(finish_fn)] di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+        #[builder(start_fn)] di_embeddings: v1::DiIrisEmbeddings,
+        #[builder(finish_fn)] di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -147,7 +149,7 @@ impl<'a> Di<'a> {
             );
         };
 
-        for share in di_embedding_shares {
+        for share in &di_embedding_shares {
             let Some(share) = &share.share_v1 else {
                 return Err(
                     "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
@@ -248,8 +250,8 @@ impl From<&str> for BiometricValidationError {
 ///
 /// ```ignore
 /// let package = orb_pcp::Builder::timestamp(unix_seconds)
-///     .info(&info)
-///     .user_public_key(&user_public_key)
+///     .info(info)
+///     .user_public_key(user_public_key)
 ///     .backend_keys(backend_keys)
 ///     .biometrics(biometrics)
 ///     .rng(rand::rngs::OsRng)
@@ -260,7 +262,7 @@ impl From<&str> for BiometricValidationError {
 #[derive(bon::Builder)]
 #[builder(start_fn = timestamp)]
 #[builder(finish_fn = signer)]
-pub struct Builder<'a, Rng, DigestSigner, SignError, SealError>
+pub struct Builder<Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
     DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
@@ -278,13 +280,13 @@ where
     /// Written as `info.json` as given, except for the builder-owned salts,
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
     /// fields are omitted.
-    info: &'a v1::Info,
+    info: v1::Info,
     /// Raw 32-byte Curve25519 recipient public key used to seal all three tiers.
-    user_public_key: &'a [u8; 32],
+    user_public_key: [u8; 32],
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
-    backend_keys: payload::BackendKeys<'a>,
+    backend_keys: payload::BackendKeys,
     /// Includes the supplied biometric payloads or redacts them and their image IDs.
-    biometrics: BiometricPolicy<'a>,
+    biometrics: BiometricPolicy,
     /// Check completeness of a supplied Iris group; the group itself is optional.
     /// Defaults to true. Disabling strictness is only for backward compatibility
     /// with old PCP values that may omit records or versions within that group.
@@ -292,14 +294,14 @@ where
     strict: bool,
     /// Written as binary `migration.pb` after `info.json` and hashed in
     /// `hashes.json`. Set by TEE migrations.
-    migration: Option<&'a v1::Migration>,
+    migration: Option<v1::Migration>,
     /// Cryptographically secure randomness for metadata salts and Hyrax blinding seeds.
     /// The sealer manages its own encryption randomness.
     rng: Rng,
 }
 
-impl<'a, Rng, DigestSigner, SignError, SealError>
-    Builder<'a, Rng, DigestSigner, SignError, SealError>
+impl<Rng, DigestSigner, SignError, SealError>
+    Builder<Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
     DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
@@ -359,7 +361,7 @@ where
         let backend_keys_json = payload::backend_keys(&self.backend_keys)?;
         let mut hashes =
             vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
-        let migration_pb = self.migration.map(Message::encode_to_vec);
+        let migration_pb = self.migration.as_ref().map(Message::encode_to_vec);
 
         if let Some(migration_pb) = &migration_pb {
             hashes.push(("migration.pb".to_owned(), sha256(migration_pb)));
@@ -377,7 +379,7 @@ where
         let tier1 = seal_tier(
             &empty,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier1.tar.gz",
             seal,
         )?;
@@ -385,7 +387,7 @@ where
         let tier2 = seal_tier(
             &empty,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier2.tar.gz",
             seal,
         )?;
@@ -419,7 +421,7 @@ where
         let tier0 = seal_tier(
             &tier0,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier0.tar.gz",
             seal,
         )?;
@@ -452,37 +454,44 @@ where
             archive::encode_inner(self.timestamp as u64, images, &mut self.rng)?;
 
         archives.iris =
-            Zeroizing::new(seal(&archives.iris, self.backend_keys.iris.public_key)?);
+            Zeroizing::new(seal(&archives.iris, &self.backend_keys.iris.public_key)?);
 
         archives.normalized_iris = Zeroizing::new(seal(
             &archives.normalized_iris,
-            self.backend_keys.normalized_iris.public_key,
+            &self.backend_keys.normalized_iris.public_key,
         )?);
 
         archives.face =
-            Zeroizing::new(seal(&archives.face, self.backend_keys.face.public_key)?);
+            Zeroizing::new(seal(&archives.face, &self.backend_keys.face.public_key)?);
 
         archives.fraud = archives
             .fraud
             .as_deref()
-            .map(|tar| seal(tar, self.backend_keys.face.public_key).map(Zeroizing::new))
+            .map(|tar| {
+                seal(tar, &self.backend_keys.face.public_key).map(Zeroizing::new)
+            })
             .transpose()?;
 
         archives.face_ir_and_thermal = Zeroizing::new(seal(
             &archives.face_ir_and_thermal,
-            self.backend_keys.tier2.public_key,
+            &self.backend_keys.tier2.public_key,
         )?);
 
         let face_embeddings = payload::face_embeddings(face_embeddings)?;
 
         let daugman = iris
             .as_ref()
-            .map(|i| payload::encode_daugman(i.iris_codes, i.iris_code_shares))
+            .map(|i| {
+                payload::encode_daugman(
+                    i.iris_codes.as_ref(),
+                    i.iris_code_shares.each_ref().map(Option::as_ref),
+                )
+            })
             .transpose()?;
 
-        let di = di
-            .as_ref()
-            .map(|di| payload::encode_di(di.di_embeddings, di.di_embedding_shares));
+        let di = di.as_ref().map(|di| {
+            payload::encode_di(&di.di_embeddings, di.di_embedding_shares.each_ref())
+        });
 
         for (name, bytes) in [
             ("face_embeddings.json", Some(face_embeddings.as_slice())),
@@ -535,7 +544,7 @@ where
             }
         };
 
-        metadata::encode(self.info, images, &mut self.rng)
+        metadata::encode(std::mem::take(&mut self.info), images, &mut self.rng)
     }
 }
 
@@ -577,7 +586,7 @@ impl Prepared {
     }
 }
 
-fn multiframe_ids(eye: &archive::IrisEye<'_>) -> Vec<String> {
+fn multiframe_ids(eye: &archive::IrisEye) -> Vec<String> {
     eye.multiframe
         .iter()
         .map(|frame| frame.image_id.to_string())
