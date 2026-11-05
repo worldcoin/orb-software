@@ -320,7 +320,8 @@ mod inner_archives {
         let mut rng = StdRng::seed_from_u64(7);
         let mut primary_rng = rng.clone();
         let primary =
-            archive::encode_inner(123, &images(vec![], vec![]), &mut primary_rng).unwrap();
+            archive::encode_inner(123, &images(vec![], vec![]), &mut primary_rng)
+                .unwrap();
         let encoded = archive::encode_inner(
             123,
             &images(vec![extra_left], vec![extra_right]),

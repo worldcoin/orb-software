@@ -202,8 +202,8 @@ pub fn run() -> Result<()> {
             let mut calls = 0;
 
             let package = pcp::Builder::timestamp(TIMESTAMP)
-                .info(&info)
-                .user_public_key(&user.public_key)
+                .info(info.clone())
+                .user_public_key(user.public_key)
                 .backend_keys(backend_keys)
                 .biometrics(biometrics)
                 .rng(&mut OsRng)
@@ -250,10 +250,10 @@ fn primary(png: &[u8], data: &[u8]) -> pcp::PrimaryIrisFrame {
     }
 }
 
-fn backend_key<'a>(pair: &'a KeyPair, encrypted: &'a str) -> pcp::BackendKey<'a> {
+fn backend_key(pair: &KeyPair, encrypted: &str) -> pcp::BackendKey {
     pcp::BackendKey {
-        public_key: &pair.public_key,
-        encrypted_private_key: encrypted,
+        public_key: pair.public_key,
+        encrypted_private_key: encrypted.to_owned(),
     }
 }
 

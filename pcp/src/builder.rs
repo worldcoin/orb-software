@@ -250,8 +250,8 @@ impl From<&str> for BiometricValidationError {
 ///
 /// ```ignore
 /// let package = orb_pcp::Builder::timestamp(unix_seconds)
-///     .info(&info)
-///     .user_public_key(&user_public_key)
+///     .info(info)
+///     .user_public_key(user_public_key)
 ///     .backend_keys(backend_keys)
 ///     .biometrics(biometrics)
 ///     .rng(rand::rngs::OsRng)
@@ -262,7 +262,7 @@ impl From<&str> for BiometricValidationError {
 #[derive(bon::Builder)]
 #[builder(start_fn = timestamp)]
 #[builder(finish_fn = signer)]
-pub struct Builder<'a, Rng, DigestSigner, SignError, SealError>
+pub struct Builder<Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
     DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
@@ -280,11 +280,11 @@ where
     /// Written as `info.json` as given, except for the builder-owned salts,
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
     /// fields are omitted.
-    info: &'a v1::Info,
+    info: v1::Info,
     /// Raw 32-byte Curve25519 recipient public key used to seal all three tiers.
-    user_public_key: &'a [u8; 32],
+    user_public_key: [u8; 32],
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
-    backend_keys: payload::BackendKeys<'a>,
+    backend_keys: payload::BackendKeys,
     /// Includes the supplied biometric payloads or redacts them and their image IDs.
     biometrics: BiometricPolicy,
     /// Check completeness of a supplied Iris group; the group itself is optional.
@@ -294,14 +294,14 @@ where
     strict: bool,
     /// Written as binary `migration.pb` after `info.json` and hashed in
     /// `hashes.json`. Set by TEE migrations.
-    migration: Option<&'a v1::Migration>,
+    migration: Option<v1::Migration>,
     /// Cryptographically secure randomness for metadata salts and Hyrax blinding seeds.
     /// The sealer manages its own encryption randomness.
     rng: Rng,
 }
 
-impl<'a, Rng, DigestSigner, SignError, SealError>
-    Builder<'a, Rng, DigestSigner, SignError, SealError>
+impl<Rng, DigestSigner, SignError, SealError>
+    Builder<Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
     DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
@@ -361,7 +361,7 @@ where
         let backend_keys_json = payload::backend_keys(&self.backend_keys)?;
         let mut hashes =
             vec![("backend_keys.json".to_owned(), sha256(&backend_keys_json))];
-        let migration_pb = self.migration.map(Message::encode_to_vec);
+        let migration_pb = self.migration.as_ref().map(Message::encode_to_vec);
 
         if let Some(migration_pb) = &migration_pb {
             hashes.push(("migration.pb".to_owned(), sha256(migration_pb)));
@@ -379,7 +379,7 @@ where
         let tier1 = seal_tier(
             &empty,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier1.tar.gz",
             seal,
         )?;
@@ -387,7 +387,7 @@ where
         let tier2 = seal_tier(
             &empty,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier2.tar.gz",
             seal,
         )?;
@@ -421,7 +421,7 @@ where
         let tier0 = seal_tier(
             &tier0,
             self.timestamp,
-            self.user_public_key,
+            &self.user_public_key,
             "tier0.tar.gz",
             seal,
         )?;
@@ -454,25 +454,27 @@ where
             archive::encode_inner(self.timestamp as u64, images, &mut self.rng)?;
 
         archives.iris =
-            Zeroizing::new(seal(&archives.iris, self.backend_keys.iris.public_key)?);
+            Zeroizing::new(seal(&archives.iris, &self.backend_keys.iris.public_key)?);
 
         archives.normalized_iris = Zeroizing::new(seal(
             &archives.normalized_iris,
-            self.backend_keys.normalized_iris.public_key,
+            &self.backend_keys.normalized_iris.public_key,
         )?);
 
         archives.face =
-            Zeroizing::new(seal(&archives.face, self.backend_keys.face.public_key)?);
+            Zeroizing::new(seal(&archives.face, &self.backend_keys.face.public_key)?);
 
         archives.fraud = archives
             .fraud
             .as_deref()
-            .map(|tar| seal(tar, self.backend_keys.face.public_key).map(Zeroizing::new))
+            .map(|tar| {
+                seal(tar, &self.backend_keys.face.public_key).map(Zeroizing::new)
+            })
             .transpose()?;
 
         archives.face_ir_and_thermal = Zeroizing::new(seal(
             &archives.face_ir_and_thermal,
-            self.backend_keys.tier2.public_key,
+            &self.backend_keys.tier2.public_key,
         )?);
 
         let face_embeddings = payload::face_embeddings(face_embeddings)?;
@@ -487,14 +489,9 @@ where
             })
             .transpose()?;
 
-        let di = di
-            .as_ref()
-            .map(|di| {
-                payload::encode_di(
-                    &di.di_embeddings,
-                    di.di_embedding_shares.each_ref(),
-                )
-            });
+        let di = di.as_ref().map(|di| {
+            payload::encode_di(&di.di_embeddings, di.di_embedding_shares.each_ref())
+        });
 
         for (name, bytes) in [
             ("face_embeddings.json", Some(face_embeddings.as_slice())),
@@ -547,7 +544,7 @@ where
             }
         };
 
-        metadata::encode(self.info, images, &mut self.rng)
+        metadata::encode(std::mem::take(&mut self.info), images, &mut self.rng)
     }
 }
 

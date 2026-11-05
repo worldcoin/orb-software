@@ -232,7 +232,10 @@ pub(crate) fn encode_inner(
     )?;
     let face = encode_archive(
         timestamp,
-        [("thumbnail.png", images.thumbnail_png.as_deref().unwrap_or_default())],
+        [(
+            "thumbnail.png",
+            images.thumbnail_png.as_deref().unwrap_or_default(),
+        )],
         &mut hashes,
     )?;
     let fraud = images
@@ -291,7 +294,10 @@ fn normalized_pair<'a>(
 ) -> Result<[NormalizedFile<'a>; 2], InnerArchiveError> {
     let suffix = if resized { "_resized" } else { "" };
     let (image, mask) = if resized {
-        (frame.image_resized.as_slice(), frame.mask_resized.as_slice())
+        (
+            frame.image_resized.as_slice(),
+            frame.mask_resized.as_slice(),
+        )
     } else {
         (frame.image.as_slice(), frame.mask.as_slice())
     };

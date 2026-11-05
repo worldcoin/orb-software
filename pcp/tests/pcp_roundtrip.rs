@@ -138,8 +138,8 @@ fn round_trip(filename: &str) -> Result<()> {
     }
 
     let backend = |i: usize| pcp::BackendKey {
-        public_key: &decoded_keys[i].0,
-        encrypted_private_key: decoded_keys[i].1,
+        public_key: decoded_keys[i].0,
+        encrypted_private_key: decoded_keys[i].1.to_owned(),
     };
 
     let backend_keys = pcp::BackendKeys::face(backend(0))
@@ -151,8 +151,8 @@ fn round_trip(filename: &str) -> Result<()> {
 
     // Act
     let rebuilt = pcp::Builder::timestamp(timestamp)
-        .info(&info)
-        .user_public_key(&[0; 32]) // Diagnostics do not encrypt the output.
+        .info(info)
+        .user_public_key([0; 32]) // Diagnostics do not encrypt the output.
         .backend_keys(backend_keys)
         .biometrics(pcp::BiometricPolicy::Included(biometrics))
         .rng(&mut OsRng)

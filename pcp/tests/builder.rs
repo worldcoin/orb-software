@@ -38,10 +38,10 @@ fn capture_info(device_public_key: Option<&str>) -> v1::Info {
     }
 }
 
-fn backend_keys(key: &[u8; 32]) -> BackendKeys<'_> {
+fn backend_keys(key: &[u8; 32]) -> BackendKeys {
     let backend = || BackendKey {
-        public_key: key,
-        encrypted_private_key: "synthetic-envelope",
+        public_key: *key,
+        encrypted_private_key: "synthetic-envelope".to_owned(),
     };
     BackendKeys::face(backend())
         .iris(backend())
@@ -288,8 +288,8 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
     for device in [None, Some("device"), Some("")] {
         let info = capture_info(device);
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
@@ -341,8 +341,8 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
 fn invalid_user_key_fails_before_metadata_randomness() {
     let info = capture_info(Some("device"));
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&[0; 32])
+        .info(info)
+        .user_public_key([0; 32])
         .backend_keys(backend_keys(&[0; 32]))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
@@ -362,8 +362,8 @@ fn randomness_failure_returns_no_package_or_signature() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(Some("device"));
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
@@ -382,8 +382,8 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
     let info = capture_info(Some("device"));
     let mut calls = 0;
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(rand::rngs::OsRng)
@@ -415,11 +415,11 @@ fn migration_pb_follows_info_and_is_hashed() {
         signing_key_id: Some("synthetic-signing-key".into()),
     };
     let output = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
-        .migration(&migration)
+        .migration(migration.clone())
         .rng(rand::rngs::OsRng)
         .sealer(support::seal)
         .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
@@ -479,8 +479,8 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
 
         // Act
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Included(biometrics))
             .rng(rand::rngs::OsRng)
@@ -604,8 +604,8 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         .di(di)
         .face_embeddings(face_embeddings.into());
     let output = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Included(biometrics))
         .rng(rand::rngs::OsRng)
@@ -690,8 +690,8 @@ mod diagnostics {
             let info = capture_info(device);
             let mut calls = 0;
             let output: pcp::DiagnosticPackage = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&[0; 32])
+                .info(info)
+                .user_public_key([0; 32])
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Redacted)
                 .rng(rand::rngs::OsRng)
@@ -750,8 +750,8 @@ mod diagnostics {
                 .di(di)
                 .face_embeddings(Vec::new());
             let output = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&[0; 32])
+                .info(info)
+                .user_public_key([0; 32])
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .rng(rand::rngs::OsRng)
@@ -791,8 +791,8 @@ mod diagnostics {
         let pair = sealedbox::Keypair::generate().unwrap();
         let info = capture_info(Some("device"));
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
@@ -843,14 +843,15 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
             let iris = Iris::codes(codes.cloned())
                 .shares(shares.map(|share| share.cloned()))
                 .unwrap();
-            let biometrics =
-                Biometrics::images(images()).iris(iris).face_embeddings(Vec::new());
+            let biometrics = Biometrics::images(images())
+                .iris(iris)
+                .face_embeddings(Vec::new());
             let mut signed = false;
 
             // Act
             let result = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&pair.public_key)
+                .info(info.clone())
+                .user_public_key(pair.public_key)
                 .backend_keys(backend_keys(&pair.public_key))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)
@@ -943,11 +944,12 @@ fn missing_iris_versions_require_compatibility_mode() {
             let iris = Iris::codes(Some(codes.clone()))
                 .shares(shares.clone().map(Some))
                 .expect("missing versions must be accepted by the constructor");
-            let biometrics =
-                Biometrics::images(images()).iris(iris).face_embeddings(Vec::new());
+            let biometrics = Biometrics::images(images())
+                .iris(iris)
+                .face_embeddings(Vec::new());
             let result = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&pair.public_key)
+                .info(info.clone())
+                .user_public_key(pair.public_key)
                 .backend_keys(backend_keys(&pair.public_key))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)

@@ -49,7 +49,7 @@ own crate; `orb-pcp` has no normal dependency on Alkali.
   required by default. Use `.strict(false)` only for compatibility with older
   PCPs missing these values. Supplied data and version consistency are still
   validated.
-- For TEE migrations, supply `.migration(&migration)` before `.signer(...)`.
+- For TEE migrations, supply `.migration(migration)` before `.signer(...)`.
 
 See the example for complete input construction and the API documentation for
 validation rules and package layout.
