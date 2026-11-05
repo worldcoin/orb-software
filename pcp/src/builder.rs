@@ -11,9 +11,11 @@ use crate::{archive, manifest, metadata, payload};
 use manifest::sha256;
 
 /// Whether biometric files, their hashes and the image IDs are included.
-pub enum BiometricPolicy<'a> {
+// Keep biometric values inline to avoid an extra allocation per package.
+#[allow(clippy::large_enum_variant)]
+pub enum BiometricPolicy {
     Redacted,
-    Included(Biometrics<'a>),
+    Included(Biometrics),
 }
 
 /// Accepted messages are written as given. Hyrax commitments are generated from the
@@ -30,29 +32,29 @@ pub enum BiometricPolicy<'a> {
 #[derive(bon::Builder)]
 #[builder(start_fn = images)]
 #[builder(finish_fn = face_embeddings)]
-pub struct Biometrics<'a> {
+pub struct Biometrics {
     #[builder(start_fn)]
-    images: &'a archive::PackageImages,
+    images: archive::PackageImages,
     #[builder(finish_fn)]
-    face_embeddings: &'a [v1::FaceEmbedding],
-    iris: Option<Iris<'a>>,
-    di: Option<Di<'a>>,
+    face_embeddings: Vec<v1::FaceEmbedding>,
+    iris: Option<Iris>,
+    di: Option<Di>,
 }
 
-pub struct Iris<'a> {
-    iris_codes: Option<&'a v1::IrisCodes>,
-    iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
+pub struct Iris {
+    iris_codes: Option<v1::IrisCodes>,
+    iris_code_shares: [Option<v1::IrisCodeShares>; 3],
 }
 
 #[bon::bon]
-impl<'a> Iris<'a> {
+impl Iris {
     #[builder(start_fn = codes)]
     #[builder(finish_fn = shares)]
     pub fn new(
-        #[builder(start_fn)] iris_codes: Option<&'a v1::IrisCodes>,
-        #[builder(finish_fn)] iris_code_shares: [Option<&'a v1::IrisCodeShares>; 3],
+        #[builder(start_fn)] iris_codes: Option<v1::IrisCodes>,
+        #[builder(finish_fn)] iris_code_shares: [Option<v1::IrisCodeShares>; 3],
     ) -> Result<Self, BiometricValidationError> {
-        if let Some(codes) = iris_codes {
+        if let Some(codes) = &iris_codes {
             let valid = [
                 &codes.left_iris_code,
                 &codes.right_iris_code,
@@ -83,7 +85,7 @@ impl<'a> Iris<'a> {
                 );
             }
 
-            if let Some(codes) = iris_codes
+            if let Some(codes) = &iris_codes
                 && let (Some(code_version), Some(share_version)) =
                     (&codes.iris_version, &share.iris_version)
                 && share_version != code_version
@@ -101,7 +103,7 @@ impl<'a> Iris<'a> {
     }
 
     pub(crate) fn validate(&self) -> Result<(), BiometricValidationError> {
-        let Some(codes) = self.iris_codes else {
+        let Some(codes) = &self.iris_codes else {
             return Err("Iris codes are missing.".into());
         };
 
@@ -127,18 +129,18 @@ impl<'a> Iris<'a> {
     }
 }
 
-pub struct Di<'a> {
-    di_embeddings: &'a v1::DiIrisEmbeddings,
-    di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+pub struct Di {
+    di_embeddings: v1::DiIrisEmbeddings,
+    di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
 }
 
 #[bon::bon]
-impl<'a> Di<'a> {
+impl Di {
     #[builder(start_fn = embeddings)]
     #[builder(finish_fn = shares)]
     pub fn new(
-        #[builder(start_fn)] di_embeddings: &'a v1::DiIrisEmbeddings,
-        #[builder(finish_fn)] di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+        #[builder(start_fn)] di_embeddings: v1::DiIrisEmbeddings,
+        #[builder(finish_fn)] di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -147,7 +149,7 @@ impl<'a> Di<'a> {
             );
         };
 
-        for share in di_embedding_shares {
+        for share in &di_embedding_shares {
             let Some(share) = &share.share_v1 else {
                 return Err(
                     "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
@@ -284,7 +286,7 @@ where
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
     backend_keys: payload::BackendKeys<'a>,
     /// Includes the supplied biometric payloads or redacts them and their image IDs.
-    biometrics: BiometricPolicy<'a>,
+    biometrics: BiometricPolicy,
     /// Check completeness of a supplied Iris group; the group itself is optional.
     /// Defaults to true. Disabling strictness is only for backward compatibility
     /// with old PCP values that may omit records or versions within that group.
@@ -477,12 +479,22 @@ where
 
         let daugman = iris
             .as_ref()
-            .map(|i| payload::encode_daugman(i.iris_codes, i.iris_code_shares))
+            .map(|i| {
+                payload::encode_daugman(
+                    i.iris_codes.as_ref(),
+                    i.iris_code_shares.each_ref().map(Option::as_ref),
+                )
+            })
             .transpose()?;
 
         let di = di
             .as_ref()
-            .map(|di| payload::encode_di(di.di_embeddings, di.di_embedding_shares));
+            .map(|di| {
+                payload::encode_di(
+                    &di.di_embeddings,
+                    di.di_embedding_shares.each_ref(),
+                )
+            });
 
         for (name, bytes) in [
             ("face_embeddings.json", Some(face_embeddings.as_slice())),

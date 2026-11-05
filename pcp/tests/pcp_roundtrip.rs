@@ -102,22 +102,16 @@ fn round_trip(filename: &str) -> Result<()> {
         )?);
     }
 
-    let iris = pcp::Iris::codes(Some(&codes)).shares([
-        Some(&iris_shares[0]),
-        Some(&iris_shares[1]),
-        Some(&iris_shares[2]),
-    ])?;
+    let iris_shares: [v1::IrisCodeShares; 3] = iris_shares.try_into().unwrap();
+    let di_shares: [v1::DiIrisEmbeddingShares; 3] = di_shares.try_into().unwrap();
 
-    let di = pcp::Di::embeddings(&embeddings).shares([
-        &di_shares[0],
-        &di_shares[1],
-        &di_shares[2],
-    ])?;
+    let iris = pcp::Iris::codes(Some(codes)).shares(iris_shares.map(Some))?;
+    let di = pcp::Di::embeddings(embeddings).shares(di_shares)?;
 
-    let biometrics = pcp::Biometrics::images(&images)
+    let biometrics = pcp::Biometrics::images(images)
         .iris(iris)
         .di(di)
-        .face_embeddings(&face_embeddings);
+        .face_embeddings(face_embeddings);
 
     let keys: v1::BackendKeys = serde_json::from_slice(&original["backend_keys.json"])?;
     let mut decoded_keys = Vec::new();

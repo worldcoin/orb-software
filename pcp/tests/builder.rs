@@ -144,8 +144,8 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
 }
 
 fn assert_iris_validation(codes: &v1::IrisCodes, shares: &[v1::IrisCodeShares; 3]) {
-    assert!(Iris::codes(Some(codes))
-        .shares(shares.each_ref().map(Some))
+    assert!(Iris::codes(Some(codes.clone()))
+        .shares(shares.clone().map(Some))
         .is_err());
 }
 
@@ -192,7 +192,7 @@ fn di_rejects_missing_embedding_or_share_records() {
     embeddings.embedding_v1 = None;
 
     // Act
-    let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+    let result = Di::embeddings(embeddings).shares(shares);
 
     // Assert
     assert!(result.is_err(), "accepted missing embedding record");
@@ -203,7 +203,7 @@ fn di_rejects_missing_embedding_or_share_records() {
         shares[recipient].share_v1 = None;
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(
@@ -235,7 +235,7 @@ fn di_rejects_mismatched_model_versions() {
             "different-model".into();
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(result.is_err(), "share {recipient} should be rejected");
@@ -254,7 +254,7 @@ fn di_rejects_mismatched_embedding_versions() {
             .embedding_version = "different-embedding".into();
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(result.is_err(), "share {recipient} should be rejected");
@@ -463,19 +463,19 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
         let iris_shares = iris_code_shares();
         let (embeddings, di_shares) = di_biometrics();
         let iris = iris_present.then(|| {
-            Iris::codes(Some(&codes))
-                .shares(iris_shares.each_ref().map(Some))
+            Iris::codes(Some(codes.clone()))
+                .shares(iris_shares.clone().map(Some))
                 .unwrap()
         });
         let di = di_present.then(|| {
-            Di::embeddings(&embeddings)
-                .shares(di_shares.each_ref())
+            Di::embeddings(embeddings.clone())
+                .shares(di_shares.clone())
                 .unwrap()
         });
-        let biometrics = Biometrics::images(&images)
+        let biometrics = Biometrics::images(images)
             .maybe_iris(iris)
             .maybe_di(di)
-            .face_embeddings(&[]);
+            .face_embeddings(Vec::new());
 
         // Act
         let output = Builder::timestamp(1)
@@ -593,16 +593,16 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     let (di_embeddings, di_embedding_shares) = di_biometrics();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
-    let iris = Iris::codes(Some(&iris_codes))
-        .shares(iris_code_shares.each_ref().map(Some))
+    let iris = Iris::codes(Some(iris_codes))
+        .shares(iris_code_shares.map(Some))
         .unwrap();
-    let di = Di::embeddings(&di_embeddings)
-        .shares(di_embedding_shares.each_ref())
+    let di = Di::embeddings(di_embeddings)
+        .shares(di_embedding_shares)
         .unwrap();
-    let biometrics = Biometrics::images(&images)
+    let biometrics = Biometrics::images(images)
         .iris(iris)
         .di(di)
-        .face_embeddings(&face_embeddings);
+        .face_embeddings(face_embeddings.into());
     let output = Builder::timestamp(1)
         .info(&info)
         .user_public_key(&pair.public_key)
@@ -721,34 +721,34 @@ mod diagnostics {
 
     #[test]
     fn diagnostic_included_inner_archives_are_plaintext() {
-        let mut images = images();
-        images.face_ir_png = Some(b"synthetic-face-ir".to_vec());
-        images.thermal_png = Some(b"synthetic-thermal".to_vec());
-        images.fraud = Some(pcp::FraudImages {
-            scc_rgb_png: Some(b"synthetic-scc".to_vec()),
-            left_rgb_png: Some(b"synthetic-left".to_vec()),
-            right_rgb_png: Some(b"synthetic-right".to_vec()),
-            left_thermal_png: None,
-            right_thermal_png: None,
-            scc_depth_png: None,
-            left_depth_png: None,
-            right_depth_png: None,
-        });
-        let iris_codes = iris_codes();
-        let iris_code_shares = iris_code_shares();
-        let (di_embeddings, di_embedding_shares) = di_biometrics();
         for device in [None, Some("device")] {
+            let mut images = images();
+            images.face_ir_png = Some(b"synthetic-face-ir".to_vec());
+            images.thermal_png = Some(b"synthetic-thermal".to_vec());
+            images.fraud = Some(pcp::FraudImages {
+                scc_rgb_png: Some(b"synthetic-scc".to_vec()),
+                left_rgb_png: Some(b"synthetic-left".to_vec()),
+                right_rgb_png: Some(b"synthetic-right".to_vec()),
+                left_thermal_png: None,
+                right_thermal_png: None,
+                scc_depth_png: None,
+                left_depth_png: None,
+                right_depth_png: None,
+            });
+            let iris_codes = iris_codes();
+            let iris_code_shares = iris_code_shares();
+            let (di_embeddings, di_embedding_shares) = di_biometrics();
             let info = capture_info(device);
-            let iris = Iris::codes(Some(&iris_codes))
-                .shares(iris_code_shares.each_ref().map(Some))
+            let iris = Iris::codes(Some(iris_codes))
+                .shares(iris_code_shares.map(Some))
                 .unwrap();
-            let di = Di::embeddings(&di_embeddings)
-                .shares(di_embedding_shares.each_ref())
+            let di = Di::embeddings(di_embeddings)
+                .shares(di_embedding_shares)
                 .unwrap();
-            let biometrics = Biometrics::images(&images)
+            let biometrics = Biometrics::images(images)
                 .iris(iris)
                 .di(di)
-                .face_embeddings(&[]);
+                .face_embeddings(Vec::new());
             let output = Builder::timestamp(1)
                 .info(&info)
                 .user_public_key(&[0; 32])
@@ -815,9 +815,9 @@ fn iris_constructor_validates_shares_without_codes() {
     invalid_shares[1].left_iris_code_shares = None;
 
     // Act
-    let valid = Iris::codes(None).shares(shares.each_ref().map(Some));
-    let invalid = Iris::codes(None).shares(invalid_shares.each_ref().map(Some));
-    let absent = Iris::codes(None).shares([None; 3]);
+    let valid = Iris::codes(None).shares(shares.map(Some));
+    let invalid = Iris::codes(None).shares(invalid_shares.map(Some));
+    let absent = Iris::codes(None).shares([None, None, None]);
 
     // Assert
     assert!(valid.is_ok());
@@ -830,7 +830,6 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
     // Arrange
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
-    let images = images();
     let codes = iris_codes();
     let shares = iris_code_shares();
 
@@ -841,9 +840,11 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
 
         for strict in [None, Some(true), Some(false)] {
             // Arrange
-            let iris = Iris::codes(codes).shares(shares).unwrap();
+            let iris = Iris::codes(codes.cloned())
+                .shares(shares.map(|share| share.cloned()))
+                .unwrap();
             let biometrics =
-                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+                Biometrics::images(images()).iris(iris).face_embeddings(Vec::new());
             let mut signed = false;
 
             // Act
@@ -917,7 +918,6 @@ fn missing_iris_versions_require_compatibility_mode() {
     // Arrange
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
-    let images = images();
 
     for missing in 0..8 {
         let mut codes = iris_codes();
@@ -940,11 +940,11 @@ fn missing_iris_versions_require_compatibility_mode() {
             let mut signed = false;
 
             // Act
-            let iris = Iris::codes(Some(&codes))
-                .shares(shares.each_ref().map(Some))
+            let iris = Iris::codes(Some(codes.clone()))
+                .shares(shares.clone().map(Some))
                 .expect("missing versions must be accepted by the constructor");
             let biometrics =
-                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+                Biometrics::images(images()).iris(iris).face_embeddings(Vec::new());
             let result = Builder::timestamp(1)
                 .info(&info)
                 .user_public_key(&pair.public_key)

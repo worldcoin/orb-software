@@ -40,8 +40,7 @@ fn main() -> Result<()> {
     run()
 }
 
-/// Also run by the `prototype` integration test.
-pub fn run() -> Result<()> {
+fn images() -> Result<pcp::PackageImages> {
     let png = BASE64.decode(PNG_BASE64.as_bytes())?;
     let normalized = [0x5a; 512];
     let [left_id, right_id] =
@@ -56,7 +55,7 @@ pub fn run() -> Result<()> {
         ir_png: png.clone(),
         normalized: None,
     }];
-    let images = pcp::PackageImages {
+    Ok(pcp::PackageImages {
         left: pcp::IrisEye {
             primary: primary(&png, &normalized),
             multiframe: extra_left,
@@ -78,7 +77,11 @@ pub fn run() -> Result<()> {
             left_depth_png: Some(png.clone()),
             right_depth_png: Some(png),
         }),
-    };
+    })
+}
+
+/// Also run by the `prototype` integration test.
+pub fn run() -> Result<()> {
     let iris_codes = v1::IrisCodes {
         iris_version: Some("synthetic".into()),
         left_iris_code: Some("synthetic-left-iris".into()),
@@ -175,17 +178,17 @@ pub fn run() -> Result<()> {
             let biometrics = if redacted {
                 pcp::BiometricPolicy::Redacted
             } else {
-                let iris = Iris::codes(Some(&iris_codes))
-                    .shares(iris_code_shares.each_ref().map(Some))?;
+                let iris = Iris::codes(Some(iris_codes.clone()))
+                    .shares(iris_code_shares.clone().map(Some))?;
 
-                let di = Di::embeddings(&di_embeddings)
-                    .shares(di_embedding_shares.each_ref())?;
+                let di = Di::embeddings(di_embeddings.clone())
+                    .shares(di_embedding_shares.clone())?;
 
                 pcp::BiometricPolicy::Included(
-                    Biometrics::images(&images)
+                    Biometrics::images(images()?)
                         .iris(iris)
                         .di(di)
-                        .face_embeddings(&face_embeddings),
+                        .face_embeddings(face_embeddings.to_vec()),
                 )
             };
 
