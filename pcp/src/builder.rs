@@ -7,7 +7,7 @@ use orb_pcp_defs::{prost::Message, v1};
 use rand::{CryptoRng, RngCore};
 use zeroize::Zeroizing;
 
-use crate::{archive, crypto, manifest, metadata, payload};
+use crate::{archive, manifest, metadata, payload};
 use manifest::sha256;
 
 /// Whether biometric files, their hashes and the image IDs are included.
@@ -205,14 +205,20 @@ struct BuiltTiers {
     checksums: [[u8; 32]; 3],
 }
 
-type Sealer = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, crypto::SealingError>;
+/// Libsodium-compatible sealed-box encryption for PCP payloads
+/// (Curve25519, XSalsa20-Poly1305, and BLAKE2b nonce derivation).
+///
+/// Preserve the exact recipient bytes and generate fresh ephemeral keys for each
+/// call. Ciphertext includes the standard 48-byte overhead. The caller owns
+/// crypto initialization and must propagate failures exposed by its library.
+pub type Sealer<SealError> = fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, SealError>;
 
 #[derive(Debug, thiserror::Error)]
 #[error("invalid biometrics: {0}")]
 pub struct BiometricValidationError(pub String);
 
 #[derive(Debug, thiserror::Error)]
-pub enum BuildError<E> {
+pub enum BuildError<SignError, SealError> {
     #[error("metadata construction failed")]
     Metadata(#[from] metadata::MetadataError),
     #[error("inner archive construction failed")]
@@ -222,9 +228,9 @@ pub enum BuildError<E> {
     #[error("archive encoding failed")]
     Archive(#[from] archive::ArchiveError),
     #[error("encryption failed")]
-    Encryption(#[from] crypto::SealingError),
+    Encryption(#[source] SealError),
     #[error("manifest signing failed")]
-    Signing(#[from] manifest::SigningError<E>),
+    Signing(#[from] manifest::SigningError<SignError>),
     #[error(transparent)]
     InvalidBiometrics(#[from] BiometricValidationError),
 }
@@ -235,26 +241,52 @@ impl From<&str> for BiometricValidationError {
     }
 }
 
+/// Builds a PCP from caller-prepared inputs, a sealed-box function and a signer.
+///
+/// Supply whole seconds since the Unix epoch to [`Self::timestamp`], configure
+/// the inputs, then finish with `.signer(...)` and call [`Self::build`].
+/// Construction is synchronous; use a blocking worker in async applications.
+///
+/// Abbreviated example; input preparation and callback implementations are omitted.
+///
+/// ```ignore
+/// let package = orb_pcp::Builder::timestamp(unix_seconds)
+///     .info(&info)
+///     .user_public_key(&user_public_key)
+///     .backend_keys(backend_keys)
+///     .biometrics(biometrics)
+///     .rng(rand::rngs::OsRng)
+///     .sealer(seal)
+///     .signer(sign_digest)
+///     .build()?;
+/// ```
 #[derive(bon::Builder)]
 #[builder(start_fn = timestamp)]
 #[builder(finish_fn = signer)]
-pub struct Builder<'a, Rng, DigestSigner, E>
+pub struct Builder<'a, Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
-    DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+    DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
 {
-    /// Whole Unix seconds used for archive and gzip headers.
+    /// Whole seconds since the Unix epoch, used for archive and gzip headers.
     #[builder(start_fn)]
     timestamp: u32,
+    /// Signs the raw 32-byte SHA-256 digest of `hashes.json` once per build.
+    /// The returned signature bytes are stored unchanged in `hashes.sign`.
+    /// The caller owns signer initialization, retries and deadlines.
     #[builder(finish_fn)]
     digest_signer: DigestSigner,
+    /// Caller-owned PCP sealed-box implementation.
+    sealer: Sealer<SealError>,
     /// Written as `info.json` as given, except for the builder-owned salts,
     /// multiframe image ID lists and, under redaction, all image IDs. Absent
     /// fields are omitted.
     info: &'a v1::Info,
+    /// Raw 32-byte Curve25519 recipient public key used to seal all three tiers.
     user_public_key: &'a [u8; 32],
     /// Written to `backend_keys.json` and used to encrypt the inner archives.
     backend_keys: payload::BackendKeys<'a>,
+    /// Includes the supplied biometric payloads or redacts them and their image IDs.
     biometrics: BiometricPolicy<'a>,
     /// Check completeness of a supplied Iris group; the group itself is optional.
     /// Defaults to true. Disabling strictness is only for backward compatibility
@@ -264,21 +296,25 @@ where
     /// Written as binary `migration.pb` after `info.json` and hashed in
     /// `hashes.json`. Set by TEE migrations.
     migration: Option<&'a v1::Migration>,
+    /// Cryptographically secure randomness for metadata salts and Hyrax blinding seeds.
+    /// The sealer manages its own encryption randomness.
     rng: Rng,
 }
 
-impl<'a, Rng, DigestSigner, E> Builder<'a, Rng, DigestSigner, E>
+impl<'a, Rng, DigestSigner, SignError, SealError>
+    Builder<'a, Rng, DigestSigner, SignError, SealError>
 where
     Rng: RngCore + CryptoRng,
-    DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, E>,
+    DigestSigner: FnOnce(&[u8; 32]) -> Result<Vec<u8>, SignError>,
 {
     /// Builds the encrypted package, calling `sign_digest` once with the raw SHA-256
     /// digest of `hashes.json`. The signer owns its retry and deadline policy.
-    pub fn build(self) -> Result<Package, BuildError<E>> {
+    pub fn build(self) -> Result<Package, BuildError<SignError, SealError>> {
+        let seal = self.sealer;
         let BuiltTiers {
             tiers: [tier0, tier1, tier2],
             checksums: [tier0_checksum, tier1_checksum, tier2_checksum],
-        } = self.build_with_sealer(crypto::seal)?;
+        } = self.build_with_sealer(seal)?;
 
         Ok(Package {
             tier0,
@@ -293,7 +329,9 @@ where
     /// Builds the package like [`Self::build`] but skips inner and outer sealing, for
     /// local diagnostics. Never upload, publish or log the output.
     #[cfg(feature = "not-prod-diagnostics")]
-    pub fn build_unencrypted(self) -> Result<DiagnosticPackage, BuildError<E>> {
+    pub fn build_unencrypted(
+        self,
+    ) -> Result<DiagnosticPackage, BuildError<SignError, SealError>> {
         let BuiltTiers {
             tiers: [tier0, tier1, tier2],
             ..
@@ -306,7 +344,13 @@ where
         })
     }
 
-    fn build_with_sealer(mut self, seal: Sealer) -> Result<BuiltTiers, BuildError<E>> {
+    fn build_with_sealer(
+        mut self,
+        seal: Sealer<SealError>,
+    ) -> Result<BuiltTiers, BuildError<SignError, SealError>> {
+        let seal = &|plaintext: &[u8], recipient: &[u8; 32]| {
+            seal(plaintext, recipient).map_err(BuildError::Encryption)
+        };
         if self.strict
             && let BiometricPolicy::Included(Biometrics {
                 iris: Some(iris), ..
@@ -389,10 +433,13 @@ where
         })
     }
 
-    fn prepare_biometrics(
+    fn prepare_biometrics<Seal>(
         &mut self,
-        seal: Sealer,
-    ) -> Result<Option<Prepared>, BuildError<E>> {
+        seal: &Seal,
+    ) -> Result<Option<Prepared>, BuildError<SignError, SealError>>
+    where
+        Seal: Fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, BuildError<SignError, SealError>>,
+    {
         let BiometricPolicy::Included(biometrics) = &self.biometrics else {
             return Ok(None);
         };
@@ -512,15 +559,18 @@ where
     }
 }
 
-fn seal_tier<E>(
+fn seal_tier<SignError, SealError, Seal>(
     tar: &[u8],
     timestamp: u32,
     user_public_key: &[u8; 32],
     name: &str,
-    seal: Sealer,
-) -> Result<Vec<u8>, BuildError<E>> {
+    seal: &Seal,
+) -> Result<Vec<u8>, BuildError<SignError, SealError>>
+where
+    Seal: Fn(&[u8], &[u8; 32]) -> Result<Vec<u8>, BuildError<SignError, SealError>>,
+{
     let gzip = archive::compress(tar, timestamp as u64, name)?;
-    Ok(seal(&gzip, user_public_key)?)
+    seal(&gzip, user_public_key)
 }
 
 struct Prepared {

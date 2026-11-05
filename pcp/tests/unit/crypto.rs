@@ -1,5 +1,8 @@
+#[path = "../support/mod.rs"]
+mod support;
+
 mod sealed_boxes {
-    use crate::crypto::{self, SealingError};
+    use super::support::{self as crypto, SealingError};
     use alkali::{
         asymmetric::seal::{curve25519xsalsa20poly1305 as sealedbox, SealError},
         AlkaliError,
