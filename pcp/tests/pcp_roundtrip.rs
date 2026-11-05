@@ -162,6 +162,9 @@ fn round_trip(filename: &str) -> Result<()> {
         .backend_keys(backend_keys)
         .biometrics(pcp::BiometricPolicy::Included(biometrics))
         .rng(&mut OsRng)
+        .sealer(|_, _| -> Result<Vec<u8>, std::convert::Infallible> {
+            panic!("diagnostics must not invoke the sealer")
+        })
         .signer(|hash| {
             let signature: Signature = signer.sign_prehash(hash)?;
 

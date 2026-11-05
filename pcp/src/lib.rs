@@ -2,11 +2,12 @@
 //!
 //! [Builder::build] assembles, hashes, signs and encrypts caller-prepared inputs: encoded
 //! PNGs, the shared [v1] messages for metadata and biometric payloads, recipient
-//! keys and a callback signing the raw SHA-256 manifest digest. Construction is
-//! synchronous; call it from a blocking worker in async applications.
+//! keys, a sealed-box callback and a callback signing the raw SHA-256 manifest
+//! digest. Construction is synchronous; call it from a blocking worker in async applications.
 //! Zeroization of intermediate buffers is best-effort.
 //!
-//! Building requires protoc and libsodium discoverable through pkg-config.
+//! Building requires protoc. Callers supply and initialize the sealed-box
+//! implementation through [`Sealer`].
 
 #![forbid(unsafe_code)]
 
@@ -25,9 +26,9 @@ pub use archive::{
 pub use builder::DiagnosticPackage;
 pub use builder::{
     BiometricPolicy, BiometricValidationError, Biometrics, BuildError, Builder, Di,
-    Iris, Package,
+    Iris, Package, Sealer,
 };
-pub use crypto::{CommitmentError, SealingError};
+pub use crypto::CommitmentError;
 pub use manifest::{ManifestError, SigningError, PCP_VERSION};
 pub use metadata::MetadataError;
 /// The shared PCP schema used for `info.json`, the payload files and `migration.pb`.
