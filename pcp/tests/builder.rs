@@ -598,6 +598,7 @@ fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(biometrics)
             .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
             .signer(|_| Ok::<_, SignerError>(Vec::new()))
             .build()
             .unwrap();
