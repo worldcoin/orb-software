@@ -139,6 +139,7 @@ impl component::Error {
             DiskSync(..) => "component-disk-sync",
             MimeUnknown { .. } => "component-mime-unknown",
             Process(..) => "component-process",
+            InvalidComponentPath(..) => "component-invalid-path",
         }
     }
 }
