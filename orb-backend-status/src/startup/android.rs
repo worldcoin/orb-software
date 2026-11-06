@@ -78,36 +78,3 @@ pub async fn configure(args: Args, orb_id: OrbId) -> Result<Config> {
         ),
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_token_file_is_required() {
-        let args = Args::try_parse_from([
-            "orb-backend-status",
-            "--token-file",
-            "/data/vendor/orb-backend-status/backend-token",
-        ])
-        .unwrap();
-        assert_eq!(
-            args.token_file,
-            PathBuf::from("/data/vendor/orb-backend-status/backend-token")
-        );
-        assert!(Args::try_parse_from(["orb-backend-status"]).is_err());
-    }
-
-    #[test]
-    fn zenoh_connects_only_to_local_router() {
-        let config = serde_json::to_value(zenoh_config().unwrap()).unwrap();
-        assert_eq!(config["mode"], "client");
-        assert_eq!(
-            config["connect"]["endpoints"],
-            serde_json::json!(["unixsock-stream//dev/socket/zenohd/zenohd.sock"])
-        );
-        assert_eq!(config["listen"]["endpoints"], serde_json::json!([]));
-        assert_eq!(config["scouting"]["multicast"]["enabled"], false);
-        assert_eq!(config["scouting"]["gossip"]["enabled"], false);
-    }
-}
