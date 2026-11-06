@@ -35,3 +35,9 @@ testsuite/
 /pcp/tests/**
 !/pcp/tests/fixtures
 !/pcp/tests/fixtures/**
+
+# Include PCP component fixtures for provenance review.
+!/pcp-defs/rust/tests
+/pcp-defs/rust/tests/**
+!/pcp-defs/rust/tests/fixtures
+!/pcp-defs/rust/tests/fixtures/**
