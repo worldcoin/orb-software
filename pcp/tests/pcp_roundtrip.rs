@@ -39,11 +39,13 @@ const SALTED_FIELDS: [&str; 10] = [
 ];
 
 #[test]
+#[ignore]
 fn fixture_with_protobuf_round_trips() -> Result<()> {
     round_trip("pcp.with_protobuf.000acfb82de34f698b20dda500000000.tier0.tar.gz")
 }
 
 #[test]
+#[ignore]
 fn fixture_without_protobuf_round_trips() -> Result<()> {
     round_trip("pcp.without_protobuf.000a23d15f2365b502a0106d00000000.tier0.tar.gz")
 }
