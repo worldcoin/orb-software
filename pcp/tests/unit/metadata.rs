@@ -74,7 +74,7 @@ fn json(bytes: &[u8]) -> serde_json::Value {
 #[test]
 fn metadata_has_exact_sorted_bytes_and_salted_hash_coverage() {
     let mut rng = SaltRng::default();
-    let encoded = metadata::encode(&info(), included(), &mut rng).unwrap();
+    let encoded = metadata::encode(info(), included(), &mut rng).unwrap();
     let salt = "abababababababababababababababab";
     let expected = format!(concat!(
         "{{\"id_commitment\":\"commitment\",\"id_commitment_salt\":\"{s}\",",
@@ -119,9 +119,9 @@ fn metadata_has_exact_sorted_bytes_and_salted_hash_coverage() {
 
 #[test]
 fn redaction_clears_all_image_ids_without_changing_identity_or_hashes() {
-    let full = metadata::encode(&info(), included(), &mut SaltRng::default()).unwrap();
+    let full = metadata::encode(info(), included(), &mut SaltRng::default()).unwrap();
     let redacted =
-        metadata::encode(&info(), ImageIdPolicy::Redacted, &mut SaltRng::default())
+        metadata::encode(info(), ImageIdPolicy::Redacted, &mut SaltRng::default())
             .unwrap();
     let mut expected = json(&full.info_json);
     for key in [
@@ -150,7 +150,7 @@ fn absent_fields_are_omitted_without_salt_or_hash() {
         ..Default::default()
     };
     let mut rng = SaltRng::default();
-    let encoded = metadata::encode(&input, included(), &mut rng).unwrap();
+    let encoded = metadata::encode(input, included(), &mut rng).unwrap();
     assert_eq!(rng.calls, 1);
     assert_eq!(
         encoded.hashes.keys().copied().collect::<Vec<_>>(),
@@ -178,7 +178,7 @@ fn caller_salts_and_multiframe_lists_are_replaced_and_other_fields_kept() {
     input.left_ir_multiframe_image_ids = vec!["stale".into()];
     input.right_ir_multiframe_image_ids = vec!["stale".into()];
     let encoded =
-        metadata::encode(&input, included(), &mut SaltRng::default()).unwrap();
+        metadata::encode(input.clone(), included(), &mut SaltRng::default()).unwrap();
     let output: Info = serde_json::from_slice(&encoded.info_json).unwrap();
     assert_eq!(
         output.signup_id_salt.as_deref(),
@@ -218,7 +218,7 @@ fn device_key_presence_controls_value_salt_hash_and_randomness_together() {
         input.device_public_key = key.map(str::to_owned);
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let encoded =
-            metadata::encode(&input, ImageIdPolicy::Redacted, &mut rng).unwrap();
+            metadata::encode(input, ImageIdPolicy::Redacted, &mut rng).unwrap();
         let json = json(&encoded.info_json);
         assert_eq!(json.get("device_public_key").is_some(), key.is_some());
         assert_eq!(json.get("device_public_key").and_then(|v| v.as_str()), key);
@@ -258,7 +258,7 @@ fn strings_are_json_escaped_and_hashed_unchanged() {
     let mut input = info();
     input.signup_id = Some("\"\\\n\0é".into());
     let encoded =
-        metadata::encode(&input, ImageIdPolicy::Redacted, &mut SaltRng::default())
+        metadata::encode(input, ImageIdPolicy::Redacted, &mut SaltRng::default())
             .unwrap();
     let json = json(&encoded.info_json);
     assert_eq!(json["signup_id"], "\"\\\n\0é");
@@ -278,7 +278,7 @@ fn entropy_failure_at_any_field_returns_no_result_and_does_not_retry() {
             calls: 0,
             fail_at: Some(fail_at),
         };
-        let result = metadata::encode(&input, ImageIdPolicy::Redacted, &mut rng);
+        let result = metadata::encode(input.clone(), ImageIdPolicy::Redacted, &mut rng);
         assert!(matches!(
             result,
             Err(metadata::MetadataError::Randomness(_))
