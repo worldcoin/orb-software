@@ -41,15 +41,15 @@ own crate; `orb-pcp` has no normal dependency on Alkali.
 - Supply encoded images, recipient keys and metadata using the shared
   `orb_pcp::v1` types. Image encoding, quantization, secret sharing and key
   authorization belong to the caller.
-- Build `Biometrics` with `Biometrics::images(&images)`, optionally add `.iris(iris)`
-  and `.di(di)`, then finish with `.face_embeddings(&face_embeddings)`.
+- Build `Biometrics` with `Biometrics::images(images)`, optionally add `.iris(iris)`
+  and `.di(di)`, then finish with `.face_embeddings(face_embeddings)`.
 - Choose `BiometricPolicy::Included(biometrics)` or `Redacted`. Redaction omits
   biometrics and clears image IDs, while retaining identity metadata.
 - When supplying an Iris group, codes, all three shares, and their versions are
   required by default. Use `.strict(false)` only for compatibility with older
   PCPs missing these values. Supplied data and version consistency are still
   validated.
-- For TEE migrations, supply `.migration(&migration)` before `.signer(...)`.
+- For TEE migrations, supply `.migration(migration)` before `.signer(...)`.
 
 See the example for complete input construction and the API documentation for
 validation rules and package layout.

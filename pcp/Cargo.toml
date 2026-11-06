@@ -23,7 +23,7 @@ ring.workspace = true
 serde_json.workspace = true
 tar.workspace = true
 thiserror.workspace = true
-zeroize = "1"
+zeroize.workspace = true
 
 [dev-dependencies]
 alkali.workspace = true
