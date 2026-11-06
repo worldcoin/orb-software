@@ -5,7 +5,7 @@
 
 use orb_pcp_defs::{prost::Message, v1};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{archive, manifest, metadata, payload};
 use manifest::sha256;
@@ -191,8 +191,9 @@ pub struct Package {
 
 /// Plaintext gzip tiers for local diagnostics, including plaintext inner
 /// archives with biometrics, shares and Hyrax blinding factors. Never upload,
-/// publish or log them; the caller must clear these buffers.
+/// publish or log them. The buffers are zeroized on drop.
 #[cfg(feature = "not-prod-diagnostics")]
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct DiagnosticPackage {
     pub tier0: Vec<u8>,
     pub tier1: Vec<u8>,
@@ -397,8 +398,8 @@ where
 
         let info = self.encode_metadata()?;
 
-        for (name, hash) in info.hashes {
-            hashes.push((name.to_owned(), hash));
+        for (name, hash) in &info.hashes {
+            hashes.push(((*name).to_owned(), *hash));
         }
 
         let signed = manifest::encode_and_sign(
@@ -562,7 +563,9 @@ where
     seal(&gzip, user_public_key)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 struct Prepared {
+    #[zeroize(skip)]
     archives: archive::InnerArchives,
     face_embeddings: Vec<u8>,
     daugman: Option<payload::EncodedDaugman>,

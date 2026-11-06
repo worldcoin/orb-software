@@ -61,6 +61,7 @@ pub(crate) fn face_embeddings(
     sorted_json(serde_json::to_value(embeddings)?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDaugman {
     pub codes: Option<Vec<u8>>,
     pub shares: [Option<Vec<u8>>; 3],
@@ -99,6 +100,7 @@ pub(crate) fn backend_keys(keys: &BackendKeys) -> Result<Vec<u8>, serde_json::Er
     })?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDi {
     pub embeddings: Vec<u8>,
     pub shares: [Vec<u8>; 3],

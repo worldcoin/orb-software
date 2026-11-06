@@ -24,7 +24,20 @@ fn main() -> Result<()> {
     let descriptor_path =
         PathBuf::from(env::var("OUT_DIR").expect("cargo sets OUT_DIR"))
             .join("descriptor.bin");
-    prost_build::Config::new()
+    let mut config = prost_build::Config::new();
+    for message in [
+        "IrisCodes",
+        "IrisCodeShares",
+        "DiIrisEmbeddingV1",
+        "DiIrisEmbeddingShareV1",
+        "FaceEmbedding",
+    ] {
+        config.type_attribute(
+            format!(".pcp.v1.{message}"),
+            "#[derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop)]",
+        );
+    }
+    config
         .file_descriptor_set_path(&descriptor_path)
         .compile_protos(&proto_files, &[proto_root])?;
 
