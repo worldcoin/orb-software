@@ -15,7 +15,7 @@ use flate2::read::GzDecoder;
 use orb_pcp::{self as pcp, v1, Biometrics, Di, Iris};
 use orb_pcp_defs::{
     prost::Message,
-    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings},
+    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings, Orbit5DiIrisEmbeddingShares},
 };
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -120,6 +120,18 @@ pub fn run() -> Result<()> {
             right_mirror_share: vec![40 + i],
         }),
     });
+    let orbit5_di_embedding_shares =
+        [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
+            share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
+                model_version: "synthetic-model".into(),
+                shares_version: "synthetic-orbit5-sharing".into(),
+                embedding_version: "synthetic-embedding".into(),
+                left_share: vec![100 + i; 512],
+                left_mirror_share: vec![200 + i; 512],
+                right_share: vec![300 + i; 512],
+                right_mirror_share: vec![400 + i; 512],
+            }),
+        });
     let face_embeddings = [v1::FaceEmbedding {
         embedding: Some("synthetic-embedding".into()),
         embedding_type: Some("synthetic".into()),
@@ -179,6 +191,7 @@ pub fn run() -> Result<()> {
                     .shares(iris_code_shares.each_ref().map(Some))?;
 
                 let di = Di::embeddings(&di_embeddings)
+                    .orbit5_di_embedding_shares(&orbit5_di_embedding_shares)
                     .shares(di_embedding_shares.each_ref())?;
 
                 pcp::BiometricPolicy::Included(
@@ -467,7 +480,21 @@ fn verify(
             info["right_ir_multiframe_image_ids"],
             serde_json::json!([MULTIFRAME_IDS[1]])
         );
-        assert_eq!(tier0.len(), 18);
+        for i in 0..5 {
+            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+            let shares = Orbit5DiIrisEmbeddingShares::decode(tier0[&name].as_slice())?
+                .share_v1
+                .ok_or("missing ORBIT5 share record")?;
+            assert_eq!(shares.model_version, di.model_version);
+            assert_eq!(shares.embedding_version, di.embedding_version);
+            assert_eq!(shares.shares_version, "synthetic-orbit5-sharing");
+            assert_eq!(shares.left_share, vec![100 + i; 512]);
+            assert_eq!(shares.left_mirror_share, vec![200 + i; 512]);
+            assert_eq!(shares.right_share, vec![300 + i; 512]);
+            assert_eq!(shares.right_mirror_share, vec![400 + i; 512]);
+            expected.insert(name.clone(), hash(&tier0[&name]));
+        }
+        assert_eq!(tier0.len(), 23);
         let archives = &tier0;
         for (name, key) in [
             ("iris.tar", &backends[0]),

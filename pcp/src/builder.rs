@@ -130,6 +130,7 @@ impl<'a> Iris<'a> {
 pub struct Di<'a> {
     di_embeddings: &'a v1::DiIrisEmbeddings,
     di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+    orbit5_di_embedding_shares: Option<&'a [v1::Orbit5DiIrisEmbeddingShares; 5]>,
 }
 
 #[bon::bon]
@@ -139,6 +140,7 @@ impl<'a> Di<'a> {
     pub fn new(
         #[builder(start_fn)] di_embeddings: &'a v1::DiIrisEmbeddings,
         #[builder(finish_fn)] di_embedding_shares: [&'a v1::DiIrisEmbeddingShares; 3],
+        orbit5_di_embedding_shares: Option<&'a [v1::Orbit5DiIrisEmbeddingShares; 5]>,
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -172,6 +174,7 @@ impl<'a> Di<'a> {
         Ok(Self {
             di_embeddings,
             di_embedding_shares,
+            orbit5_di_embedding_shares,
         })
     }
 }
@@ -480,9 +483,13 @@ where
             .map(|i| payload::encode_daugman(i.iris_codes, i.iris_code_shares))
             .transpose()?;
 
-        let di = di
-            .as_ref()
-            .map(|di| payload::encode_di(di.di_embeddings, di.di_embedding_shares));
+        let di = di.as_ref().map(|di| {
+            payload::encode_di(
+                di.di_embeddings,
+                di.di_embedding_shares,
+                di.orbit5_di_embedding_shares,
+            )
+        });
 
         for (name, bytes) in [
             ("face_embeddings.json", Some(face_embeddings.as_slice())),
@@ -508,10 +515,23 @@ where
             }
         }
 
-        for (i, share) in di.iter().flat_map(|di| di.shares.iter().enumerate()) {
+        for (i, share) in di
+            .iter()
+            .flat_map(|di| di.three_party_shares.iter().enumerate())
+        {
             archives
                 .hashes
                 .push((format!("di_iris_embeddings_shares_{i}.pb"), sha256(share)));
+        }
+
+        if let Some(shares) = di
+            .as_ref()
+            .and_then(|di| di.orbit5_di_embedding_shares.as_ref())
+        {
+            for (name, bytes) in payload::ORBIT5_DI_SHARE_FILES.into_iter().zip(shares)
+            {
+                archives.hashes.push((name.to_owned(), sha256(bytes)));
+            }
         }
 
         Ok(Some(Prepared {

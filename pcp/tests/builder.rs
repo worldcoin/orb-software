@@ -143,6 +143,20 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     (embeddings, shares)
 }
 
+fn orbit5_di_embedding_shares() -> [v1::Orbit5DiIrisEmbeddingShares; 5] {
+    [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
+        share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
+            model_version: "synthetic-model".into(),
+            shares_version: "synthetic-orbit5-sharing".into(),
+            embedding_version: "synthetic-embedding".into(),
+            left_share: vec![i; 512],
+            left_mirror_share: vec![10 + i; 512],
+            right_share: vec![20 + i; 512],
+            right_mirror_share: vec![u32::from(u16::MAX) - i; 512],
+        }),
+    })
+}
+
 fn assert_iris_validation(codes: &v1::IrisCodes, shares: &[v1::IrisCodeShares; 3]) {
     assert!(Iris::codes(Some(codes))
         .shares(shares.each_ref().map(Some))
@@ -559,10 +573,62 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
     }
 }
 
+#[test]
+fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let info = capture_info(None);
+    let images = images();
+    let (embeddings, di_shares) = di_biometrics();
+    let shares: [v1::Orbit5DiIrisEmbeddingShares; 5] = Default::default();
+    for (included, present) in [(true, false), (true, true), (false, true)] {
+        let di = Di::embeddings(&embeddings)
+            .maybe_orbit5_di_embedding_shares(present.then_some(&shares))
+            .shares(di_shares.each_ref())
+            .unwrap();
+        let biometrics = if included {
+            BiometricPolicy::Included(
+                Biometrics::images(&images).di(di).face_embeddings(&[]),
+            )
+        } else {
+            BiometricPolicy::Redacted
+        };
+        let output = Builder::timestamp(1)
+            .info(&info)
+            .user_public_key(&pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(biometrics)
+            .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
+            .signer(|_| Ok::<_, SignerError>(Vec::new()))
+            .build()
+            .unwrap();
+        let files: std::collections::BTreeMap<_, _> =
+            tier0(&output, &pair).into_iter().collect();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&files["hashes.json"]).unwrap();
+        for i in 0..5 {
+            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+            let expected = included && present;
+            assert_eq!(files.contains_key(&name), expected, "{name}");
+            assert_eq!(manifest.get(&name).is_some(), expected, "{name}");
+            if expected {
+                assert!(files[&name].is_empty());
+                assert_eq!(
+                    manifest[&name],
+                    data_encoding::HEXLOWER.encode(
+                        ring::digest::digest(&ring::digest::SHA256, &[]).as_ref()
+                    )
+                );
+            }
+        }
+    }
+}
+
 /// Every tier 0 JSON file decodes into the shared `pcp-defs` types without
 /// losing a key or value. Only per-frame manifest keys fall outside `Hashes`.
 #[test]
 fn tier0_json_matches_the_shared_pcp_defs_schema() {
+    use orb_pcp_defs::prost::Message;
     use std::collections::BTreeSet;
 
     macro_rules! assert_schema {
@@ -591,12 +657,14 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         embedding_inference_backend: Some("none".into()),
     }];
     let (di_embeddings, di_embedding_shares) = di_biometrics();
+    let orbit5_di_embedding_shares = orbit5_di_embedding_shares();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
     let iris = Iris::codes(Some(&iris_codes))
         .shares(iris_code_shares.each_ref().map(Some))
         .unwrap();
     let di = Di::embeddings(&di_embeddings)
+        .orbit5_di_embedding_shares(&orbit5_di_embedding_shares)
         .shares(di_embedding_shares.each_ref())
         .unwrap();
     let biometrics = Biometrics::images(&images)
@@ -624,6 +692,15 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         assert_schema!(
             v1::IrisCodeShares,
             &files[&format!("iris_code_shares_{i}.json")]
+        );
+    }
+
+    for (i, expected) in orbit5_di_embedding_shares.iter().enumerate() {
+        let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+        assert_eq!(files[&name], expected.encode_to_vec());
+        assert_eq!(
+            v1::Orbit5DiIrisEmbeddingShares::decode(files[&name].as_slice()).unwrap(),
+            *expected
         );
     }
 
