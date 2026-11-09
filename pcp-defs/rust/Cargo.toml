@@ -13,7 +13,12 @@ publish = false
 pbjson = "0.9.0"
 prost = { version = "0.14.1", default-features = false, features = ["std", "derive"] }
 serde.workspace = true
+uniffi = { version = "0.32.0", default-features = false, optional = true }
 zeroize.workspace = true
+
+[features]
+# Exports the reference image enums to Kotlin/Swift for oxide. Orb builds leave it off.
+uniffi = ["dep:uniffi"]
 
 [dev-dependencies]
 flate2.workspace = true

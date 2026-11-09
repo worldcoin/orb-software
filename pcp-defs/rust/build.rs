@@ -37,6 +37,12 @@ fn main() -> Result<()> {
             "#[derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop)]",
         );
     }
+    for enumeration in ["ReferenceImage.MatchMode", "ReferenceImage.MatchStatus"] {
+        config.enum_attribute(
+            format!(".pcp.v1.{enumeration}"),
+            "#[cfg_attr(feature = \"uniffi\", derive(uniffi::Enum))]",
+        );
+    }
     config
         .file_descriptor_set_path(&descriptor_path)
         .compile_protos(&proto_files, &[proto_root])?;
