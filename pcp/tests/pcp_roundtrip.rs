@@ -39,15 +39,8 @@ const SALTED_FIELDS: [&str; 10] = [
 ];
 
 #[test]
-#[ignore]
-fn fixture_with_protobuf_round_trips() -> Result<()> {
-    round_trip("pcp.with_protobuf.000acfb82de34f698b20dda500000000.tier0.tar.gz")
-}
-
-#[test]
-#[ignore]
-fn fixture_without_protobuf_round_trips() -> Result<()> {
-    round_trip("pcp.without_protobuf.000a23d15f2365b502a0106d00000000.tier0.tar.gz")
+fn dummy_pcp_round_trips() -> Result<()> {
+    round_trip("dummy-pcp-2.8.tar.gz")
 }
 
 fn round_trip(filename: &str) -> Result<()> {
@@ -64,7 +57,7 @@ fn round_trip(filename: &str) -> Result<()> {
     }
 
     let (timestamp, original) = read_tier(&bytes, "tier0.tar.gz")?;
-    verify_manifest(&original, "2.7")?;
+    verify_manifest(&original, "2.8")?;
 
     let iris_files = read_tar(&original["iris.tar"])?;
     let normalized = read_tar(&original["normalized_iris.tar"])?;
