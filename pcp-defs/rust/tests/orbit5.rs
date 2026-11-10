@@ -55,3 +55,22 @@ fn legacy_manifest_omits_absent_orbit5_hashes() {
     let decoded = Hashes::decode(wire.as_slice()).unwrap();
     assert_eq!(serde_json::to_value(decoded).unwrap(), expected);
 }
+
+#[test]
+fn orbit5_share_payload_is_zeroized() {
+    use zeroize::{Zeroize, ZeroizeOnDrop};
+
+    fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
+    assert_zeroize_on_drop::<Orbit5DiIrisEmbeddingShareV1>();
+    let mut share = Orbit5DiIrisEmbeddingShareV1 {
+        model_version: "test-model".into(),
+        shares_version: "test-sharing-revision".into(),
+        embedding_version: "test-embedding".into(),
+        left_share: vec![1; 512],
+        left_mirror_share: vec![2; 512],
+        right_share: vec![3; 512],
+        right_mirror_share: vec![4; 512],
+    };
+    share.zeroize();
+    assert_eq!(share, Orbit5DiIrisEmbeddingShareV1::default());
+}

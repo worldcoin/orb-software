@@ -49,14 +49,14 @@ vector. Filename indices 0–4 correspond to Shamir IDs 1–5.
 
 Producers record the sharing implementation revision in `shares_version`.
 Consumers must validate vector dimensions and value bounds before using the
-shares. An explicit sharing-scheme identifier is deferred; the separate message
-name alone does not distinguish protobuf wire encodings.
+shares and agree on the sharing scheme and recipient order. The message name
+does not distinguish protobuf wire encodings.
 
 The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
 `reference_image.pb`. Producers must include all five bundles and hashes when
 ORBIT5 is enabled, alongside the existing three-party DI family, and omit them
-under biometric redaction. This schema addition does not change the PCP version;
-the producer version/capability rule remains pending consumer compatibility tests.
+under biometric redaction. The PCP version remains 2.8. Producers must enable
+ORBIT5 only for consumers that support this file family and its extended manifest.
 
 ## Next breaking version
 

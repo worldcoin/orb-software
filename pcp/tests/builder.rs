@@ -38,10 +38,10 @@ fn capture_info(device_public_key: Option<&str>) -> v1::Info {
     }
 }
 
-fn backend_keys(key: &[u8; 32]) -> BackendKeys<'_> {
+fn backend_keys(key: &[u8; 32]) -> BackendKeys {
     let backend = || BackendKey {
-        public_key: key,
-        encrypted_private_key: "synthetic-envelope",
+        public_key: *key,
+        encrypted_private_key: "synthetic-envelope".to_owned(),
     };
     BackendKeys::face(backend())
         .iris(backend())
@@ -65,27 +65,27 @@ fn tier0(output: &pcp::Package, pair: &sealedbox::Keypair) -> Vec<(String, Vec<u
     files
 }
 
-fn normalized() -> pcp::NormalizedIrisFrame<'static> {
+fn normalized() -> pcp::NormalizedIrisFrame {
     pcp::NormalizedIrisFrame {
-        image: b"image",
-        mask: b"mask",
-        image_resized: b"resized-image",
-        mask_resized: b"resized-mask",
+        image: b"image".to_vec(),
+        mask: b"mask".to_vec(),
+        image_resized: b"resized-image".to_vec(),
+        mask_resized: b"resized-mask".to_vec(),
     }
 }
 
-fn images() -> pcp::PackageImages<'static> {
+fn images() -> pcp::PackageImages {
     let eye = || pcp::IrisEye {
         primary: pcp::PrimaryIrisFrame {
-            ir_png: b"synthetic-ir",
+            ir_png: b"synthetic-ir".to_vec(),
             normalized: normalized(),
         },
-        multiframe: &[],
+        multiframe: Vec::new(),
     };
     pcp::PackageImages {
         left: eye(),
         right: eye(),
-        thumbnail_png: Some(b"synthetic-thumbnail"),
+        thumbnail_png: Some(b"synthetic-thumbnail".to_vec()),
         face_ir_png: None,
         thermal_png: None,
         fraud: None,
@@ -158,8 +158,8 @@ fn orbit5_di_embedding_shares() -> [v1::Orbit5DiIrisEmbeddingShares; 5] {
 }
 
 fn assert_iris_validation(codes: &v1::IrisCodes, shares: &[v1::IrisCodeShares; 3]) {
-    assert!(Iris::codes(Some(codes))
-        .shares(shares.each_ref().map(Some))
+    assert!(Iris::codes(Some(codes.clone()))
+        .shares(shares.clone().map(Some))
         .is_err());
 }
 
@@ -206,7 +206,7 @@ fn di_rejects_missing_embedding_or_share_records() {
     embeddings.embedding_v1 = None;
 
     // Act
-    let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+    let result = Di::embeddings(embeddings).shares(shares);
 
     // Assert
     assert!(result.is_err(), "accepted missing embedding record");
@@ -217,7 +217,7 @@ fn di_rejects_missing_embedding_or_share_records() {
         shares[recipient].share_v1 = None;
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(
@@ -249,7 +249,7 @@ fn di_rejects_mismatched_model_versions() {
             "different-model".into();
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(result.is_err(), "share {recipient} should be rejected");
@@ -268,7 +268,7 @@ fn di_rejects_mismatched_embedding_versions() {
             .embedding_version = "different-embedding".into();
 
         // Act
-        let result = Di::embeddings(&embeddings).shares(shares.each_ref());
+        let result = Di::embeddings(embeddings).shares(shares);
 
         // Assert
         assert!(result.is_err(), "share {recipient} should be rejected");
@@ -302,8 +302,8 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
     for device in [None, Some("device"), Some("")] {
         let info = capture_info(device);
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
@@ -355,8 +355,8 @@ fn device_key_is_optional_and_tiers_1_and_2_are_empty() {
 fn invalid_user_key_fails_before_metadata_randomness() {
     let info = capture_info(Some("device"));
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&[0; 32])
+        .info(info)
+        .user_public_key([0; 32])
         .backend_keys(backend_keys(&[0; 32]))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
@@ -376,8 +376,8 @@ fn randomness_failure_returns_no_package_or_signature() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(Some("device"));
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(FailingRng)
@@ -396,8 +396,8 @@ fn signer_failure_is_not_retried_or_returned_as_a_package() {
     let info = capture_info(Some("device"));
     let mut calls = 0;
     let result = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
         .rng(rand::rngs::OsRng)
@@ -429,11 +429,11 @@ fn migration_pb_follows_info_and_is_hashed() {
         signing_key_id: Some("synthetic-signing-key".into()),
     };
     let output = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Redacted)
-        .migration(&migration)
+        .migration(migration.clone())
         .rng(rand::rngs::OsRng)
         .sealer(support::seal)
         .signer(|_| Ok::<_, SignerError>(b"synthetic-signature".to_vec()))
@@ -477,24 +477,24 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
         let iris_shares = iris_code_shares();
         let (embeddings, di_shares) = di_biometrics();
         let iris = iris_present.then(|| {
-            Iris::codes(Some(&codes))
-                .shares(iris_shares.each_ref().map(Some))
+            Iris::codes(Some(codes.clone()))
+                .shares(iris_shares.clone().map(Some))
                 .unwrap()
         });
         let di = di_present.then(|| {
-            Di::embeddings(&embeddings)
-                .shares(di_shares.each_ref())
+            Di::embeddings(embeddings.clone())
+                .shares(di_shares.clone())
                 .unwrap()
         });
-        let biometrics = Biometrics::images(&images)
+        let biometrics = Biometrics::images(images)
             .maybe_iris(iris)
             .maybe_di(di)
-            .face_embeddings(&[]);
+            .face_embeddings(Vec::new());
 
         // Act
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Included(biometrics))
             .rng(rand::rngs::OsRng)
@@ -577,24 +577,25 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
 fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
-    let images = images();
     let (embeddings, di_shares) = di_biometrics();
     let shares: [v1::Orbit5DiIrisEmbeddingShares; 5] = Default::default();
     for (included, present) in [(true, false), (true, true), (false, true)] {
-        let di = Di::embeddings(&embeddings)
-            .maybe_orbit5_di_embedding_shares(present.then_some(&shares))
-            .shares(di_shares.each_ref())
+        let di = Di::embeddings(embeddings.clone())
+            .maybe_orbit5_di_embedding_shares(present.then(|| shares.clone()))
+            .shares(di_shares.clone())
             .unwrap();
         let biometrics = if included {
             BiometricPolicy::Included(
-                Biometrics::images(&images).di(di).face_embeddings(&[]),
+                Biometrics::images(images())
+                    .di(di)
+                    .face_embeddings(Vec::new()),
             )
         } else {
             BiometricPolicy::Redacted
         };
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info.clone())
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(biometrics)
             .rng(rand::rngs::OsRng)
@@ -641,13 +642,13 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
 
     let pair = sealedbox::Keypair::generate().unwrap();
     let extra_id: pcp::ImageId = "00ff0000000000000000000000000001".parse().unwrap();
-    let extra = [pcp::IrisFrame {
-        image_id: &extra_id,
-        ir_png: b"synthetic-ir",
+    let extra = vec![pcp::IrisFrame {
+        image_id: extra_id.clone(),
+        ir_png: b"synthetic-ir".to_vec(),
         normalized: Some(normalized()),
     }];
     let mut images = images();
-    images.left.multiframe = &extra;
+    images.left.multiframe = extra;
     let iris_codes = iris_codes();
     let iris_code_shares = iris_code_shares();
     let face_embeddings = [v1::FaceEmbedding {
@@ -660,20 +661,20 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
     let orbit5_di_embedding_shares = orbit5_di_embedding_shares();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
-    let iris = Iris::codes(Some(&iris_codes))
-        .shares(iris_code_shares.each_ref().map(Some))
+    let iris = Iris::codes(Some(iris_codes))
+        .shares(iris_code_shares.map(Some))
         .unwrap();
-    let di = Di::embeddings(&di_embeddings)
-        .orbit5_di_embedding_shares(&orbit5_di_embedding_shares)
-        .shares(di_embedding_shares.each_ref())
+    let di = Di::embeddings(di_embeddings)
+        .orbit5_di_embedding_shares(orbit5_di_embedding_shares.clone())
+        .shares(di_embedding_shares)
         .unwrap();
-    let biometrics = Biometrics::images(&images)
+    let biometrics = Biometrics::images(images)
         .iris(iris)
         .di(di)
-        .face_embeddings(&face_embeddings);
+        .face_embeddings(face_embeddings.into());
     let output = Builder::timestamp(1)
-        .info(&info)
-        .user_public_key(&pair.public_key)
+        .info(info)
+        .user_public_key(pair.public_key)
         .backend_keys(backend_keys(&pair.public_key))
         .biometrics(BiometricPolicy::Included(biometrics))
         .rng(rand::rngs::OsRng)
@@ -767,8 +768,8 @@ mod diagnostics {
             let info = capture_info(device);
             let mut calls = 0;
             let output: pcp::DiagnosticPackage = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&[0; 32])
+                .info(info)
+                .user_public_key([0; 32])
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Redacted)
                 .rng(rand::rngs::OsRng)
@@ -798,37 +799,37 @@ mod diagnostics {
 
     #[test]
     fn diagnostic_included_inner_archives_are_plaintext() {
-        let mut images = images();
-        images.face_ir_png = Some(b"synthetic-face-ir");
-        images.thermal_png = Some(b"synthetic-thermal");
-        images.fraud = Some(pcp::FraudImages {
-            scc_rgb_png: Some(b"synthetic-scc"),
-            left_rgb_png: Some(b"synthetic-left"),
-            right_rgb_png: Some(b"synthetic-right"),
-            left_thermal_png: None,
-            right_thermal_png: None,
-            scc_depth_png: None,
-            left_depth_png: None,
-            right_depth_png: None,
-        });
-        let iris_codes = iris_codes();
-        let iris_code_shares = iris_code_shares();
-        let (di_embeddings, di_embedding_shares) = di_biometrics();
         for device in [None, Some("device")] {
+            let mut images = images();
+            images.face_ir_png = Some(b"synthetic-face-ir".to_vec());
+            images.thermal_png = Some(b"synthetic-thermal".to_vec());
+            images.fraud = Some(pcp::FraudImages {
+                scc_rgb_png: Some(b"synthetic-scc".to_vec()),
+                left_rgb_png: Some(b"synthetic-left".to_vec()),
+                right_rgb_png: Some(b"synthetic-right".to_vec()),
+                left_thermal_png: None,
+                right_thermal_png: None,
+                scc_depth_png: None,
+                left_depth_png: None,
+                right_depth_png: None,
+            });
+            let iris_codes = iris_codes();
+            let iris_code_shares = iris_code_shares();
+            let (di_embeddings, di_embedding_shares) = di_biometrics();
             let info = capture_info(device);
-            let iris = Iris::codes(Some(&iris_codes))
-                .shares(iris_code_shares.each_ref().map(Some))
+            let iris = Iris::codes(Some(iris_codes))
+                .shares(iris_code_shares.map(Some))
                 .unwrap();
-            let di = Di::embeddings(&di_embeddings)
-                .shares(di_embedding_shares.each_ref())
+            let di = Di::embeddings(di_embeddings)
+                .shares(di_embedding_shares)
                 .unwrap();
-            let biometrics = Biometrics::images(&images)
+            let biometrics = Biometrics::images(images)
                 .iris(iris)
                 .di(di)
-                .face_embeddings(&[]);
+                .face_embeddings(Vec::new());
             let output = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&[0; 32])
+                .info(info)
+                .user_public_key([0; 32])
                 .backend_keys(backend_keys(&[0; 32]))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .rng(rand::rngs::OsRng)
@@ -868,8 +869,8 @@ mod diagnostics {
         let pair = sealedbox::Keypair::generate().unwrap();
         let info = capture_info(Some("device"));
         let output = Builder::timestamp(1)
-            .info(&info)
-            .user_public_key(&pair.public_key)
+            .info(info)
+            .user_public_key(pair.public_key)
             .backend_keys(backend_keys(&pair.public_key))
             .biometrics(BiometricPolicy::Redacted)
             .rng(rand::rngs::OsRng)
@@ -892,9 +893,9 @@ fn iris_constructor_validates_shares_without_codes() {
     invalid_shares[1].left_iris_code_shares = None;
 
     // Act
-    let valid = Iris::codes(None).shares(shares.each_ref().map(Some));
-    let invalid = Iris::codes(None).shares(invalid_shares.each_ref().map(Some));
-    let absent = Iris::codes(None).shares([None; 3]);
+    let valid = Iris::codes(None).shares(shares.map(Some));
+    let invalid = Iris::codes(None).shares(invalid_shares.map(Some));
+    let absent = Iris::codes(None).shares([None, None, None]);
 
     // Assert
     assert!(valid.is_ok());
@@ -907,7 +908,6 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
     // Arrange
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
-    let images = images();
     let codes = iris_codes();
     let shares = iris_code_shares();
 
@@ -918,15 +918,18 @@ fn strict_mode_requires_iris_records_and_compatibility_mode_omits_missing_files(
 
         for strict in [None, Some(true), Some(false)] {
             // Arrange
-            let iris = Iris::codes(codes).shares(shares).unwrap();
-            let biometrics =
-                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+            let iris = Iris::codes(codes.cloned())
+                .shares(shares.map(|share| share.cloned()))
+                .unwrap();
+            let biometrics = Biometrics::images(images())
+                .iris(iris)
+                .face_embeddings(Vec::new());
             let mut signed = false;
 
             // Act
             let result = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&pair.public_key)
+                .info(info.clone())
+                .user_public_key(pair.public_key)
                 .backend_keys(backend_keys(&pair.public_key))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)
@@ -994,7 +997,6 @@ fn missing_iris_versions_require_compatibility_mode() {
     // Arrange
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
-    let images = images();
 
     for missing in 0..8 {
         let mut codes = iris_codes();
@@ -1017,14 +1019,15 @@ fn missing_iris_versions_require_compatibility_mode() {
             let mut signed = false;
 
             // Act
-            let iris = Iris::codes(Some(&codes))
-                .shares(shares.each_ref().map(Some))
+            let iris = Iris::codes(Some(codes.clone()))
+                .shares(shares.clone().map(Some))
                 .expect("missing versions must be accepted by the constructor");
-            let biometrics =
-                Biometrics::images(&images).iris(iris).face_embeddings(&[]);
+            let biometrics = Biometrics::images(images())
+                .iris(iris)
+                .face_embeddings(Vec::new());
             let result = Builder::timestamp(1)
-                .info(&info)
-                .user_public_key(&pair.public_key)
+                .info(info.clone())
+                .user_public_key(pair.public_key)
                 .backend_keys(backend_keys(&pair.public_key))
                 .biometrics(BiometricPolicy::Included(biometrics))
                 .maybe_strict(strict)

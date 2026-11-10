@@ -11,6 +11,7 @@ use data_encoding::HEXLOWER;
 use orb_pcp_defs::v1::Info;
 use rand::{CryptoRng, RngCore};
 use ring::digest::{Context, SHA256};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::payload::sorted_json;
 
@@ -25,9 +26,11 @@ pub(crate) enum ImageIdPolicy {
     },
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedMetadata {
     pub info_json: Vec<u8>,
     /// Hashes of the salted values, keyed by field name.
+    #[zeroize(skip)]
     pub hashes: BTreeMap<&'static str, [u8; 32]>,
 }
 
@@ -43,11 +46,10 @@ pub enum MetadataError {
 /// its lowercase-hex salt string. Each salt is 16 fresh random bytes and
 /// replaces any salt the caller supplied; absent values get neither.
 pub(crate) fn encode(
-    info: &Info,
+    mut info: Info,
     images: ImageIdPolicy,
     rng: &mut (impl RngCore + CryptoRng),
 ) -> Result<EncodedMetadata, MetadataError> {
-    let mut info = info.clone();
     match images {
         ImageIdPolicy::Redacted => {
             for id in [

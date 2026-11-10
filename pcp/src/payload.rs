@@ -12,24 +12,26 @@ use orb_pcp_defs::{
     },
 };
 use serde_json::Value;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-pub struct BackendKey<'a> {
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct BackendKey {
     /// Raw 32-byte public key; serialized as padded standard Base64.
-    pub public_key: &'a [u8; 32],
+    pub public_key: [u8; 32],
     /// Already-encoded encrypted private key, preserved verbatim as a string.
-    pub encrypted_private_key: &'a str,
+    pub encrypted_private_key: String,
 }
 
 #[derive(bon::Builder)]
 #[builder(start_fn = face)]
 #[builder(finish_fn = tier2)]
-pub struct BackendKeys<'a> {
+pub struct BackendKeys {
     #[builder(start_fn)]
-    pub face: BackendKey<'a>,
+    pub face: BackendKey,
     #[builder(finish_fn)]
-    pub tier2: BackendKey<'a>,
-    pub iris: BackendKey<'a>,
-    pub normalized_iris: BackendKey<'a>,
+    pub tier2: BackendKey,
+    pub iris: BackendKey,
+    pub normalized_iris: BackendKey,
 }
 
 /// Compact JSON with object keys sorted at every level. Sorting is explicit so it
@@ -62,6 +64,7 @@ pub(crate) fn face_embeddings(
     sorted_json(serde_json::to_value(embeddings)?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDaugman {
     pub codes: Option<Vec<u8>>,
     pub shares: [Option<Vec<u8>>; 3],
@@ -85,12 +88,10 @@ pub(crate) fn encode_daugman(
     })
 }
 
-pub(crate) fn backend_keys(
-    keys: &BackendKeys<'_>,
-) -> Result<Vec<u8>, serde_json::Error> {
-    let key = |key: &BackendKey<'_>| {
+pub(crate) fn backend_keys(keys: &BackendKeys) -> Result<Vec<u8>, serde_json::Error> {
+    let key = |key: &BackendKey| {
         Some(v1::BackendKey {
-            public_key: Some(BASE64.encode(key.public_key)),
+            public_key: Some(BASE64.encode(&key.public_key)),
             encrypted_private_key: Some(key.encrypted_private_key.to_owned()),
         })
     };
@@ -102,6 +103,7 @@ pub(crate) fn backend_keys(
     })?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDi {
     pub embeddings: Vec<u8>,
     pub three_party_shares: [Vec<u8>; 3],

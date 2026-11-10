@@ -167,34 +167,31 @@ mod inner_archives {
         format!("{n:032x}").parse().unwrap()
     }
 
-    fn normalized() -> NormalizedIrisFrame<'static> {
+    fn normalized() -> NormalizedIrisFrame {
         NormalizedIrisFrame {
-            image: &[1; 512],
-            mask: b"mask",
-            image_resized: b"resized image",
-            mask_resized: b"resized mask",
+            image: vec![1; 512],
+            mask: b"mask".to_vec(),
+            image_resized: b"resized image".to_vec(),
+            mask_resized: b"resized mask".to_vec(),
         }
     }
 
-    fn frame(image_id: &ImageId) -> IrisFrame<'_> {
+    fn frame(image_id: &ImageId) -> IrisFrame {
         IrisFrame {
-            image_id,
-            ir_png: b"synthetic-png",
+            image_id: image_id.clone(),
+            ir_png: b"synthetic-png".to_vec(),
             normalized: Some(normalized()),
         }
     }
 
-    fn primary() -> PrimaryIrisFrame<'static> {
+    fn primary() -> PrimaryIrisFrame {
         PrimaryIrisFrame {
-            ir_png: b"synthetic-png",
+            ir_png: b"synthetic-png".to_vec(),
             normalized: normalized(),
         }
     }
 
-    fn images<'a>(
-        left: &'a [IrisFrame<'a>],
-        right: &'a [IrisFrame<'a>],
-    ) -> PackageImages<'a> {
+    fn images(left: Vec<IrisFrame>, right: Vec<IrisFrame>) -> PackageImages {
         PackageImages {
             left: IrisEye {
                 primary: primary(),
@@ -229,9 +226,9 @@ mod inner_archives {
     #[test]
     fn archives_preserve_order_and_hash_every_file() {
         let ids = [id(1), id(2), id(3)];
-        let left = [frame(&ids[0]), frame(&ids[1])];
-        let right = [frame(&ids[2])];
-        let input = images(&left, &right);
+        let left = vec![frame(&ids[0]), frame(&ids[1])];
+        let right = vec![frame(&ids[2])];
+        let input = images(left, right);
         let encoded =
             archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(3)).unwrap();
         let iris = entries(&encoded.iris);
@@ -323,10 +320,11 @@ mod inner_archives {
         let mut rng = StdRng::seed_from_u64(7);
         let mut primary_rng = rng.clone();
         let primary =
-            archive::encode_inner(123, &images(&[], &[]), &mut primary_rng).unwrap();
+            archive::encode_inner(123, &images(vec![], vec![]), &mut primary_rng)
+                .unwrap();
         let encoded = archive::encode_inner(
             123,
-            &images(&[extra_left], &[extra_right]),
+            &images(vec![extra_left], vec![extra_right]),
             &mut rng,
         )
         .unwrap();
@@ -357,7 +355,7 @@ mod inner_archives {
     fn absent_thumbnail_and_modalities_keep_empty_entries() {
         let encoded = archive::encode_inner(
             123,
-            &images(&[], &[]),
+            &images(vec![], vec![]),
             &mut StdRng::seed_from_u64(0),
         )
         .unwrap();
@@ -371,19 +369,19 @@ mod inner_archives {
 
     #[test]
     fn fraud_and_modalities_keep_fixed_order_and_skip_absent_images() {
-        let mut input = images(&[], &[]);
-        input.thumbnail_png = Some(b"thumbnail");
-        input.face_ir_png = Some(b"face ir");
-        input.thermal_png = Some(b"thermal");
+        let mut input = images(vec![], vec![]);
+        input.thumbnail_png = Some(b"thumbnail".to_vec());
+        input.face_ir_png = Some(b"face ir".to_vec());
+        input.thermal_png = Some(b"thermal".to_vec());
         input.fraud = Some(archive::FraudImages {
-            scc_rgb_png: Some(b"scc"),
+            scc_rgb_png: Some(b"scc".to_vec()),
             left_rgb_png: None,
-            right_rgb_png: Some(b"right"),
+            right_rgb_png: Some(b"right".to_vec()),
             left_thermal_png: None,
-            right_thermal_png: Some(b"right thermal"),
-            scc_depth_png: Some(b"scc depth"),
+            right_thermal_png: Some(b"right thermal".to_vec()),
+            scc_depth_png: Some(b"scc depth".to_vec()),
             left_depth_png: None,
-            right_depth_png: Some(b"right depth"),
+            right_depth_png: Some(b"right depth".to_vec()),
         });
         let encoded =
             archive::encode_inner(123, &input, &mut StdRng::seed_from_u64(0)).unwrap();
@@ -417,11 +415,11 @@ mod inner_archives {
     #[test]
     fn duplicate_image_ids_are_rejected_by_manifest_before_signing() {
         let same = id(1);
-        let left = [frame(&same)];
-        let right = [frame(&same)];
+        let left = vec![frame(&same)];
+        let right = vec![frame(&same)];
         let encoded = archive::encode_inner(
             123,
-            &images(&left, &right),
+            &images(left, right),
             &mut StdRng::seed_from_u64(0),
         )
         .unwrap();

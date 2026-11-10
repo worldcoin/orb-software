@@ -50,7 +50,7 @@ mod json {
         assert_eq!(
             payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes.unwrap(),
+                .codes.as_deref().unwrap(),
             br#"{"IRIS_version":"synthetic-version","left_iris_code":"left","left_mask_code":"","right_mask_code":"right-mask"}"#,
         );
         assert_eq!(
@@ -60,6 +60,7 @@ mod json {
             )
             .unwrap()
             .codes
+            .as_deref()
             .unwrap(),
             br#"{}"#
         );
@@ -89,12 +90,14 @@ mod json {
         let codes = IrisCodes {
             iris_version: Some("\"\\\n\t\0é".into()),
             left_iris_code: Some("not base64".into()),
-            ..Default::default()
+            left_mask_code: None,
+            right_iris_code: None,
+            right_mask_code: None,
         };
         assert_eq!(
             payload::encode_daugman(Some(&codes), shares().each_ref().map(Some))
                 .unwrap()
-                .codes.unwrap(),
+                .codes.as_deref().unwrap(),
             "{\"IRIS_version\":\"\\\"\\\\\\n\\t\\u0000é\",\"left_iris_code\":\"not base64\"}".as_bytes(),
         );
     }
@@ -103,20 +106,20 @@ mod json {
     fn backend_roles_and_nested_keys_are_sorted_with_padded_base64() {
         let keys = BackendKeys {
             iris: BackendKey {
-                public_key: &[0; 32],
-                encrypted_private_key: "iris-envelope",
+                public_key: [0; 32],
+                encrypted_private_key: "iris-envelope".to_owned(),
             },
             normalized_iris: BackendKey {
-                public_key: &[255; 32],
-                encrypted_private_key: "normalized-envelope",
+                public_key: [255; 32],
+                encrypted_private_key: "normalized-envelope".to_owned(),
             },
             face: BackendKey {
-                public_key: &[251; 32],
-                encrypted_private_key: "face-envelope",
+                public_key: [251; 32],
+                encrypted_private_key: "face-envelope".to_owned(),
             },
             tier2: BackendKey {
-                public_key: &[1; 32],
-                encrypted_private_key: "tier2-envelope",
+                public_key: [1; 32],
+                encrypted_private_key: "tier2-envelope".to_owned(),
             },
         };
         assert_eq!(
