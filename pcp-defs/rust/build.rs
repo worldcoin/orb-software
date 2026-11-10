@@ -12,6 +12,7 @@ fn main() -> Result<()> {
         "./proto/pcp/v1/iris_code_shares.proto",
         "./proto/pcp/v1/iris_codes.proto",
         "./proto/pcp/v1/migration.proto",
+        "./proto/pcp/v1/orbit5_di_iris_embedding_shares.proto",
         "./proto/pcp/v1/reference_image.proto",
     ];
 
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
         "IrisCodeShares",
         "DiIrisEmbeddingV1",
         "DiIrisEmbeddingShareV1",
+        "Orbit5DiIrisEmbeddingShareV1",
         "FaceEmbedding",
     ] {
         config.type_attribute(

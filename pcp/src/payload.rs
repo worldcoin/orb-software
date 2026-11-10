@@ -6,7 +6,10 @@
 use data_encoding::BASE64;
 use orb_pcp_defs::{
     prost::Message,
-    v1::{self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes},
+    v1::{
+        self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes,
+        Orbit5DiIrisEmbeddingShares,
+    },
 };
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -103,19 +106,31 @@ pub(crate) fn backend_keys(keys: &BackendKeys) -> Result<Vec<u8>, serde_json::Er
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDi {
     pub embeddings: Vec<u8>,
-    pub shares: [Vec<u8>; 3],
+    pub three_party_shares: [Vec<u8>; 3],
+    pub orbit5_di_embedding_shares: Option<[Vec<u8>; 5]>,
 }
 
 /// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
     embeddings: &DiIrisEmbeddings,
-    shares: [&DiIrisEmbeddingShares; 3],
+    three_party_shares: [&DiIrisEmbeddingShares; 3],
+    orbit5_di_embedding_shares: Option<&[Orbit5DiIrisEmbeddingShares; 5]>,
 ) -> EncodedDi {
     EncodedDi {
         embeddings: Message::encode_to_vec(embeddings),
-        shares: shares.map(Message::encode_to_vec),
+        three_party_shares: three_party_shares.map(Message::encode_to_vec),
+        orbit5_di_embedding_shares: orbit5_di_embedding_shares
+            .map(|shares| shares.each_ref().map(Message::encode_to_vec)),
     }
 }
+
+pub(crate) const ORBIT5_DI_SHARE_FILES: [&str; 5] = [
+    "orbit5_di_iris_embeddings_shares_0.pb",
+    "orbit5_di_iris_embeddings_shares_1.pb",
+    "orbit5_di_iris_embeddings_shares_2.pb",
+    "orbit5_di_iris_embeddings_shares_3.pb",
+    "orbit5_di_iris_embeddings_shares_4.pb",
+];
 
 #[cfg(test)]
 #[path = "../tests/unit/payload.rs"]
