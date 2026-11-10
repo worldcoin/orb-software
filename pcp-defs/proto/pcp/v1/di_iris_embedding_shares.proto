@@ -3,8 +3,7 @@ syntax = "proto3";
 package pcp.v1;
 
 // One recipient's bundle in either DI share family:
-// di_iris_embeddings_shares_{0..2}.pb or di_iris_embeddings_5_party_shares_{0..4}.pb,
-// where five-party index i holds Shamir ID i + 1. The filename identifies the family.
+// di_iris_embeddings_shares_{0..2}.pb or di_iris_embeddings_5_party_shares_{0..4}.pb.
 message DiIrisEmbeddingShares {
   DiIrisEmbeddingShareV1 share_v1 = 1;
 }
