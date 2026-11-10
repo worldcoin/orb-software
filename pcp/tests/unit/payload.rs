@@ -164,7 +164,7 @@ mod di {
                 right_mirror_share: vec![],
             }),
         });
-        let output = payload::encode_di(&embeddings, shares.each_ref());
+        let output = payload::encode_di(&embeddings, shares.each_ref(), None);
         assert_eq!(
             output.embeddings,
             [
@@ -174,7 +174,7 @@ mod di {
                 0x3f,
             ]
         );
-        for (i, bytes) in output.shares.iter().enumerate() {
+        for (i, bytes) in output.three_party_shares.iter().enumerate() {
             assert_eq!(
                 bytes.as_slice(),
                 &[
@@ -190,8 +190,12 @@ mod di {
         let output = payload::encode_di(
             &DiIrisEmbeddings::default(),
             [&DiIrisEmbeddingShares::default(); 3],
+            None,
         );
         assert!(output.embeddings.is_empty());
-        assert!(output.shares.iter().all(|share| share.is_empty()));
+        assert!(output
+            .three_party_shares
+            .iter()
+            .all(|share| share.is_empty()));
     }
 }

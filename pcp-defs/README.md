@@ -40,6 +40,26 @@ The TEE verifies the source manifest and signature before processing the
 package, then produces a new `hashes.json` and `hashes.sign` covering the
 migrated package.
 
+## Five-party DI shares
+
+`di_iris_embeddings_5_party_shares_0.pb` through `_4.pb` encode
+`DiIrisEmbeddingShares`, the message of the three-party family; the filename
+identifies the family. Each file contains one recipient's left, left mirrored,
+right and right mirrored vectors: 512 unsigned 16-bit values per vector.
+Filename indices 0–4 correspond to Shamir IDs 1–5.
+
+Producers record the sharing implementation revision in `shares_version`.
+Consumers must validate vector dimensions and value bounds before using the
+shares and agree on the sharing scheme and recipient order.
+
+The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
+`reference_image.pb`. Producers must include all five bundles and hashes when
+five-party sharing is enabled, alongside the existing three-party DI family, and
+omit them under biometric redaction. The PCP version stays 2.8, so readers detect
+the family by its files and manifest keys. Issued packages keep the family, so
+enable five-party sharing in a producer only after every reader of its packages
+accepts these files and the extended manifest.
+
 ## Next breaking version
 
 Changes that need a new package because they change the signed bytes:

@@ -406,8 +406,15 @@ pub(crate) fn tier0(
                     "di_iris_embeddings_shares_2.pb",
                 ]
                 .into_iter()
-                .zip(di.shares.iter().map(Vec::as_slice)),
+                .zip(di.three_party_shares.iter().map(Vec::as_slice)),
             );
+            if let Some(shares) = &di.five_party_shares {
+                entries.extend(
+                    crate::payload::FIVE_PARTY_SHARE_FILES
+                        .into_iter()
+                        .zip(shares.iter().map(Vec::as_slice)),
+                );
+            }
         }
     }
     entries.extend([
