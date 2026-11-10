@@ -55,9 +55,10 @@ shares and agree on the sharing scheme and recipient order.
 The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
 `reference_image.pb`. Producers must include all five bundles and hashes when
 five-party sharing is enabled, alongside the existing three-party DI family, and
-omit them under biometric redaction. The PCP version remains 2.8. Producers must
-enable five-party sharing only for consumers that support this file family and
-its extended manifest.
+omit them under biometric redaction. The PCP version stays 2.8, so readers detect
+the family by its files and manifest keys. Issued packages keep the family, so
+enable five-party sharing in a producer only after every reader of its packages
+accepts these files and the extended manifest.
 
 ## Next breaking version
 
