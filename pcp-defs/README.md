@@ -40,10 +40,10 @@ The TEE verifies the source manifest and signature before processing the
 package, then produces a new `hashes.json` and `hashes.sign` covering the
 migrated package.
 
-## ORBIT5 shares
+## Five-party DI shares
 
-`orbit5_di_iris_embeddings_shares_0.pb` through `_4.pb` encode
-`Orbit5DiIrisEmbeddingShares`. Each file contains one recipient's left, left
+`di_iris_embeddings_5_party_shares_0.pb` through `_4.pb` encode
+`DiIrisEmbedding5PartyShares`. Each file contains one recipient's left, left
 mirrored, right and right mirrored vectors: 512 unsigned 16-bit values per
 vector. Filename indices 0–4 correspond to Shamir IDs 1–5.
 
@@ -54,9 +54,10 @@ does not distinguish protobuf wire encodings.
 
 The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
 `reference_image.pb`. Producers must include all five bundles and hashes when
-ORBIT5 is enabled, alongside the existing three-party DI family, and omit them
-under biometric redaction. The PCP version remains 2.8. Producers must enable
-ORBIT5 only for consumers that support this file family and its extended manifest.
+five-party sharing is enabled, alongside the existing three-party DI family, and
+omit them under biometric redaction. The PCP version remains 2.8. Producers must
+enable five-party sharing only for consumers that support this file family and
+its extended manifest.
 
 ## Next breaking version
 

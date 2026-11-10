@@ -15,7 +15,7 @@ use flate2::read::GzDecoder;
 use orb_pcp::{self as pcp, v1, Biometrics, Di, Iris};
 use orb_pcp_defs::{
     prost::Message,
-    v1::{DiIrisEmbeddingShares, DiIrisEmbeddings, Orbit5DiIrisEmbeddingShares},
+    v1::{DiIrisEmbedding5PartyShares, DiIrisEmbeddingShares, DiIrisEmbeddings},
 };
 use p256::ecdsa::{
     signature::hazmat::{PrehashSigner, PrehashVerifier},
@@ -123,11 +123,11 @@ pub fn run() -> Result<()> {
             right_mirror_share: vec![40 + i],
         }),
     });
-    let orbit5_di_embedding_shares =
-        [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
-            share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
+    let di_embedding_5_party_shares =
+        [0, 1, 2, 3, 4].map(|i| v1::DiIrisEmbedding5PartyShares {
+            share_v1: Some(v1::DiIrisEmbedding5PartyShareV1 {
                 model_version: "synthetic-model".into(),
-                shares_version: "synthetic-orbit5-sharing".into(),
+                shares_version: "synthetic-5-party-sharing".into(),
                 embedding_version: "synthetic-embedding".into(),
                 left_share: vec![100 + i; 512],
                 left_mirror_share: vec![200 + i; 512],
@@ -194,7 +194,7 @@ pub fn run() -> Result<()> {
                     .shares(iris_code_shares.clone().map(Some))?;
 
                 let di = Di::embeddings(di_embeddings.clone())
-                    .orbit5_di_embedding_shares(orbit5_di_embedding_shares.clone())
+                    .di_embedding_5_party_shares(di_embedding_5_party_shares.clone())
                     .shares(di_embedding_shares.clone())?;
 
                 pcp::BiometricPolicy::Included(
@@ -484,13 +484,13 @@ fn verify(
             serde_json::json!([MULTIFRAME_IDS[1]])
         );
         for i in 0..5 {
-            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
-            let shares = Orbit5DiIrisEmbeddingShares::decode(tier0[&name].as_slice())?
+            let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
+            let shares = DiIrisEmbedding5PartyShares::decode(tier0[&name].as_slice())?
                 .share_v1
-                .ok_or("missing ORBIT5 share record")?;
+                .ok_or("missing five-party share record")?;
             assert_eq!(shares.model_version, di.model_version);
             assert_eq!(shares.embedding_version, di.embedding_version);
-            assert_eq!(shares.shares_version, "synthetic-orbit5-sharing");
+            assert_eq!(shares.shares_version, "synthetic-5-party-sharing");
             assert_eq!(shares.left_share, vec![100 + i; 512]);
             assert_eq!(shares.left_mirror_share, vec![200 + i; 512]);
             assert_eq!(shares.right_share, vec![300 + i; 512]);

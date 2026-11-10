@@ -3,11 +3,11 @@ syntax = "proto3";
 package pcp.v1;
 
 // One recipient's bundle; filename indices 0-4 map to Shamir IDs 1-5.
-message Orbit5DiIrisEmbeddingShares {
-  Orbit5DiIrisEmbeddingShareV1 share_v1 = 1;
+message DiIrisEmbedding5PartyShares {
+  DiIrisEmbedding5PartyShareV1 share_v1 = 1;
 }
 
-message Orbit5DiIrisEmbeddingShareV1 {
+message DiIrisEmbedding5PartyShareV1 {
   string model_version = 1;
   string shares_version = 2;
   string embedding_version = 3;

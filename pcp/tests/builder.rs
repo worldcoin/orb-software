@@ -143,11 +143,11 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     (embeddings, shares)
 }
 
-fn orbit5_di_embedding_shares() -> [v1::Orbit5DiIrisEmbeddingShares; 5] {
-    [0, 1, 2, 3, 4].map(|i| v1::Orbit5DiIrisEmbeddingShares {
-        share_v1: Some(v1::Orbit5DiIrisEmbeddingShareV1 {
+fn di_embedding_5_party_shares() -> [v1::DiIrisEmbedding5PartyShares; 5] {
+    [0, 1, 2, 3, 4].map(|i| v1::DiIrisEmbedding5PartyShares {
+        share_v1: Some(v1::DiIrisEmbedding5PartyShareV1 {
             model_version: "synthetic-model".into(),
-            shares_version: "synthetic-orbit5-sharing".into(),
+            shares_version: "synthetic-5-party-sharing".into(),
             embedding_version: "synthetic-embedding".into(),
             left_share: vec![i; 512],
             left_mirror_share: vec![10 + i; 512],
@@ -574,14 +574,14 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
 }
 
 #[test]
-fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
+fn five_party_presence_and_redaction_apply_to_all_five_files_and_hashes() {
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
     let (embeddings, di_shares) = di_biometrics();
-    let shares: [v1::Orbit5DiIrisEmbeddingShares; 5] = Default::default();
+    let shares: [v1::DiIrisEmbedding5PartyShares; 5] = Default::default();
     for (included, present) in [(true, false), (true, true), (false, true)] {
         let di = Di::embeddings(embeddings.clone())
-            .maybe_orbit5_di_embedding_shares(present.then(|| shares.clone()))
+            .maybe_di_embedding_5_party_shares(present.then(|| shares.clone()))
             .shares(di_shares.clone())
             .unwrap();
         let biometrics = if included {
@@ -608,7 +608,7 @@ fn orbit5_presence_and_redaction_apply_to_all_five_files_and_hashes() {
         let manifest: serde_json::Value =
             serde_json::from_slice(&files["hashes.json"]).unwrap();
         for i in 0..5 {
-            let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+            let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
             let expected = included && present;
             assert_eq!(files.contains_key(&name), expected, "{name}");
             assert_eq!(manifest.get(&name).is_some(), expected, "{name}");
@@ -658,14 +658,14 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         embedding_inference_backend: Some("none".into()),
     }];
     let (di_embeddings, di_embedding_shares) = di_biometrics();
-    let orbit5_di_embedding_shares = orbit5_di_embedding_shares();
+    let di_embedding_5_party_shares = di_embedding_5_party_shares();
     let mut info = capture_info(Some("device"));
     info.left_iris_code_aggregate_image_ids = vec!["left".into()];
     let iris = Iris::codes(Some(iris_codes))
         .shares(iris_code_shares.map(Some))
         .unwrap();
     let di = Di::embeddings(di_embeddings)
-        .orbit5_di_embedding_shares(orbit5_di_embedding_shares.clone())
+        .di_embedding_5_party_shares(di_embedding_5_party_shares.clone())
         .shares(di_embedding_shares)
         .unwrap();
     let biometrics = Biometrics::images(images)
@@ -696,11 +696,11 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         );
     }
 
-    for (i, expected) in orbit5_di_embedding_shares.iter().enumerate() {
-        let name = format!("orbit5_di_iris_embeddings_shares_{i}.pb");
+    for (i, expected) in di_embedding_5_party_shares.iter().enumerate() {
+        let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
         assert_eq!(files[&name], expected.encode_to_vec());
         assert_eq!(
-            v1::Orbit5DiIrisEmbeddingShares::decode(files[&name].as_slice()).unwrap(),
+            v1::DiIrisEmbedding5PartyShares::decode(files[&name].as_slice()).unwrap(),
             *expected
         );
     }

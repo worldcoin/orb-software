@@ -50,13 +50,13 @@ own crate; `orb-pcp` has no normal dependency on Alkali.
   PCPs missing these values. Supplied data and version consistency are still
   validated.
 - For TEE migrations, supply `.migration(migration)` before `.signer(...)`.
-- Supply optional ORBIT5 bundles with
-  `Di::embeddings(embeddings).orbit5_di_embedding_shares(bundles).shares(shares)`.
-  Omitting the ORBIT5 input omits that entire family; supplying it writes all five
-  `orbit5_di_iris_embeddings_shares_{0..4}.pb` files and their signed hashes,
+- Supply optional five-party share bundles with
+  `Di::embeddings(embeddings).di_embedding_5_party_shares(bundles).shares(shares)`.
+  Omitting the five-party input omits that entire family; supplying it writes all
+  five `di_iris_embeddings_5_party_shares_{0..4}.pb` files and their signed hashes,
   including zero-byte files for default messages. Omitting the DI group or
   redacting biometrics also omits the family. The caller owns share generation
-  and validation of ORBIT5 dimensions, values and metadata.
+  and validation of five-party share dimensions, values and metadata.
 
 See the example for complete input construction and the API documentation for
 validation rules and package layout.

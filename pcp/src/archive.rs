@@ -408,9 +408,9 @@ pub(crate) fn tier0(
                 .into_iter()
                 .zip(di.three_party_shares.iter().map(Vec::as_slice)),
             );
-            if let Some(shares) = &di.orbit5_di_embedding_shares {
+            if let Some(shares) = &di.five_party_shares {
                 entries.extend(
-                    crate::payload::ORBIT5_DI_SHARE_FILES
+                    crate::payload::FIVE_PARTY_SHARE_FILES
                         .into_iter()
                         .zip(shares.iter().map(Vec::as_slice)),
                 );

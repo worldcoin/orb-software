@@ -9,8 +9,8 @@
 use orb_pcp_defs::{
     prost::Message,
     v1::{
-        BackendKeys, DiIrisEmbeddingShares, DiIrisEmbeddings, FaceEmbedding, Info,
-        IrisCodeShares, IrisCodes, Orbit5DiIrisEmbeddingShares,
+        BackendKeys, DiIrisEmbedding5PartyShares, DiIrisEmbeddingShares,
+        DiIrisEmbeddings, FaceEmbedding, Info, IrisCodeShares, IrisCodes,
     },
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -67,8 +67,8 @@ fn round_trip(name: &str, bytes: &[u8]) -> Result<bool> {
         n if n.starts_with("di_iris_embeddings_shares_") => {
             pb_round_trip::<DiIrisEmbeddingShares>(bytes)
         }
-        n if n.starts_with("orbit5_di_iris_embeddings_shares_") => {
-            pb_round_trip::<Orbit5DiIrisEmbeddingShares>(bytes)
+        n if n.starts_with("di_iris_embeddings_5_party_shares_") => {
+            pb_round_trip::<DiIrisEmbedding5PartyShares>(bytes)
         }
         n => Err(format!("no v1 type for {n}").into()),
     }

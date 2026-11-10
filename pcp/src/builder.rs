@@ -132,7 +132,7 @@ impl Iris {
 pub struct Di {
     di_embeddings: v1::DiIrisEmbeddings,
     di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
-    orbit5_di_embedding_shares: Option<[v1::Orbit5DiIrisEmbeddingShares; 5]>,
+    di_embedding_5_party_shares: Option<[v1::DiIrisEmbedding5PartyShares; 5]>,
 }
 
 #[bon::bon]
@@ -142,7 +142,7 @@ impl Di {
     pub fn new(
         #[builder(start_fn)] di_embeddings: v1::DiIrisEmbeddings,
         #[builder(finish_fn)] di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
-        orbit5_di_embedding_shares: Option<[v1::Orbit5DiIrisEmbeddingShares; 5]>,
+        di_embedding_5_party_shares: Option<[v1::DiIrisEmbedding5PartyShares; 5]>,
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -176,7 +176,7 @@ impl Di {
         Ok(Self {
             di_embeddings,
             di_embedding_shares,
-            orbit5_di_embedding_shares,
+            di_embedding_5_party_shares,
         })
     }
 }
@@ -497,7 +497,7 @@ where
             payload::encode_di(
                 &di.di_embeddings,
                 di.di_embedding_shares.each_ref(),
-                di.orbit5_di_embedding_shares.as_ref(),
+                di.di_embedding_5_party_shares.as_ref(),
             )
         });
 
@@ -534,11 +534,8 @@ where
                 .push((format!("di_iris_embeddings_shares_{i}.pb"), sha256(share)));
         }
 
-        if let Some(shares) = di
-            .as_ref()
-            .and_then(|di| di.orbit5_di_embedding_shares.as_ref())
-        {
-            for (name, bytes) in payload::ORBIT5_DI_SHARE_FILES.into_iter().zip(shares)
+        if let Some(shares) = di.as_ref().and_then(|di| di.five_party_shares.as_ref()) {
+            for (name, bytes) in payload::FIVE_PARTY_SHARE_FILES.into_iter().zip(shares)
             {
                 archives.hashes.push((name.to_owned(), sha256(bytes)));
             }
