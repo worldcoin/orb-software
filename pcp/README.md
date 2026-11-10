@@ -53,10 +53,11 @@ own crate; `orb-pcp` has no normal dependency on Alkali.
 - Supply optional five-party share bundles with
   `Di::embeddings(embeddings).di_embedding_5_party_shares(bundles).shares(shares)`.
   Omitting the five-party input omits that entire family; supplying it writes all
-  five `di_iris_embeddings_5_party_shares_{0..4}.pb` files and their signed hashes,
-  including zero-byte files for default messages. Omitting the DI group or
-  redacting biometrics also omits the family. The caller owns share generation
-  and validation of five-party share dimensions, values and metadata.
+  five `di_iris_embeddings_5_party_shares_{0..4}.pb` files and their signed hashes.
+  Omitting the DI group or redacting biometrics also omits the family. Each share
+  in either family must contain its record and the embedding's model and
+  embedding versions. The caller owns share generation and validation of share
+  dimensions and values.
 
 See the example for complete input construction and the API documentation for
 validation rules and package layout.

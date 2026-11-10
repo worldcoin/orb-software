@@ -6,10 +6,7 @@
 use data_encoding::BASE64;
 use orb_pcp_defs::{
     prost::Message,
-    v1::{
-        self, DiIrisEmbedding5PartyShares, DiIrisEmbeddingShares, DiIrisEmbeddings,
-        IrisCodeShares, IrisCodes,
-    },
+    v1::{self, DiIrisEmbeddingShares, DiIrisEmbeddings, IrisCodeShares, IrisCodes},
 };
 use serde_json::Value;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -114,7 +111,7 @@ pub(crate) struct EncodedDi {
 pub(crate) fn encode_di(
     embeddings: &DiIrisEmbeddings,
     three_party_shares: [&DiIrisEmbeddingShares; 3],
-    five_party_shares: Option<&[DiIrisEmbedding5PartyShares; 5]>,
+    five_party_shares: Option<&[DiIrisEmbeddingShares; 5]>,
 ) -> EncodedDi {
     EncodedDi {
         embeddings: Message::encode_to_vec(embeddings),

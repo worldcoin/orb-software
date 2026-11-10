@@ -132,7 +132,7 @@ impl Iris {
 pub struct Di {
     di_embeddings: v1::DiIrisEmbeddings,
     di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
-    di_embedding_5_party_shares: Option<[v1::DiIrisEmbedding5PartyShares; 5]>,
+    di_embedding_5_party_shares: Option<[v1::DiIrisEmbeddingShares; 5]>,
 }
 
 #[bon::bon]
@@ -142,7 +142,7 @@ impl Di {
     pub fn new(
         #[builder(start_fn)] di_embeddings: v1::DiIrisEmbeddings,
         #[builder(finish_fn)] di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
-        di_embedding_5_party_shares: Option<[v1::DiIrisEmbedding5PartyShares; 5]>,
+        di_embedding_5_party_shares: Option<[v1::DiIrisEmbeddingShares; 5]>,
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -151,26 +151,9 @@ impl Di {
             );
         };
 
-        for share in &di_embedding_shares {
-            let Some(share) = &share.share_v1 else {
-                return Err(
-                    "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
-                        .into(),
-                );
-            };
-
-            if share.model_version != embedding.model_version {
-                return Err(
-                    "Share model version does not match embedding model version."
-                        .into(),
-                );
-            }
-
-            if share.embedding_version != embedding.embedding_version {
-                return Err(
-                    "Share embedding version does not match embedding version.".into(),
-                );
-            }
+        validate_di_shares("Three-party", embedding, &di_embedding_shares)?;
+        if let Some(shares) = &di_embedding_5_party_shares {
+            validate_di_shares("Five-party", embedding, shares)?;
         }
 
         Ok(Self {
@@ -179,6 +162,35 @@ impl Di {
             di_embedding_5_party_shares,
         })
     }
+}
+
+/// Requires each share's record and the embedding's model and embedding versions.
+fn validate_di_shares<'a>(
+    family: &str,
+    embedding: &v1::DiIrisEmbeddingV1,
+    shares: impl IntoIterator<Item = &'a v1::DiIrisEmbeddingShares>,
+) -> Result<(), BiometricValidationError> {
+    for (index, share) in shares.into_iter().enumerate() {
+        let Some(share) = &share.share_v1 else {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} is missing its v1 record."
+            )));
+        };
+
+        if share.model_version != embedding.model_version {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} model version does not match embedding model version."
+            )));
+        }
+
+        if share.embedding_version != embedding.embedding_version {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} embedding version does not match embedding version."
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 /// Encrypted tiers and SHA-256 checksums of their ciphertext. Tiers 1 and 2 are

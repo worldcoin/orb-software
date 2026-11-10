@@ -143,9 +143,9 @@ fn di_biometrics() -> (v1::DiIrisEmbeddings, [v1::DiIrisEmbeddingShares; 3]) {
     (embeddings, shares)
 }
 
-fn di_embedding_5_party_shares() -> [v1::DiIrisEmbedding5PartyShares; 5] {
-    [0, 1, 2, 3, 4].map(|i| v1::DiIrisEmbedding5PartyShares {
-        share_v1: Some(v1::DiIrisEmbedding5PartyShareV1 {
+fn di_embedding_5_party_shares() -> [v1::DiIrisEmbeddingShares; 5] {
+    [0, 1, 2, 3, 4].map(|i| v1::DiIrisEmbeddingShares {
+        share_v1: Some(v1::DiIrisEmbeddingShareV1 {
             model_version: "synthetic-model".into(),
             shares_version: "synthetic-5-party-sharing".into(),
             embedding_version: "synthetic-embedding".into(),
@@ -272,6 +272,54 @@ fn di_rejects_mismatched_embedding_versions() {
 
         // Assert
         assert!(result.is_err(), "share {recipient} should be rejected");
+    }
+}
+
+#[test]
+fn di_rejects_missing_five_party_share_records() {
+    for recipient in 0..5 {
+        // Arrange
+        let (embeddings, shares) = di_biometrics();
+        let mut five_party_shares = di_embedding_5_party_shares();
+        five_party_shares[recipient].share_v1 = None;
+
+        // Act
+        let result = Di::embeddings(embeddings)
+            .di_embedding_5_party_shares(five_party_shares)
+            .shares(shares);
+
+        // Assert
+        assert!(
+            result.is_err(),
+            "accepted missing record in five-party share {recipient}"
+        );
+    }
+}
+
+#[test]
+fn di_rejects_mismatched_five_party_share_versions() {
+    let mismatches: [fn(&mut v1::DiIrisEmbeddingShareV1); 2] = [
+        |share| share.model_version = "different-model".into(),
+        |share| share.embedding_version = "different-embedding".into(),
+    ];
+    for mismatch in mismatches {
+        for recipient in 0..5 {
+            // Arrange
+            let (embeddings, shares) = di_biometrics();
+            let mut five_party_shares = di_embedding_5_party_shares();
+            mismatch(five_party_shares[recipient].share_v1.as_mut().unwrap());
+
+            // Act
+            let result = Di::embeddings(embeddings)
+                .di_embedding_5_party_shares(five_party_shares)
+                .shares(shares);
+
+            // Assert
+            assert!(
+                result.is_err(),
+                "five-party share {recipient} should be rejected"
+            );
+        }
     }
 }
 
@@ -575,10 +623,12 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
 
 #[test]
 fn five_party_presence_and_redaction_apply_to_all_five_files_and_hashes() {
+    use orb_pcp_defs::prost::Message;
+
     let pair = sealedbox::Keypair::generate().unwrap();
     let info = capture_info(None);
     let (embeddings, di_shares) = di_biometrics();
-    let shares: [v1::DiIrisEmbedding5PartyShares; 5] = Default::default();
+    let shares = di_embedding_5_party_shares();
     for (included, present) in [(true, false), (true, true), (false, true)] {
         let di = Di::embeddings(embeddings.clone())
             .maybe_di_embedding_5_party_shares(present.then(|| shares.clone()))
@@ -607,17 +657,18 @@ fn five_party_presence_and_redaction_apply_to_all_five_files_and_hashes() {
             tier0(&output, &pair).into_iter().collect();
         let manifest: serde_json::Value =
             serde_json::from_slice(&files["hashes.json"]).unwrap();
-        for i in 0..5 {
+        for (i, share) in shares.iter().enumerate() {
             let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
             let expected = included && present;
             assert_eq!(files.contains_key(&name), expected, "{name}");
             assert_eq!(manifest.get(&name).is_some(), expected, "{name}");
             if expected {
-                assert!(files[&name].is_empty());
+                assert_eq!(files[&name], share.encode_to_vec(), "{name}");
                 assert_eq!(
                     manifest[&name],
                     data_encoding::HEXLOWER.encode(
-                        ring::digest::digest(&ring::digest::SHA256, &[]).as_ref()
+                        ring::digest::digest(&ring::digest::SHA256, &files[&name])
+                            .as_ref()
                     )
                 );
             }
@@ -700,7 +751,7 @@ fn tier0_json_matches_the_shared_pcp_defs_schema() {
         let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
         assert_eq!(files[&name], expected.encode_to_vec());
         assert_eq!(
-            v1::DiIrisEmbedding5PartyShares::decode(files[&name].as_slice()).unwrap(),
+            v1::DiIrisEmbeddingShares::decode(files[&name].as_slice()).unwrap(),
             *expected
         );
     }

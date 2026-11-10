@@ -43,14 +43,14 @@ migrated package.
 ## Five-party DI shares
 
 `di_iris_embeddings_5_party_shares_0.pb` through `_4.pb` encode
-`DiIrisEmbedding5PartyShares`. Each file contains one recipient's left, left
-mirrored, right and right mirrored vectors: 512 unsigned 16-bit values per
-vector. Filename indices 0–4 correspond to Shamir IDs 1–5.
+`DiIrisEmbeddingShares`, the message of the three-party family; the filename
+identifies the family. Each file contains one recipient's left, left mirrored,
+right and right mirrored vectors: 512 unsigned 16-bit values per vector.
+Filename indices 0–4 correspond to Shamir IDs 1–5.
 
 Producers record the sharing implementation revision in `shares_version`.
 Consumers must validate vector dimensions and value bounds before using the
-shares and agree on the sharing scheme and recipient order. The message name
-does not distinguish protobuf wire encodings.
+shares and agree on the sharing scheme and recipient order.
 
 The five optional `Hashes` fields use tags 61–65; tag 60 belongs to
 `reference_image.pb`. Producers must include all five bundles and hashes when
