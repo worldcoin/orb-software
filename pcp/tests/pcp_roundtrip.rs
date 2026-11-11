@@ -43,6 +43,22 @@ const SALTED_FIELDS: [&str; 10] = [
 // 8bdd896afe0b764df23cc5d27ecef6f127bdad75, the latest commit at generation time,
 // before orb-core adopted the shared PCP builder. This keeps the fixture
 // independent of the builder under test.
+//
+// Files must match byte-for-byte, except:
+// - Hyrax commitments and blinding factors: rebuilding uses fresh randomness,
+//   so these bytes change. We check that the files are nonempty and have the
+//   same size, but not that the commitments are mathematically correct.
+// - info.json: values must match, except for newly generated salts.
+//   JSON spacing and field order don't matter.
+// - hashes.json: hashes must match the files they describe, and the package
+//   version must be correct. JSON spacing and field order don't matter.
+// - hashes.sign: we check that the new signature is valid. We don't compare
+//   it with, or verify, the original signature.
+// - Tar archives: we compare the files inside, using the rules above. We don't
+//   compare file order or archive details such as timestamps and padding.
+// - Gzip archives: we check the stored filename and timestamp, but don't
+//   require the compressed bytes or other header details to match.
+//
 #[test]
 fn dummy_pcp_round_trips() -> Result<()> {
     round_trip("dummy-pcp-2.8-fraud.tar.gz")
