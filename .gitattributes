@@ -1,4 +1,4 @@
 *.wav filter=lfs diff=lfs merge=lfs -text
 *.mp4 filter=lfs diff=lfs merge=lfs -text
 *.mp3 filter=lfs diff=lfs merge=lfs -text
-pcp/tests/fixtures/dummy-pcp-2.8.tar.gz filter=lfs diff=lfs merge=lfs -text
+pcp/tests/fixtures/dummy-pcp-2.8-fraud.tar.gz filter=lfs diff=lfs merge=lfs -text

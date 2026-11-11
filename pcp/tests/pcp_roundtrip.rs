@@ -18,10 +18,11 @@ use std::{collections::BTreeMap, io::Read, path::Path};
 
 type Files = BTreeMap<String, Vec<u8>>;
 
-const INNER_ARCHIVES: [&str; 4] = [
+const INNER_ARCHIVES: [&str; 5] = [
     "iris.tar",
     "normalized_iris.tar",
     "face.tar",
+    "fraud.tar",
     "face_ir_and_thermal.tar",
 ];
 
@@ -40,7 +41,7 @@ const SALTED_FIELDS: [&str; 10] = [
 
 #[test]
 fn dummy_pcp_round_trips() -> Result<()> {
-    round_trip("dummy-pcp-2.8.tar.gz")
+    round_trip("dummy-pcp-2.8-fraud.tar.gz")
 }
 
 fn round_trip(filename: &str) -> Result<()> {
@@ -64,18 +65,42 @@ fn round_trip(filename: &str) -> Result<()> {
     let face = read_tar(&original["face.tar"])?;
     let extra = read_tar(&original["face_ir_and_thermal.tar"])?;
 
-    let images = pcp::PackageImages {
-        left: eye(&iris_files, &normalized, "left"),
-        right: eye(&iris_files, &normalized, "right"),
-        thumbnail_png: Some(face["thumbnail.png"].clone()),
-        face_ir_png: Some(extra["face_ir.png"].clone()),
-        thermal_png: Some(extra["thermal.png"].clone()),
-        fraud: None,
+    let fraud_files = read_tar(&original["fraud.tar"])?;
+    assert_eq!(fraud_files.len(), 8, "expected all eight fraud images");
+
+    let fraud = pcp::FraudImages {
+        scc_rgb_png: Some(fraud_files["scc_rgb.png"].clone()),
+        left_rgb_png: Some(fraud_files["left_rgb.png"].clone()),
+        right_rgb_png: Some(fraud_files["right_rgb.png"].clone()),
+        left_thermal_png: Some(fraud_files["left_thermal.png"].clone()),
+        right_thermal_png: Some(fraud_files["right_thermal.png"].clone()),
+        scc_depth_png: Some(fraud_files["scc_depth.png"].clone()),
+        left_depth_png: Some(fraud_files["left_depth.png"].clone()),
+        right_depth_png: Some(fraud_files["right_depth.png"].clone()),
     };
 
     let info: v1::Info = serde_json::from_slice(&original["info.json"])?;
-    assert!(info.left_ir_multiframe_image_ids.is_empty());
-    assert!(info.right_ir_multiframe_image_ids.is_empty());
+    assert_eq!(info.left_ir_multiframe_image_ids.len(), 2);
+    assert_eq!(info.right_ir_multiframe_image_ids.len(), 2);
+
+    let images = pcp::PackageImages {
+        left: eye(
+            &iris_files,
+            &normalized,
+            "left",
+            &info.left_ir_multiframe_image_ids,
+        )?,
+        right: eye(
+            &iris_files,
+            &normalized,
+            "right",
+            &info.right_ir_multiframe_image_ids,
+        )?,
+        thumbnail_png: Some(face["thumbnail.png"].clone()),
+        face_ir_png: Some(extra["face_ir.png"].clone()),
+        thermal_png: Some(extra["thermal.png"].clone()),
+        fraud: Some(fraud),
+    };
 
     let face_embeddings: Vec<v1::FaceEmbedding> =
         serde_json::from_slice(&original["face_embeddings.json"])?;
@@ -226,30 +251,43 @@ fn read_tier(bytes: &[u8], name: &str) -> Result<(u32, Files)> {
     Ok((timestamp, read_tar(&tar)?))
 }
 
-fn eye(iris: &Files, normalized: &Files, side: &str) -> pcp::IrisEye {
-    pcp::IrisEye {
+fn eye(
+    iris: &Files,
+    normalized: &Files,
+    side: &str,
+    multiframe_ids: &[String],
+) -> Result<pcp::IrisEye> {
+    let normalized_frame = |prefix: &str| pcp::NormalizedIrisFrame {
+        image: normalized[&format!("{prefix}_normalized_image.bin")].clone(),
+        mask: normalized[&format!("{prefix}_normalized_mask.bin")].clone(),
+        image_resized: normalized[&format!("{prefix}_normalized_image_resized.bin")]
+            .clone(),
+        mask_resized: normalized[&format!("{prefix}_normalized_mask_resized.bin")]
+            .clone(),
+    };
+
+    let multiframe = multiframe_ids
+        .iter()
+        .map(|id| {
+            Ok(pcp::IrisFrame {
+                image_id: id.parse::<pcp::ImageId>()?,
+                ir_png: iris[&format!("{id}.png")].clone(),
+                normalized: Some(normalized_frame(id)),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(pcp::IrisEye {
         primary: pcp::PrimaryIrisFrame {
             ir_png: iris[&format!("{side}_ir.png")].clone(),
-            normalized: pcp::NormalizedIrisFrame {
-                image: normalized[&format!("{side}_normalized_image.bin")].clone(),
-                mask: normalized[&format!("{side}_normalized_mask.bin")].clone(),
-                image_resized: normalized
-                    [&format!("{side}_normalized_image_resized.bin")]
-                    .clone(),
-                mask_resized: normalized
-                    [&format!("{side}_normalized_mask_resized.bin")]
-                    .clone(),
-            },
+            normalized: normalized_frame(side),
         },
-        multiframe: Vec::new(),
-    }
+        multiframe,
+    })
 }
 
 fn is_hyrax_file(name: &str) -> bool {
-    let Some(name) = name
-        .strip_prefix("left_")
-        .or_else(|| name.strip_prefix("right_"))
-    else {
+    let Some((_, name)) = name.split_once('_') else {
         return false;
     };
 
