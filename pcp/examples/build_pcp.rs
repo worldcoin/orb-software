@@ -123,6 +123,18 @@ pub fn run() -> Result<()> {
             right_mirror_share: vec![40 + i],
         }),
     });
+    let di_embedding_5_party_shares =
+        [0, 1, 2, 3, 4].map(|i| v1::DiIrisEmbeddingShares {
+            share_v1: Some(v1::DiIrisEmbeddingShareV1 {
+                model_version: "synthetic-model".into(),
+                shares_version: "synthetic-5-party-sharing".into(),
+                embedding_version: "synthetic-embedding".into(),
+                left_share: vec![100 + i; 512],
+                left_mirror_share: vec![200 + i; 512],
+                right_share: vec![300 + i; 512],
+                right_mirror_share: vec![400 + i; 512],
+            }),
+        });
     let face_embeddings = [v1::FaceEmbedding {
         embedding: Some("synthetic-embedding".into()),
         embedding_type: Some("synthetic".into()),
@@ -182,6 +194,7 @@ pub fn run() -> Result<()> {
                     .shares(iris_code_shares.clone().map(Some))?;
 
                 let di = Di::embeddings(di_embeddings.clone())
+                    .di_embedding_5_party_shares(di_embedding_5_party_shares.clone())
                     .shares(di_embedding_shares.clone())?;
 
                 pcp::BiometricPolicy::Included(
@@ -470,7 +483,21 @@ fn verify(
             info["right_ir_multiframe_image_ids"],
             serde_json::json!([MULTIFRAME_IDS[1]])
         );
-        assert_eq!(tier0.len(), 18);
+        for i in 0..5 {
+            let name = format!("di_iris_embeddings_5_party_shares_{i}.pb");
+            let shares = DiIrisEmbeddingShares::decode(tier0[&name].as_slice())?
+                .share_v1
+                .ok_or("missing five-party share record")?;
+            assert_eq!(shares.model_version, di.model_version);
+            assert_eq!(shares.embedding_version, di.embedding_version);
+            assert_eq!(shares.shares_version, "synthetic-5-party-sharing");
+            assert_eq!(shares.left_share, vec![100 + i; 512]);
+            assert_eq!(shares.left_mirror_share, vec![200 + i; 512]);
+            assert_eq!(shares.right_share, vec![300 + i; 512]);
+            assert_eq!(shares.right_mirror_share, vec![400 + i; 512]);
+            expected.insert(name.clone(), hash(&tier0[&name]));
+        }
+        assert_eq!(tier0.len(), 23);
         let archives = &tier0;
         for (name, key) in [
             ("iris.tar", &backends[0]),
