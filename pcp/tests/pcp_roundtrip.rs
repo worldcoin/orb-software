@@ -39,6 +39,10 @@ const SALTED_FIELDS: [&str; 10] = [
     "device_public_key",
 ];
 
+// Fixture generated from orb-core main at commit
+// 8bdd896afe0b764df23cc5d27ecef6f127bdad75, the latest commit at generation time,
+// before orb-core adopted the shared PCP builder. This keeps the fixture
+// independent of the builder under test.
 #[test]
 fn dummy_pcp_round_trips() -> Result<()> {
     round_trip("dummy-pcp-2.8-fraud.tar.gz")
