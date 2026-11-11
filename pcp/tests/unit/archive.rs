@@ -459,8 +459,9 @@ mod tier_layout {
             },
             EncodedDi {
                 embeddings: b"di-protobuf".to_vec(),
-                shares: [b"di-share-0", b"di-share-1", b"di-share-2"]
+                three_party_shares: [b"di-share-0", b"di-share-1", b"di-share-2"]
                     .map(|x| x.to_vec()),
+                five_party_shares: None,
             },
         )
     }
@@ -520,20 +521,25 @@ mod tier_layout {
     #[test]
     fn archives_precede_payloads_in_tier0() {
         for fraud in [false, true] {
-            let (daugman, di) = payloads();
-            let bio = biometrics(fraud, &daugman, &di);
-            let bytes = archive::tier0(123, common_files(), Some(&bio)).unwrap();
-            let mut expected: Vec<(&str, &[u8])> = vec![
-                ("iris.tar", b"iris-ciphertext"),
-                ("normalized_iris.tar", b"normalized-ciphertext"),
-                ("face.tar", b"face-ciphertext"),
-            ];
-            if fraud {
-                expected.push(("fraud.tar", b"fraud-ciphertext"));
+            for five_party in [false, true] {
+                let (daugman, mut di) = payloads();
+                if five_party {
+                    di.five_party_shares = Some([0, 1, 2, 3, 4].map(|i| vec![i]));
+                }
+                let bio = biometrics(fraud, &daugman, &di);
+                let bytes = archive::tier0(123, common_files(), Some(&bio)).unwrap();
+                let mut expected: Vec<(&str, &[u8])> = vec![
+                    ("iris.tar", b"iris-ciphertext"),
+                    ("normalized_iris.tar", b"normalized-ciphertext"),
+                    ("face.tar", b"face-ciphertext"),
+                ];
+                if fraud {
+                    expected.push(("fraud.tar", b"fraud-ciphertext"));
+                }
+                expected.push(("face_ir_and_thermal.tar", b"modality-ciphertext"));
+                expected.extend(full_tier0_remainder(five_party));
+                assert_entries(&bytes, &expected);
             }
-            expected.push(("face_ir_and_thermal.tar", b"modality-ciphertext"));
-            expected.extend(full_tier0_remainder());
-            assert_entries(&bytes, &expected);
         }
     }
 
@@ -556,7 +562,8 @@ mod tier_layout {
         let (daugman, _) = payloads();
         let di = EncodedDi {
             embeddings: Vec::new(),
-            shares: std::array::from_fn(|_| Vec::new()),
+            three_party_shares: std::array::from_fn(|_| Vec::new()),
+            five_party_shares: None,
         };
         let bio = biometrics(false, &daugman, &di);
         let tier0 = archive::tier0(123, common_files(), Some(&bio)).unwrap();
@@ -588,8 +595,8 @@ mod tier_layout {
         }
     }
 
-    fn full_tier0_remainder() -> Vec<(&'static str, &'static [u8])> {
-        vec![
+    fn full_tier0_remainder(five_party: bool) -> Vec<(&'static str, &'static [u8])> {
+        let payloads: Vec<(&'static str, &'static [u8])> = vec![
             ("info.json", b"info-json"),
             ("face_embeddings.json", b"face-json"),
             ("iris_codes.json", b"iris-json"),
@@ -600,9 +607,24 @@ mod tier_layout {
             ("di_iris_embeddings_shares_0.pb", b"di-share-0"),
             ("di_iris_embeddings_shares_1.pb", b"di-share-1"),
             ("di_iris_embeddings_shares_2.pb", b"di-share-2"),
+        ];
+        let five_party_shares: Vec<(&'static str, &'static [u8])> = vec![
+            ("di_iris_embeddings_5_party_shares_0.pb", &[0]),
+            ("di_iris_embeddings_5_party_shares_1.pb", &[1]),
+            ("di_iris_embeddings_5_party_shares_2.pb", &[2]),
+            ("di_iris_embeddings_5_party_shares_3.pb", &[3]),
+            ("di_iris_embeddings_5_party_shares_4.pb", &[4]),
+        ];
+        let manifest: Vec<(&'static str, &'static [u8])> = vec![
             ("hashes.sign", b"signature"),
             ("hashes.json", b"hashes-json"),
             ("backend_keys.json", b"backend-keys-json"),
-        ]
+        ];
+        let five_party_shares = if five_party {
+            five_party_shares
+        } else {
+            Vec::new()
+        };
+        [payloads, five_party_shares, manifest].concat()
     }
 }
