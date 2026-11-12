@@ -5,7 +5,7 @@
 
 use orb_pcp_defs::{prost::Message, v1};
 use rand::{CryptoRng, RngCore};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::{archive, manifest, metadata, payload};
 use manifest::sha256;
@@ -132,6 +132,7 @@ impl Iris {
 pub struct Di {
     di_embeddings: v1::DiIrisEmbeddings,
     di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
+    di_embedding_5_party_shares: Option<[v1::DiIrisEmbeddingShares; 5]>,
 }
 
 #[bon::bon]
@@ -141,6 +142,7 @@ impl Di {
     pub fn new(
         #[builder(start_fn)] di_embeddings: v1::DiIrisEmbeddings,
         #[builder(finish_fn)] di_embedding_shares: [v1::DiIrisEmbeddingShares; 3],
+        di_embedding_5_party_shares: Option<[v1::DiIrisEmbeddingShares; 5]>,
     ) -> Result<Self, BiometricValidationError> {
         let Some(embedding) = &di_embeddings.embedding_v1 else {
             return Err(
@@ -149,33 +151,46 @@ impl Di {
             );
         };
 
-        for share in &di_embedding_shares {
-            let Some(share) = &share.share_v1 else {
-                return Err(
-                    "At least one of the fields in each v1::DiIrisEmbeddingsShares must be present"
-                        .into(),
-                );
-            };
-
-            if share.model_version != embedding.model_version {
-                return Err(
-                    "Share model version does not match embedding model version."
-                        .into(),
-                );
-            }
-
-            if share.embedding_version != embedding.embedding_version {
-                return Err(
-                    "Share embedding version does not match embedding version.".into(),
-                );
-            }
+        validate_di_shares("Three-party", embedding, &di_embedding_shares)?;
+        if let Some(shares) = &di_embedding_5_party_shares {
+            validate_di_shares("Five-party", embedding, shares)?;
         }
 
         Ok(Self {
             di_embeddings,
             di_embedding_shares,
+            di_embedding_5_party_shares,
         })
     }
+}
+
+/// Requires each share's record and the embedding's model and embedding versions.
+fn validate_di_shares<'a>(
+    family: &str,
+    embedding: &v1::DiIrisEmbeddingV1,
+    shares: impl IntoIterator<Item = &'a v1::DiIrisEmbeddingShares>,
+) -> Result<(), BiometricValidationError> {
+    for (index, share) in shares.into_iter().enumerate() {
+        let Some(share) = &share.share_v1 else {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} is missing its v1 record."
+            )));
+        };
+
+        if share.model_version != embedding.model_version {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} model version does not match embedding model version."
+            )));
+        }
+
+        if share.embedding_version != embedding.embedding_version {
+            return Err(BiometricValidationError(format!(
+                "{family} DI share {index} embedding version does not match embedding version."
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 /// Encrypted tiers and SHA-256 checksums of their ciphertext. Tiers 1 and 2 are
@@ -191,8 +206,9 @@ pub struct Package {
 
 /// Plaintext gzip tiers for local diagnostics, including plaintext inner
 /// archives with biometrics, shares and Hyrax blinding factors. Never upload,
-/// publish or log them; the caller must clear these buffers.
+/// publish or log them. The buffers are zeroized on drop.
 #[cfg(feature = "not-prod-diagnostics")]
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub struct DiagnosticPackage {
     pub tier0: Vec<u8>,
     pub tier1: Vec<u8>,
@@ -397,8 +413,8 @@ where
 
         let info = self.encode_metadata()?;
 
-        for (name, hash) in info.hashes {
-            hashes.push((name.to_owned(), hash));
+        for (name, hash) in &info.hashes {
+            hashes.push(((*name).to_owned(), *hash));
         }
 
         let signed = manifest::encode_and_sign(
@@ -490,7 +506,11 @@ where
             .transpose()?;
 
         let di = di.as_ref().map(|di| {
-            payload::encode_di(&di.di_embeddings, di.di_embedding_shares.each_ref())
+            payload::encode_di(
+                &di.di_embeddings,
+                di.di_embedding_shares.each_ref(),
+                di.di_embedding_5_party_shares.as_ref(),
+            )
         });
 
         for (name, bytes) in [
@@ -517,10 +537,20 @@ where
             }
         }
 
-        for (i, share) in di.iter().flat_map(|di| di.shares.iter().enumerate()) {
+        for (i, share) in di
+            .iter()
+            .flat_map(|di| di.three_party_shares.iter().enumerate())
+        {
             archives
                 .hashes
                 .push((format!("di_iris_embeddings_shares_{i}.pb"), sha256(share)));
+        }
+
+        if let Some(shares) = di.as_ref().and_then(|di| di.five_party_shares.as_ref()) {
+            for (name, bytes) in payload::FIVE_PARTY_SHARE_FILES.into_iter().zip(shares)
+            {
+                archives.hashes.push((name.to_owned(), sha256(bytes)));
+            }
         }
 
         Ok(Some(Prepared {
@@ -562,7 +592,9 @@ where
     seal(&gzip, user_public_key)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 struct Prepared {
+    #[zeroize(skip)]
     archives: archive::InnerArchives,
     face_embeddings: Vec<u8>,
     daugman: Option<payload::EncodedDaugman>,

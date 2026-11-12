@@ -61,6 +61,7 @@ pub(crate) fn face_embeddings(
     sorted_json(serde_json::to_value(embeddings)?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDaugman {
     pub codes: Option<Vec<u8>>,
     pub shares: [Option<Vec<u8>>; 3],
@@ -99,21 +100,34 @@ pub(crate) fn backend_keys(keys: &BackendKeys) -> Result<Vec<u8>, serde_json::Er
     })?)
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct EncodedDi {
     pub embeddings: Vec<u8>,
-    pub shares: [Vec<u8>; 3],
+    pub three_party_shares: [Vec<u8>; 3],
+    pub five_party_shares: Option<[Vec<u8>; 5]>,
 }
 
 /// Default protobuf messages encode to zero-byte files.
 pub(crate) fn encode_di(
     embeddings: &DiIrisEmbeddings,
-    shares: [&DiIrisEmbeddingShares; 3],
+    three_party_shares: [&DiIrisEmbeddingShares; 3],
+    five_party_shares: Option<&[DiIrisEmbeddingShares; 5]>,
 ) -> EncodedDi {
     EncodedDi {
         embeddings: Message::encode_to_vec(embeddings),
-        shares: shares.map(Message::encode_to_vec),
+        three_party_shares: three_party_shares.map(Message::encode_to_vec),
+        five_party_shares: five_party_shares
+            .map(|shares| shares.each_ref().map(Message::encode_to_vec)),
     }
 }
+
+pub(crate) const FIVE_PARTY_SHARE_FILES: [&str; 5] = [
+    "di_iris_embeddings_5_party_shares_0.pb",
+    "di_iris_embeddings_5_party_shares_1.pb",
+    "di_iris_embeddings_5_party_shares_2.pb",
+    "di_iris_embeddings_5_party_shares_3.pb",
+    "di_iris_embeddings_5_party_shares_4.pb",
+];
 
 #[cfg(test)]
 #[path = "../tests/unit/payload.rs"]

@@ -70,4 +70,10 @@ message Hashes {
   optional string migration_pb = 59 [json_name = "migration.pb"];
 
   optional string reference_image_pb = 60 [json_name = "reference_image.pb"];
+
+  optional string di_iris_embeddings_5_party_shares_0_pb = 61 [json_name = "di_iris_embeddings_5_party_shares_0.pb"];
+  optional string di_iris_embeddings_5_party_shares_1_pb = 62 [json_name = "di_iris_embeddings_5_party_shares_1.pb"];
+  optional string di_iris_embeddings_5_party_shares_2_pb = 63 [json_name = "di_iris_embeddings_5_party_shares_2.pb"];
+  optional string di_iris_embeddings_5_party_shares_3_pb = 64 [json_name = "di_iris_embeddings_5_party_shares_3.pb"];
+  optional string di_iris_embeddings_5_party_shares_4_pb = 65 [json_name = "di_iris_embeddings_5_party_shares_4.pb"];
 }

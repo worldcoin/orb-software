@@ -2,6 +2,9 @@
 
 pub use prost;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
 // pbjson-generated serde impls trip this lint; the code is not ours to edit.
 #[allow(clippy::useless_borrows_in_formatting)]
 pub mod v1 {
