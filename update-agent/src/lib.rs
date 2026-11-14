@@ -59,6 +59,7 @@ impl From<Error> for ExitCode {
                 RangeRequest(..)
                 | InitialLengthRequest(..)
                 | ResponseStatus(..)
+                | InvalidRangeResponse { .. }
                 | GetBytes(..),
             ) => ExitCode::from(exit_codes::DOWNLOAD_FAILED),
 
@@ -134,6 +135,7 @@ impl component::Error {
             InitialLengthRequest(..) => "component-initial-lenght-request",
             ResponseStatus(..) => "component-response-status",
             GetBytes(..) => "component-get-bytes",
+            InvalidRangeResponse { .. } => "component-invalid-range-response",
             MergeChunk(..) => "component-merge-chunk",
             HashMismatch { .. } => "component-hash-mismatch",
             DiskSync(..) => "component-disk-sync",
