@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
 
     #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
-    let args = <startup::android::Args as clap::Parser>::parse();
+    <startup::android::Args as clap::Parser>::parse();
 
     let telemetry = orb_telemetry::TelemetryConfig::new();
 
@@ -49,13 +49,26 @@ async fn main() -> Result<()> {
     #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
     let config = {
         let orb_id = orb_info::OrbId::read().await?;
-        startup::android::configure(args, orb_id).await?
+        startup::android::configure(orb_id).await?
     };
 
     let zsession = zenorb::Zenorb::from_cfg(config.zenoh)
         .orb_id(config.orb_id.clone())
         .with_name("orb-backend-status")
         .await?;
+
+    #[cfg(feature = "linux-collectors")]
+    let collector_config = config.collectors;
+    #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+    let collector_config = tokio::select! {
+        token = startup::android::wait_for_token(&zsession) => {
+            orb_backend_status::collectors::Config { token }
+        }
+        _ = shutdown_token.cancelled() => {
+            telemetry.flush().await;
+            return Ok(());
+        }
+    };
 
     let metrics = match config.metrics_socket {
         Some(socket) => DogstatsdClient::new_with(
@@ -70,7 +83,7 @@ async fn main() -> Result<()> {
 
     let result = orb_backend_status::program()
         .metrics(metrics)
-        .collector_config(config.collectors)
+        .collector_config(collector_config)
         .zsession(&zsession)
         .endpoint(config.endpoint)
         .orb_os_version(config.orb_os_version)
