@@ -1,13 +1,41 @@
 use crate::{
+    mcu_util::{McuUtil, Module},
     network_manager::{AccessPoint, ActiveConnState, WifiProfile, WifiSec},
     service::ConndService,
 };
 use color_eyre::{eyre::eyre, Result};
+use crabwire::inject;
+use orb_info::orb_os_release::OrbOsPlatform;
 use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info, warn};
 use zenorb::{zenoh::query::Query, zoci::ZociQueryExt};
+
+#[inject(mcu_util: &McuUtil)]
+pub(crate) async fn power_cycle_lte(
+    platform: OrbOsPlatform,
+    query: Query,
+) -> Result<()> {
+    if platform != OrbOsPlatform::Diamond {
+        return query
+            .res_err("LTE power cycling is only supported on Diamond")
+            .await;
+    }
+
+    if query.payload().is_some_and(|payload| !payload.is_empty()) {
+        return query
+            .res_err("power_cycle_lte does not accept arguments")
+            .await;
+    }
+
+    let response = mcu_util
+        .powercycle(Module::Modem)
+        .await
+        .map(|()| "LTE power cycle accepted by main MCU")
+        .map_err(|e| format!("{e:#}"));
+    query.res(response).await
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 struct WifiAdd {

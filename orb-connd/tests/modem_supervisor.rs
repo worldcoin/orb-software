@@ -17,12 +17,89 @@ use orb_dogd::test::agent::Agent;
 use orb_info::orb_os_release::{OrbOsPlatform, OrbRelease};
 use speare::mini::Ctx;
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
     time::Duration,
 };
 use tokio::{fs, time};
+use zenorb::zoci::ReplyExt;
 
 mod fixture;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn fleet_power_cycle_lte_requests_the_modem_and_reports_mcu_errors() {
+    let mut fx = Fixture::platform(OrbOsPlatform::Diamond)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+
+    let power_cycle_calls = Arc::new(AtomicUsize::new(0));
+    let calls = Arc::clone(&power_cycle_calls);
+    let mut mcu_util = McuUtil::faux();
+    when!(mcu_util.powercycle).then(move |module| {
+        assert!(matches!(module, Module::Modem));
+        if calls.fetch_add(1, Ordering::Relaxed) == 0 {
+            Ok(())
+        } else {
+            Err(eyre!("MCU rejected the request"))
+        }
+    });
+    let registry = crabwire::Registry::new().insert(mcu_util);
+    let handle = fx.run_with().registry(registry).call().await;
+    let zenoh = handle.zenoh();
+
+    let result = zenoh
+        .command_raw("connd/job/power_cycle_lte", "10")
+        .await
+        .unwrap()
+        .json::<String, String>()
+        .unwrap();
+    assert_eq!(
+        result.unwrap_err(),
+        "power_cycle_lte does not accept arguments"
+    );
+
+    let result = zenoh
+        .command_raw("connd/job/power_cycle_lte", "")
+        .await
+        .unwrap()
+        .json::<String, String>()
+        .unwrap();
+    assert_eq!(result.unwrap(), "LTE power cycle accepted by main MCU");
+
+    let result = zenoh
+        .command_raw("connd/job/power_cycle_lte", "")
+        .await
+        .unwrap()
+        .json::<String, String>()
+        .unwrap();
+    assert_eq!(result.unwrap_err(), "MCU rejected the request");
+    assert_eq!(power_cycle_calls.load(Ordering::Relaxed), 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn fleet_power_cycle_lte_rejects_pearl() {
+    let mut fx = Fixture::platform(OrbOsPlatform::Pearl)
+        .release(OrbRelease::Dev)
+        .build()
+        .await;
+    let registry = crabwire::Registry::new().insert(McuUtil::faux());
+    let handle = fx.run_with().registry(registry).call().await;
+
+    let result = handle
+        .zenoh()
+        .command_raw("connd/job/power_cycle_lte", "")
+        .await
+        .unwrap()
+        .json::<String, String>()
+        .unwrap();
+    assert_eq!(
+        result.unwrap_err(),
+        "LTE power cycling is only supported on Diamond"
+    );
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_modem_snapshot_on_poll_interval() {

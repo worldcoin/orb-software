@@ -67,6 +67,7 @@ pub async fn program(
     )
     .await?;
 
+    let platform = os_release.orb_os_platform_type;
     let _ = zenoh
         .receiver(connd.clone())
         .queryable("job/wifi_add", service::zoci::wifi_add)
@@ -74,6 +75,9 @@ pub async fn program(
         .queryable("job/wifi_remove", service::zoci::wifi_remove)
         .queryable("job/wifi_scan", service::zoci::wifi_scan)
         .queryable("job/wifi_list", service::zoci::wifi_list)
+        .queryable("job/power_cycle_lte", move |_, query| {
+            service::zoci::power_cycle_lte(platform, query)
+        })
         .run()
         .await
         .inspect_err(|e| error!("failed to start connd zoci zenoh receiver: {e}"));
