@@ -9,10 +9,7 @@ use chrono::Utc;
 use color_eyre::Result;
 use rustix::time::{clock_gettime, ClockId};
 use secrecy::SecretString;
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use zenorb::Zenorb;
@@ -25,13 +22,11 @@ pub struct Config {
 
 pub struct Collectors {
     _token_tx: watch::Sender<SecretString>,
-    _connectivity_tx: watch::Sender<GlobalConnectivity>,
     state: Arc<ReporterState>,
 }
 
-#[derive(Default)]
 struct ReporterState {
-    wifi_ssid: Mutex<Option<String>>,
+    connectivity_tx: watch::Sender<GlobalConnectivity>,
     urgent_send: UrgentSend,
 }
 
@@ -45,16 +40,16 @@ impl Collectors {
         watch::Receiver<GlobalConnectivity>,
     )> {
         let (token_tx, token_receiver) = watch::channel(config.token);
-        // Android has no connd collector yet. Allow HTTP attempts; this is not
-        // a connectivity probe or a claim that the backend is reachable.
         let (connectivity_tx, connectivity_receiver) =
-            watch::channel(GlobalConnectivity::Connected { ssid: None });
+            watch::channel(GlobalConnectivity::NotConnected);
 
         Ok((
             Self {
                 _token_tx: token_tx,
-                _connectivity_tx: connectivity_tx,
-                state: Arc::default(),
+                state: Arc::new(ReporterState {
+                    connectivity_tx,
+                    urgent_send: UrgentSend::default(),
+                }),
             },
             token_receiver,
             connectivity_receiver,
@@ -110,9 +105,11 @@ fn ingest(oes: &OrbEventStream, state: &ReporterState, payload: Payload) -> Resu
             connectivity::active_connections(&payload.event)
         }
     };
+    let urgent =
+        report.is_some_and(|report| connectivity::update_connectivity(state, report));
     oes.ingest(payload)?;
-    if let Some(report) = report {
-        connectivity::handle_connection_event(state, report)?;
+    if urgent {
+        state.urgent_send.request_urgent_send();
     }
     Ok(())
 }

@@ -1,9 +1,9 @@
 use super::ReporterState;
 use crate::{
     backend::types::{WifiApiV2, WifiQualityApiV2},
+    collectors::GlobalConnectivity,
     orb_event_stream::Event,
 };
-use color_eyre::{eyre::eyre, Result};
 use serde::Deserialize;
 use tracing::warn;
 
@@ -24,20 +24,29 @@ fn wifi_connection(report: oes::ActiveConnections) -> Option<oes::Connection> {
         .find(|c| c.iface == oes::NetworkInterface::WiFi)
 }
 
-pub(super) fn handle_connection_event(
+pub(super) fn update_connectivity(
     state: &ReporterState,
     report: oes::ActiveConnections,
-) -> Result<()> {
-    let ssid = wifi_connection(report).map(|wifi| wifi.name);
-    let mut previous = state
-        .wifi_ssid
-        .lock()
-        .map_err(|_| eyre!("Wi-Fi SSID lock poisoned"))?;
-    if *previous != ssid {
-        *previous = ssid;
-        state.urgent_send.request_urgent_send();
-    }
-    Ok(())
+) -> bool {
+    let online = report
+        .connections
+        .iter()
+        .any(|c| c.primary && c.has_internet);
+    let next = if online {
+        GlobalConnectivity::Connected {
+            ssid: wifi_connection(report).map(|wifi| wifi.name),
+        }
+    } else {
+        GlobalConnectivity::NotConnected
+    };
+    let changed = state.connectivity_tx.send_if_modified(|previous| {
+        if *previous == next {
+            return false;
+        }
+        *previous = next;
+        true
+    });
+    online && changed
 }
 
 pub(crate) fn wifi_report(events: &[Event]) -> Option<WifiApiV2> {

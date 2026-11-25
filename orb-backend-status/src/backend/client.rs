@@ -93,7 +93,10 @@ impl StatusClient {
             let mut attest_token = attest_token_rx.borrow_and_update().clone();
             let mut connectivity = connectivity_rx.borrow_and_update().clone();
 
-            info!("client with connectivity: {connectivity:?}");
+            info!(
+                connected = connectivity.is_connected(),
+                "initial connectivity"
+            );
 
             loop {
                 tokio::select! {
