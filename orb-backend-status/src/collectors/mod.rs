@@ -17,6 +17,20 @@ pub use linux::{
 #[cfg(feature = "linux-collectors")]
 pub use linux::{Collectors, Config};
 
+/// Requests received during a send coalesce into one wakeup for the next snapshot.
+#[derive(Default)]
+pub(crate) struct UrgentSend(tokio::sync::Notify);
+
+impl UrgentSend {
+    pub(crate) fn request_urgent_send(&self) {
+        self.0.notify_one();
+    }
+
+    pub(crate) async fn wait(&self) {
+        self.0.notified().await;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GlobalConnectivity {
     Connected { ssid: Option<String> },

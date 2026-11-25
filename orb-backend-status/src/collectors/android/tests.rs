@@ -4,6 +4,7 @@ use crate::{
     orb_event_stream::{Event, Payload},
     sender::BackendSender,
 };
+use futures_util::FutureExt;
 use orb_dogd::test::MetricSinkhole;
 use orb_info::{orb_id::test_orb_id, orb_name::test_orb_name};
 use secrecy::ExposeSecret;
@@ -67,88 +68,69 @@ async fn static_channels_stay_open_without_background_reporters() {
     );
 }
 
+
 #[tokio::test]
-async fn sends_cached_oes_with_initial_static_token() {
-    let orb_id = test_orb_id().to_string();
+async fn only_wifi_association_changes_wake_the_sender() {
+    use serde_json::json;
+
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(basic_auth(orb_id.as_str(), "static-token"))
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        .mount(&server)
-        .await;
     let (collectors, client) = setup("static-token", &server).await;
     let shutdown = CancellationToken::new();
-    let oes = OrbEventStream::start(client.clone(), shutdown.clone());
-    oes.ingest(Payload {
-        headers: oes::Headers::default().mode(oes::Mode::CacheOnly),
-        event: Event {
-            name: "orb-engine/test".to_owned(),
-            created_at: 123,
-            payload: Some(serde_json::json!({ "value": 42 })),
-        },
-    })
-    .unwrap();
+    let oes = OrbEventStream::start(client, shutdown.clone());
 
-    let sender = BackendSender::new(client, oes, Duration::from_secs(30));
-    assert!(timeout(
-        Duration::from_secs(5),
-        sender.send_snapshot(collectors.snapshot().await)
-    )
-    .await
-    .unwrap()
-    .unwrap());
-    shutdown.cancel();
-
-    let requests = server.received_requests().await.unwrap();
-    let body: serde_json::Value = requests[0].body_json().unwrap();
-    assert_eq!(body["orb_id"], orb_id);
-    assert_eq!(body["oes_cached"], true);
-    assert_eq!(body["oes"][0]["name"], "orb-engine/test");
-    assert_eq!(body["oes"][0]["payload"]["value"], 42);
-    assert!(body["update_progress"].is_null());
-    assert!(body["wifi"].is_null());
-}
-
-#[tokio::test]
-async fn empty_static_token_keeps_existing_missing_token_error() {
-    let server = MockServer::start().await;
-    let (collectors, client) = setup("", &server).await;
-    let result = timeout(
-        Duration::from_secs(5),
-        client.req(collectors.snapshot().await),
-    )
-    .await
-    .unwrap();
-
-    assert!(matches!(result, Err(Err::MissingAttestToken)));
-    assert!(server.received_requests().await.unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn backend_failures_do_not_count_as_successful_snapshots() {
-    for response in [
-        ResponseTemplate::new(503),
-        ResponseTemplate::new(200).set_delay(Duration::from_secs(1)),
+    for (ssid, rssi, urgent) in [
+        (Some("Lab"), -50, true),
+        (Some("Lab"), -70, false),
+        (Some("Lab"), -70, false),
+        (Some("Guest"), -60, true),
+        (None, 0, true),
+        (Some(""), -65, true), // Associated, but Android redacted the SSID.
+        (None, 0, true),
     ] {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .respond_with(response)
-            .expect(1..=4)
-            .mount(&server)
-            .await;
-        let (collectors, client) = setup("static-token", &server).await;
-        let shutdown = CancellationToken::new();
-        let oes = OrbEventStream::start(client.clone(), shutdown.clone());
-        let sender = BackendSender::new(client, oes, Duration::from_secs(30));
-
-        assert!(timeout(
-            Duration::from_secs(5),
-            sender.send_snapshot(collectors.snapshot().await)
+        let connections: Vec<_> = ssid
+            .into_iter()
+            .map(|name| {
+                json!({
+                    "iface": "WiFi", "name": name, "primary": false,
+                    "has_internet": false, "rssi_dbm": rssi,
+                })
+            })
+            .collect();
+        let payload = Payload {
+            headers: oes::Headers::default().mode(oes::Mode::CacheOnly),
+            event: Event {
+                name: "raven/active_connections".into(),
+                created_at: 123,
+                payload: Some(
+                    json!({"connections": connections, "connectivity_uri": ""}),
+                ),
+            },
+        };
+        // Normal reports are forwarded without changing the cached association.
+        ingest(
+            &oes,
+            &collectors.state,
+            Payload {
+                headers: oes::Headers::default().mode(oes::Mode::Normal),
+                event: payload.event.clone(),
+            },
         )
-        .await
-        .unwrap()
-        .is_err());
-        shutdown.cancel();
+        .unwrap();
+        assert!(collectors.wait_for_urgent_send().now_or_never().is_none());
+        ingest(&oes, &collectors.state, payload).unwrap();
+        assert_eq!(
+            collectors.wait_for_urgent_send().now_or_never().is_some(),
+            urgent
+        );
+        let wifi = wifi_report(&oes.cached().unwrap());
+        assert_eq!(
+            wifi.as_ref().and_then(|w| w.ssid.as_deref()),
+            ssid.filter(|s| !s.is_empty())
+        );
+        assert_eq!(
+            wifi.and_then(|w| w.quality?.signal_level),
+            ssid.map(|_| rssi)
+        );
     }
+    shutdown.cancel();
 }

@@ -89,16 +89,18 @@ pub async fn program(
 
     let mut zenorb_tasks = collectors.subscribe(zsession, oes.clone()).await?;
 
-    zenorb_tasks.extend(
-        zsession
-            .receiver(oes.clone())
-            .subscriber(
-                orb_event_stream::KEY_EXPR,
-                orb_event_stream::collector::handler,
-            )
-            .run()
-            .await?,
-    );
+    if cfg!(feature = "linux-collectors") {
+        zenorb_tasks.extend(
+            zsession
+                .receiver(oes.clone())
+                .subscriber(
+                    orb_event_stream::KEY_EXPR,
+                    orb_event_stream::collector::handler,
+                )
+                .run()
+                .await?,
+        );
+    }
 
     let sender = BackendSender::new(status_client.clone(), oes, sender_interval);
     sender.run_loop(collectors, shutdown_token.clone()).await;

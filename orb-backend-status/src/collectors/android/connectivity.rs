@@ -1,29 +1,47 @@
+use super::ReporterState;
 use crate::{
     backend::types::{WifiApiV2, WifiQualityApiV2},
     orb_event_stream::Event,
 };
+use color_eyre::{eyre::eyre, Result};
 use serde::Deserialize;
 use tracing::warn;
 
-pub(crate) fn wifi_report(events: &[Event]) -> Option<WifiApiV2> {
-    let event = events
-        .iter()
-        .find(|event| event.name == "raven/active_connections")?;
-
-    let report = event
-        .payload
-        .as_ref()
-        .and_then(|payload| oes::ActiveConnections::deserialize(payload).ok());
-
-    let Some(report) = report else {
-        warn!("invalid raven/active_connections payload");
+pub(super) fn active_connections(event: &Event) -> Option<oes::ActiveConnections> {
+    if event.name != "raven/active_connections" {
         return None;
-    };
+    }
+    let payload = event.payload.as_ref().unwrap_or(&serde_json::Value::Null);
+    oes::ActiveConnections::deserialize(payload)
+        .inspect_err(|_| warn!("invalid raven/active_connections payload"))
+        .ok()
+}
 
-    let wifi = report
+fn wifi_connection(report: oes::ActiveConnections) -> Option<oes::Connection> {
+    report
         .connections
         .into_iter()
-        .find(|connection| connection.iface == oes::NetworkInterface::WiFi)?;
+        .find(|c| c.iface == oes::NetworkInterface::WiFi)
+}
+
+pub(super) fn handle_connection_event(
+    state: &ReporterState,
+    report: oes::ActiveConnections,
+) -> Result<()> {
+    let ssid = wifi_connection(report).map(|wifi| wifi.name);
+    let mut previous = state
+        .wifi_ssid
+        .lock()
+        .map_err(|_| eyre!("Wi-Fi SSID lock poisoned"))?;
+    if *previous != ssid {
+        *previous = ssid;
+        state.urgent_send.request_urgent_send();
+    }
+    Ok(())
+}
+
+pub(crate) fn wifi_report(events: &[Event]) -> Option<WifiApiV2> {
+    let wifi = wifi_connection(events.iter().find_map(active_connections)?)?;
 
     let ssid = (!wifi.name.is_empty()).then_some(wifi.name);
     if ssid.is_none()

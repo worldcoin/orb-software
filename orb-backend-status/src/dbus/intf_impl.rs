@@ -9,19 +9,19 @@ use orb_backend_status_dbus::{
 use orb_messages::main::AmbientLight;
 use orb_update_agent_dbus::UpdateAgentState;
 
+use crate::collectors::UrgentSend;
 use orb_telemetry::TraceCtx;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tokio::sync::Notify;
 use tracing::{error, info_span};
 
 #[derive(Clone)]
 pub struct BackendStatusImpl {
     current_status: Arc<Mutex<CurrentStatus>>,
     /// Notify to wake up the sender loop immediately for urgent sends.
-    notify_urgent: Arc<Notify>,
+    notify_urgent: Arc<UrgentSend>,
     /// Flag that persists until we actually send. Set by urgent events,
     /// cleared only after successful send.
     send_immediately: Arc<Mutex<bool>>,
@@ -180,7 +180,7 @@ impl BackendStatusImpl {
     pub fn new() -> Self {
         Self {
             current_status: Arc::new(Mutex::new(CurrentStatus::default())),
-            notify_urgent: Arc::new(Notify::new()),
+            notify_urgent: Arc::default(),
             send_immediately: Arc::new(Mutex::new(false)),
         }
     }
@@ -192,13 +192,13 @@ impl BackendStatusImpl {
         if let Ok(mut send_immediately) = self.send_immediately.lock() {
             *send_immediately = true;
         }
-        self.notify_urgent.notify_one();
+        self.notify_urgent.request_urgent_send();
     }
 
     /// Wait for an urgent send request. Returns immediately if an urgent
     /// event has already been signaled.
     pub async fn wait_for_urgent_send(&self) {
-        self.notify_urgent.notified().await;
+        self.notify_urgent.wait().await;
     }
 
     pub fn snapshot(&self) -> CurrentStatus {
