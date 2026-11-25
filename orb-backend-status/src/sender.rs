@@ -26,7 +26,14 @@ impl BackendSender {
 
     pub async fn send_snapshot(&self, mut req: OrbStatusApiV2) -> Result<bool> {
         req.oes_cached = true;
-        req.oes = Some(self.oes.cached()?);
+        let cached = self.oes.cached()?;
+        #[cfg(all(feature = "android-collectors", not(feature = "linux-collectors")))]
+        {
+            req.wifi = crate::collectors::android::wifi_report(&cached);
+        }
+        req.oes = Some(cached);
+        let wifi_ssid_present =
+            req.wifi.as_ref().is_some_and(|wifi| wifi.ssid.is_some());
 
         let res = match self.client.req(req).await {
             Err(client::Err::MissingAttestToken | client::Err::NoConnectivity) => {
@@ -48,6 +55,11 @@ impl BackendSender {
             ));
         }
 
+        tracing::debug!(
+            wifi_ssid_present,
+            http_status = status.as_u16(),
+            "status snapshot accepted"
+        );
         Ok(true)
     }
 

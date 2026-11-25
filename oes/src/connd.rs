@@ -53,6 +53,15 @@ pub struct Connection {
     pub primary: bool,
     /// Whether this connection currently has internet access.
     pub has_internet: bool,
+    /// BSSID of the associated Wi-Fi access point, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bssid: Option<String>,
+    /// Wi-Fi frequency in megahertz.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frequency_mhz: Option<u32>,
+    /// Received Wi-Fi signal strength in dBm.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rssi_dbm: Option<i32>,
 }
 
 /// The network interface used by this connection

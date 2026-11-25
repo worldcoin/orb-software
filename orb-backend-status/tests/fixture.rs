@@ -274,6 +274,9 @@ impl Fixture {
                     iface: NetworkInterface::WiFi,
                     primary: true,
                     has_internet: true,
+                    bssid: None,
+                    frequency_mhz: None,
+                    rssi_dbm: None,
                 }],
             },
 
@@ -299,6 +302,9 @@ impl Fixture {
                     iface: NetworkInterface::WiFi,
                     primary: true,
                     has_internet: false,
+                    bssid: None,
+                    frequency_mhz: None,
+                    rssi_dbm: None,
                 }],
             },
         };
@@ -335,6 +341,9 @@ impl Fixture {
                 iface: NetworkInterface::WiFi,
                 primary: true,
                 has_internet: true,
+                bssid: None,
+                frequency_mhz: None,
+                rssi_dbm: None,
             }],
         };
 

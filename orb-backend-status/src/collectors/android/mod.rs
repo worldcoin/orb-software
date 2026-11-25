@@ -1,3 +1,5 @@
+mod connectivity;
+
 use super::GlobalConnectivity;
 use crate::{backend::types::OrbStatusApiV2, orb_event_stream::OrbEventStream};
 use chrono::Utc;
@@ -7,6 +9,8 @@ use std::{future::pending, path::PathBuf};
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use zenorb::Zenorb;
+
+pub(crate) use connectivity::wifi_report;
 
 pub struct Config {
     pub token: SecretString,

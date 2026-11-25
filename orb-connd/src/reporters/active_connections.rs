@@ -266,6 +266,9 @@ impl TryFrom<ActiveConnections> for oes::ActiveConnections {
                     iface,
                     primary: c.primary,
                     has_internet: c.has_internet,
+                    bssid: None,
+                    frequency_mhz: None,
+                    rssi_dbm: None,
                 })
             })
             .collect::<Result<_>>()?;
