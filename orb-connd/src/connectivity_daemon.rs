@@ -1,3 +1,4 @@
+use crate::mcu_util::McuUtil;
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
@@ -14,7 +15,7 @@ use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
-#[inject(zenoh: &Zenorb)]
+#[inject(zenoh: &Zenorb, mcu_util: &McuUtil)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
     procfs: impl AsRef<Path>,
@@ -76,7 +77,7 @@ pub async fn program(
         .queryable("job/wifi_scan", service::zoci::wifi_scan)
         .queryable("job/wifi_list", service::zoci::wifi_list)
         .queryable("job/power_cycle_lte", move |_, query| {
-            service::zoci::power_cycle_lte(platform, query)
+            service::zoci::power_cycle_lte(platform, mcu_util, query)
         })
         .run()
         .await

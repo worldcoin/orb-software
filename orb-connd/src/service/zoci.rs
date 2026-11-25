@@ -4,7 +4,6 @@ use crate::{
     service::ConndService,
 };
 use color_eyre::{eyre::eyre, Result};
-use crabwire::inject;
 use orb_info::orb_os_release::OrbOsPlatform;
 use rusty_network_manager::dbus_interface_types::NM80211Mode;
 use serde::{Deserialize, Serialize};
@@ -12,9 +11,9 @@ use serde_json::json;
 use tracing::{error, info, warn};
 use zenorb::{zenoh::query::Query, zoci::ZociQueryExt};
 
-#[inject(mcu_util: &McuUtil)]
 pub(crate) async fn power_cycle_lte(
     platform: OrbOsPlatform,
+    mcu_util: &McuUtil,
     query: Query,
 ) -> Result<()> {
     if platform != OrbOsPlatform::Diamond {
