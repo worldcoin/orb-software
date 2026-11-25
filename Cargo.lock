@@ -6585,6 +6585,7 @@ dependencies = [
  "reqwest-middleware",
  "reqwest-retry",
  "reqwest-tracing",
+ "rustix 0.38.44",
  "secrecy 0.8.0",
  "serde",
  "serde_json",

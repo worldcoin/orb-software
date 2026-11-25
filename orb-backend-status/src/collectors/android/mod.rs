@@ -4,6 +4,7 @@ use super::GlobalConnectivity;
 use crate::{backend::types::OrbStatusApiV2, orb_event_stream::OrbEventStream};
 use chrono::Utc;
 use color_eyre::Result;
+use rustix::time::{clock_gettime, ClockId};
 use secrecy::SecretString;
 use std::{future::pending, path::PathBuf};
 use tokio::{sync::watch, task::JoinHandle};
@@ -63,8 +64,11 @@ impl Collectors {
     }
 
     pub(crate) async fn snapshot(&self) -> OrbStatusApiV2 {
+        let uptime = clock_gettime(ClockId::Boottime);
+
         OrbStatusApiV2 {
             timestamp: Utc::now(),
+            uptime_sec: Some(uptime.tv_sec as f64),
             ..Default::default()
         }
     }
