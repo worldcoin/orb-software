@@ -10,7 +10,7 @@ use orb_pcp_defs::{
     prost::Message,
     v1::{
         BackendKeys, DiIrisEmbeddingShares, DiIrisEmbeddings, FaceEmbedding, Info,
-        IrisCodeShares, IrisCodes,
+        IrisCodeShares, IrisCodes, ReferenceImage,
     },
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -60,6 +60,7 @@ fn round_trip(name: &str, bytes: &[u8]) -> Result<bool> {
         "face_embeddings.json" => json_round_trip::<Vec<FaceEmbedding>>(bytes),
         // Per-frame keys no message can name; checked as plain sorted JSON instead.
         "hashes.json" => json_round_trip::<Value>(bytes),
+        "reference_image.pb" => pb_round_trip::<ReferenceImage>(bytes),
         "di_iris_embeddings.pb" => pb_round_trip::<DiIrisEmbeddings>(bytes),
         n if n.starts_with("iris_code_shares_") => {
             json_round_trip::<IrisCodeShares>(bytes)

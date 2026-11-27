@@ -43,6 +43,9 @@ own crate; `orb-pcp` has no normal dependency on Alkali.
   authorization belong to the caller.
 - Build `Biometrics` with `Biometrics::images(images)`, optionally add `.iris(iris)`
   and `.di(di)`, then finish with `.face_embeddings(face_embeddings)`.
+- Supply the phone reference image with `.maybe_reference_image(reference_image)`
+  before `.face_embeddings(...)`. When present, its protobuf bytes are written to
+  tier 0 as `reference_image.pb` and their SHA-256 is included in the signed manifest.
 - Choose `BiometricPolicy::Included(biometrics)` or `Redacted`. Redaction omits
   biometrics and clears image IDs, while retaining identity metadata.
 - When supplying an Iris group, codes, all three shares, and their versions are

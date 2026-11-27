@@ -622,6 +622,58 @@ fn iris_and_di_groups_are_included_or_omitted_independently() {
 }
 
 #[test]
+fn reference_image_is_hashed_only_when_included() {
+    use orb_pcp_defs::prost::Message;
+
+    // Arrange
+    let pair = sealedbox::Keypair::generate().unwrap();
+    let reference = v1::ReferenceImage {
+        image: b"phone image".to_vec(),
+        embedding: None,
+        match_mode: v1::reference_image::MatchMode::Shadow.into(),
+        match_status: v1::reference_image::MatchStatus::Matched.into(),
+    };
+    let included = |image| {
+        BiometricPolicy::Included(
+            Biometrics::images(images())
+                .maybe_reference_image(image)
+                .face_embeddings(Vec::new()),
+        )
+    };
+
+    for (policy, expected) in [
+        (included(Some(reference.clone())), Some(&reference)),
+        (included(None), None),
+        (BiometricPolicy::Redacted, None),
+    ] {
+        // Act
+        let output = Builder::timestamp(1)
+            .info(capture_info(None))
+            .user_public_key(pair.public_key)
+            .backend_keys(backend_keys(&pair.public_key))
+            .biometrics(policy)
+            .rng(rand::rngs::OsRng)
+            .sealer(support::seal)
+            .signer(|_| Ok::<_, SignerError>(Vec::new()))
+            .build()
+            .unwrap();
+
+        // Assert
+        let files: std::collections::BTreeMap<_, _> =
+            tier0(&output, &pair).into_iter().collect();
+        let hashes: v1::Hashes = serde_json::from_slice(&files["hashes.json"]).unwrap();
+        let bytes = files.get("reference_image.pb");
+        let decoded = bytes.map(|b| v1::ReferenceImage::decode(b.as_slice()).unwrap());
+        assert_eq!(decoded.as_ref(), expected);
+        assert_eq!(
+            hashes.reference_image_pb,
+            bytes.map(|b| data_encoding::HEXLOWER
+                .encode(ring::digest::digest(&ring::digest::SHA256, b).as_ref()))
+        );
+    }
+}
+
+#[test]
 fn five_party_presence_and_redaction_apply_to_all_five_files_and_hashes() {
     use orb_pcp_defs::prost::Message;
 

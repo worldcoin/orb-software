@@ -37,6 +37,7 @@ pub struct Biometrics {
     images: archive::PackageImages,
     #[builder(finish_fn)]
     face_embeddings: Vec<v1::FaceEmbedding>,
+    reference_image: Option<v1::ReferenceImage>,
     iris: Option<Iris>,
     di: Option<Di>,
 }
@@ -461,6 +462,7 @@ where
 
         let Biometrics {
             images,
+            reference_image,
             face_embeddings,
             iris,
             di,
@@ -513,7 +515,15 @@ where
             )
         });
 
+        let reference_image = reference_image
+            .as_ref()
+            .map(|image| Zeroizing::new(image.encode_to_vec()));
+
         for (name, bytes) in [
+            (
+                "reference_image.pb",
+                reference_image.as_ref().map(|b| b.as_slice()),
+            ),
             ("face_embeddings.json", Some(face_embeddings.as_slice())),
             (
                 "iris_codes.json",
@@ -555,6 +565,7 @@ where
 
         Ok(Some(Prepared {
             archives,
+            reference_image,
             face_embeddings,
             daugman,
             di,
@@ -596,6 +607,7 @@ where
 struct Prepared {
     #[zeroize(skip)]
     archives: archive::InnerArchives,
+    reference_image: Option<Zeroizing<Vec<u8>>>,
     face_embeddings: Vec<u8>,
     daugman: Option<payload::EncodedDaugman>,
     di: Option<payload::EncodedDi>,
@@ -611,6 +623,7 @@ impl Prepared {
                 fraud_sealed: self.archives.fraud.as_ref().map(|tar| tar.as_slice()),
                 face_ir_and_thermal_sealed: &self.archives.face_ir_and_thermal,
             },
+            reference_image: self.reference_image.as_ref().map(|b| b.as_slice()),
             face_embeddings_json: &self.face_embeddings,
             daugman: self.daugman.as_ref(),
             di: self.di.as_ref(),

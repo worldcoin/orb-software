@@ -31,8 +31,9 @@ fn main() -> Result<()> {
         "DiIrisEmbeddingV1",
         "DiIrisEmbeddingShareV1",
         "FaceEmbedding",
+        "ReferenceImage",
     ] {
-        config.type_attribute(
+        config.message_attribute(
             format!(".pcp.v1.{message}"),
             "#[derive(zeroize::Zeroize, zeroize::ZeroizeOnDrop)]",
         );
