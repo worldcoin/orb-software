@@ -1,6 +1,7 @@
 use crate::network_manager::NetworkManager;
 use crate::resolved::Resolved;
 use crate::service::{self, ConndService, ProfileStorage};
+use crate::systemd::Systemd;
 use crate::{ble, modem, reporters, OrbCapabilities};
 use color_eyre::eyre::Result;
 use crabwire::inject;
@@ -14,7 +15,7 @@ use zenorb::zenoh::bytes::Encoding;
 use zenorb::Zenorb;
 
 #[bon::builder(finish_fn = run)]
-#[inject(zenoh: &Zenorb)]
+#[inject(zenoh: &Zenorb, systemd: &Systemd)]
 pub async fn program(
     sysfs: impl AsRef<Path>,
     procfs: impl AsRef<Path>,
@@ -87,6 +88,7 @@ pub async fn program(
             })
             .args(ble::Args {
                 zenoh: zenoh.clone(),
+                systemd: systemd.clone(),
                 interval: Duration::from_millis(1_000),
             })
             .spawn(ble::advertiser)

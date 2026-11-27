@@ -195,6 +195,12 @@ impl FakeBluez {
         })
     }
 
+    pub fn mock_adapter_after_restart(&self) -> &Self {
+        self.mock_adapter()
+            .mock_adapter_is_powered(false)
+            .mock_adapter_set_powered(true)
+    }
+
     pub fn mock_advertisements(&self, count: usize) -> &Self {
         assert!(count > 0);
 
