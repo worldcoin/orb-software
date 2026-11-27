@@ -10,5 +10,17 @@
     multicast: { enabled: false },
     gossip: { enabled: false },
   },
-  plugins: {},
+  timestamping: {
+    enabled: { router: true },
+  },
+  plugins: {
+    storage_manager: {
+      storages: {
+        config: {
+          key_expr: "config/*",
+          volume: { id: "memory" },
+        },
+      },
+    },
+  },
 }

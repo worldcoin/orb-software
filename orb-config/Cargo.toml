@@ -1,0 +1,34 @@
+[package]
+name = "orb-config"
+version = "0.1.0"
+description = "Android configuration daemon"
+publish = false
+
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+clap.workspace = true
+eyre.workspace = true
+httpdate = "1"
+orb-build-info.workspace = true
+orb-info = { workspace = true, features = ["orb-id"] }
+orb-security-utils = { workspace = true, features = ["reqwest"] }
+orb-telemetry.workspace = true
+reqwest.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+zenorb.workspace = true
+
+[build-dependencies]
+orb-build-info = { workspace = true, features = ["build-script"] }
+
+[dev-dependencies]
+orb-security-utils = { workspace = true, features = ["reqwest", "dangerously-allow-http"] }
+tempfile.workspace = true
+wiremock.workspace = true
