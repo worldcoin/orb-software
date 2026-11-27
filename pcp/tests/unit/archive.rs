@@ -479,6 +479,7 @@ mod tier_layout {
                 fraud_sealed: fraud.then_some(b"fraud-ciphertext".as_slice()),
                 face_ir_and_thermal_sealed: b"modality-ciphertext",
             },
+            reference_image: None,
             face_embeddings_json: b"face-json",
             daugman: Some(daugman),
             di: Some(di),

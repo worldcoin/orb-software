@@ -338,6 +338,7 @@ pub(crate) struct BiometricArchives<'a> {
 
 pub(crate) struct PreparedBiometricFiles<'a> {
     pub archives: BiometricArchives<'a>,
+    pub reference_image: Option<&'a [u8]>,
     pub face_embeddings_json: &'a [u8],
     pub daugman: Option<&'a EncodedDaugman>,
     pub di: Option<&'a EncodedDi>,
@@ -415,6 +416,9 @@ pub(crate) fn tier0(
                         .zip(shares.iter().map(Vec::as_slice)),
                 );
             }
+        }
+        if let Some(bytes) = biometrics.reference_image {
+            entries.push(("reference_image.pb", bytes));
         }
     }
     entries.extend([
